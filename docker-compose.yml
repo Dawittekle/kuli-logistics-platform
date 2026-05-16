@@ -1,0 +1,24 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: kuli-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: kuli
+    volumes:
+      - mongodb-data:/data/db
+
+  redis:
+    image: redis:7-alpine
+    container_name: kuli-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+
+volumes:
+  mongodb-data:
+  redis-data:
+

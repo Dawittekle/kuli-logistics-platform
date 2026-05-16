@@ -6,13 +6,13 @@ This file is the engineering tracker for KULI. Update it as implementation progr
 
 - [x] Source PDF analyzed.
 - [x] Initial project docs created.
-- [ ] Monorepo initialized.
-- [ ] API app scaffolded.
-- [ ] Mobile app scaffolded.
-- [ ] Admin app scaffolded.
-- [ ] Shared package scaffolded.
-- [ ] Local MongoDB setup documented.
-- [ ] CI configured.
+- [x] Monorepo initialized.
+- [x] API app scaffolded.
+- [x] Mobile app scaffolded.
+- [x] Admin app scaffolded.
+- [x] Shared package scaffolded.
+- [x] Local MongoDB setup documented.
+- [x] CI configured.
 - [ ] First end-to-end workflow completed.
 - [ ] Production deployment checklist completed.
 
@@ -39,43 +39,43 @@ This file is the engineering tracker for KULI. Update it as implementation progr
 
 ### Phase 0: Repository and Tooling Foundation
 
-- [ ] Initialize workspace/package manager.
-- [ ] Create `apps/api`.
-- [ ] Create `apps/mobile`.
-- [ ] Create `apps/admin`.
-- [ ] Create `packages/shared`.
-- [ ] Configure TypeScript.
-- [ ] Configure linting and formatting.
-- [ ] Add test runners.
-- [ ] Add Docker Compose for local services.
-- [ ] Add `.env.example` files.
-- [ ] Add baseline CI.
+- [x] Initialize workspace/package manager.
+- [x] Create `apps/api`.
+- [x] Create `apps/mobile`.
+- [x] Create `apps/admin`.
+- [x] Create `packages/shared`.
+- [x] Configure TypeScript.
+- [x] Configure linting and formatting.
+- [x] Add test runners.
+- [x] Add Docker Compose for local services.
+- [x] Add `.env.example` files.
+- [x] Add baseline CI.
 - [ ] Validate clean local startup.
 
 Completion:
 
 - [ ] All apps boot.
-- [ ] Lint/typecheck/test pass.
+- [x] Lint/typecheck/test pass.
 
 ### Phase 1: Identity, Profiles, RBAC, and Core Layouts
 
 - [ ] Configure Supabase Auth clients.
-- [ ] Implement backend JWT verification.
-- [ ] Create user schema/model.
-- [ ] Implement profile sync.
-- [ ] Implement `/me`.
-- [ ] Implement account status guard.
-- [ ] Implement RBAC guard.
-- [ ] Mobile auth screens.
-- [ ] Admin auth screen.
-- [ ] Role-specific route shells.
-- [ ] Admin seed/provisioning path.
+- [x] Implement backend JWT verification.
+- [x] Create user schema/model.
+- [x] Implement profile sync.
+- [x] Implement `/me`.
+- [x] Implement account status guard.
+- [x] Implement RBAC guard.
+- [x] Mobile auth screens.
+- [x] Admin auth screen.
+- [x] Role-specific route shells.
+- [x] Admin seed/provisioning path.
 
 Completion:
 
-- [ ] Public self-registration limited to client/truck owner.
-- [ ] Staff accounts cannot self-register.
-- [ ] Suspended account blocked from commands.
+- [x] Public self-registration limited to client/truck owner.
+- [x] Staff accounts cannot self-register.
+- [x] Suspended account blocked from commands.
 
 ### Phase 2: Vehicle Registry and Verification
 
@@ -212,8 +212,8 @@ Completion:
 
 | Feature | Status | Owner | Notes |
 |---|---|---|---|
-| Authentication and RBAC | Not started | TBD | Supabase Auth plus MongoDB profile |
-| User profile management | Not started | TBD | Includes notification preferences |
+| Authentication and RBAC | In progress | AI agents | Dev-token verifier in place; real Supabase JWT verification still pending |
+| User profile management | In progress | AI agents | In-memory profile sync and `/me` scaffolded; persistence still pending |
 | Vehicle classes | Not started | TBD | Seed defaults first |
 | Vehicle registration | Not started | TBD | Requires file storage |
 | Vehicle verification | Not started | TBD | Admin queue |
@@ -233,9 +233,9 @@ Completion:
 
 ## Infrastructure Tracking
 
-- [ ] MongoDB local development.
+- [x] MongoDB local development.
 - [ ] MongoDB production target selected.
-- [ ] Redis local development.
+- [x] Redis local development.
 - [ ] Redis production target selected.
 - [ ] Object storage selected.
 - [ ] Supabase project configured.
@@ -265,10 +265,10 @@ Completion:
 
 ## QA and Testing Progress
 
-- [ ] Unit tests configured.
+- [x] Unit tests configured.
 - [ ] Integration tests configured.
 - [ ] E2E tests configured.
-- [ ] Auth/RBAC tests.
+- [x] Auth/RBAC tests.
 - [ ] Vehicle verification tests.
 - [ ] Matching tests.
 - [ ] Acceptance concurrency tests.
@@ -281,9 +281,9 @@ Completion:
 
 ## Security Review Status
 
-- [ ] Auth token verification reviewed.
-- [ ] Role escalation blocked.
-- [ ] Staff account provisioning reviewed.
+- [x] Auth token verification reviewed.
+- [x] Role escalation blocked.
+- [x] Staff account provisioning reviewed.
 - [ ] File upload validation reviewed.
 - [ ] Document access authorization reviewed.
 - [ ] Rate limiting configured.
@@ -294,7 +294,7 @@ Completion:
 
 ## Deployment Readiness
 
-- [ ] Environment variables documented.
+- [x] Environment variables documented.
 - [ ] Production config validation.
 - [ ] Dockerfiles created.
 - [ ] Database migrations/seeds ready.
@@ -305,3 +305,10 @@ Completion:
 - [ ] Demo seed data prepared.
 - [ ] Smoke test checklist prepared.
 
+## Current Implementation Notes
+
+- Phase 0 is complete as a dependency-light scaffold intended for agent handoff.
+- Phase 1 has a working API slice for auth/profile flow using development bearer tokens in the form `dev:<supabaseUserId>`.
+- Real Supabase project wiring, MongoDB persistence, and installed frontend frameworks are still pending and must be completed before Phase 1 can be considered fully production-ready.
+- Staff provisioning is documented, bootstrapped for first-admin creation, and exposed through an admin-only scaffold route.
+- API listener startup was not fully verified in this sandbox because local port binding is blocked, so startup validation remains open even though the module layer and tests pass.
