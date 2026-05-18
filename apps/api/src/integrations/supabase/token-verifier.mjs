@@ -1,4 +1,5 @@
 import { AppError } from '../../common/errors/app-error.mjs';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const parseDevelopmentToken = (token) => {
   if (!token.startsWith('dev:')) {
@@ -20,8 +21,12 @@ const parseDevelopmentToken = (token) => {
 };
 
 export class SupabaseTokenVerifier {
-  constructor({ mode }) {
+  constructor({ mode, issuer, audience, jwksUrl }) {
     this.mode = mode;
+    this.issuer = issuer;
+    this.audience = audience;
+    this.jwksUrl = jwksUrl;
+    this.jwks = null;
   }
 
   async verifyAuthorizationHeader(authorizationHeader) {
@@ -35,11 +40,35 @@ export class SupabaseTokenVerifier {
       return parseDevelopmentToken(token);
     }
 
-    throw new AppError(
-      501,
-      'SUPABASE_VERIFIER_NOT_IMPLEMENTED',
-      'Real Supabase JWT verification has not been wired into this scaffold yet.'
-    );
+    if (!this.issuer || !this.jwksUrl) {
+      throw new AppError(
+        500,
+        'SUPABASE_CONFIG_MISSING',
+        'Supabase JWT verification is enabled but issuer or JWKS configuration is missing.'
+      );
+    }
+
+    if (!this.jwks) {
+      this.jwks = createRemoteJWKSet(new URL(this.jwksUrl));
+    }
+
+    try {
+      const { payload } = await jwtVerify(token, this.jwks, {
+        issuer: this.issuer,
+        audience: this.audience || undefined
+      });
+
+      return {
+        sub: payload.sub,
+        email: payload.email,
+        phone: payload.phone,
+        app_metadata: payload.app_metadata ?? {},
+        raw: payload
+      };
+    } catch (error) {
+      throw new AppError(401, 'INVALID_TOKEN', 'Supabase token verification failed.', {
+        reason: error instanceof Error ? error.message : String(error)
+      });
+    }
   }
 }
-

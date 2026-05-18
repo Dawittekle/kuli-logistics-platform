@@ -50,11 +50,11 @@ This file is the engineering tracker for KULI. Update it as implementation progr
 - [x] Add Docker Compose for local services.
 - [x] Add `.env.example` files.
 - [x] Add baseline CI.
-- [ ] Validate clean local startup.
+- [x] Validate clean local startup.
 
 Completion:
 
-- [ ] All apps boot.
+- [x] All apps boot.
 - [x] Lint/typecheck/test pass.
 
 ### Phase 1: Identity, Profiles, RBAC, and Core Layouts
@@ -212,8 +212,8 @@ Completion:
 
 | Feature | Status | Owner | Notes |
 |---|---|---|---|
-| Authentication and RBAC | In progress | AI agents | Dev-token verifier in place; real Supabase JWT verification still pending |
-| User profile management | In progress | AI agents | In-memory profile sync and `/me` scaffolded; persistence still pending |
+| Authentication and RBAC | In progress | AI agents | Dev-token verifier and Supabase JWKS verifier are in place; real project env values still need to be supplied |
+| User profile management | In progress | AI agents | MongoDB-backed profile sync, `/me`, profile update, status guard, RBAC guard, and staff provisioning scaffolded |
 | Vehicle classes | Not started | TBD | Seed defaults first |
 | Vehicle registration | Not started | TBD | Requires file storage |
 | Vehicle verification | Not started | TBD | Admin queue |
@@ -308,7 +308,7 @@ Completion:
 ## Current Implementation Notes
 
 - Phase 0 is complete as a dependency-light scaffold intended for agent handoff.
-- Phase 1 has a working API slice for auth/profile flow using development bearer tokens in the form `dev:<supabaseUserId>`.
-- Real Supabase project wiring, MongoDB persistence, and installed frontend frameworks are still pending and must be completed before Phase 1 can be considered fully production-ready.
+- Phase 1 has a working API slice for auth/profile flow using development bearer tokens in the form `dev:<supabaseUserId>` or Supabase JWT mode when project env values are supplied.
+- MongoDB persistence is wired for the Phase 1 `users` slice. Installed frontend frameworks and real Supabase client testing are still pending before Phase 1 can be considered fully production-ready.
 - Staff provisioning is documented, bootstrapped for first-admin creation, and exposed through an admin-only scaffold route.
-- API listener startup was not fully verified in this sandbox because local port binding is blocked, so startup validation remains open even though the module layer and tests pass.
+- Local startup was verified with Docker Compose MongoDB/Redis, admin placeholder, mobile placeholder, and API listener startup.

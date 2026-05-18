@@ -11,15 +11,15 @@ export class AccountService {
     this.userRepository = userRepository;
   }
 
-  syncProfile({ authUser, role, fullName, email, phone }) {
-    const existingUser = this.userRepository.findBySupabaseUserId(authUser.sub);
+  async syncProfile({ authUser, role, fullName, email, phone }) {
+    const existingUser = await this.userRepository.findBySupabaseUserId(authUser.sub);
 
     if (existingUser) {
-      const updatedUser = this.userRepository.save({
+      const updatedUser = await this.userRepository.save({
         ...existingUser,
         fullName: pickDefined(fullName, existingUser.fullName),
-        email: pickDefined(email, existingUser.email),
-        phone: pickDefined(phone, existingUser.phone)
+        email: pickDefined(email ?? authUser.email, existingUser.email),
+        phone: pickDefined(phone ?? authUser.phone, existingUser.phone)
       });
 
       return {
@@ -33,18 +33,18 @@ export class AccountService {
       supabaseUserId: authUser.sub,
       role,
       fullName,
-      email,
-      phone
+      email: email ?? authUser.email,
+      phone: phone ?? authUser.phone
     });
 
     return {
-      user: this.userRepository.save(user),
+      user: await this.userRepository.save(user),
       created: true
     };
   }
 
-  getCurrentUser(authUser) {
-    const user = this.userRepository.findBySupabaseUserId(authUser.sub);
+  async getCurrentUser(authUser) {
+    const user = await this.userRepository.findBySupabaseUserId(authUser.sub);
 
     if (!user) {
       throw new AppError(404, 'PROFILE_NOT_FOUND', 'No application profile exists for this identity.');
@@ -53,8 +53,8 @@ export class AccountService {
     return user;
   }
 
-  updateOwnProfile(authUser, input) {
-    const user = this.getCurrentUser(authUser);
+  async updateOwnProfile(authUser, input) {
+    const user = await this.getCurrentUser(authUser);
 
     return this.userRepository.save({
       ...user,
@@ -70,18 +70,18 @@ export class AccountService {
     });
   }
 
-  listUsers() {
+  async listUsers() {
     return this.userRepository.list();
   }
 
-  setAccountStatus({ actor, targetUserId, accountStatus }) {
+  async setAccountStatus({ actor, targetUserId, accountStatus }) {
     if (!Object.values(accountStatuses).includes(accountStatus)) {
       throw new AppError(422, 'INVALID_ACCOUNT_STATUS', 'Unknown account status.', {
         attemptedStatus: accountStatus
       });
     }
 
-    const targetUser = this.userRepository.findById(targetUserId);
+    const targetUser = await this.userRepository.findById(targetUserId);
 
     if (!targetUser) {
       throw new AppError(404, 'USER_NOT_FOUND', 'Target user was not found.');
@@ -97,12 +97,12 @@ export class AccountService {
     });
   }
 
-  provisionStaffUser({ actor, supabaseUserId, role, fullName, email, phone }) {
+  async provisionStaffUser({ actor, supabaseUserId, role, fullName, email, phone }) {
     if (![roles.admin, roles.assistant].includes(role)) {
       throw new AppError(422, 'INVALID_STAFF_ROLE', 'Only admin or assistant roles can be provisioned through staff flow.');
     }
 
-    const existingUser = this.userRepository.findBySupabaseUserId(supabaseUserId);
+    const existingUser = await this.userRepository.findBySupabaseUserId(supabaseUserId);
 
     if (existingUser) {
       throw new AppError(409, 'USER_ALREADY_EXISTS', 'A user profile already exists for this Supabase identity.');

@@ -1,11 +1,11 @@
 import { roles } from '../../../../../packages/shared/src/index.mjs';
 
-export const bootstrapAdmin = ({ accountService, config }) => {
+export const bootstrapAdmin = async ({ accountService, config }) => {
   if (!config.bootstrapAdminSupabaseUserId) {
     return null;
   }
 
-  const existing = accountService.userRepository.findBySupabaseUserId(config.bootstrapAdminSupabaseUserId);
+  const existing = await accountService.userRepository.findBySupabaseUserId(config.bootstrapAdminSupabaseUserId);
 
   if (existing) {
     return existing;

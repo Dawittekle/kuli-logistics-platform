@@ -8,7 +8,7 @@ The repository now contains:
 
 - A full project documentation package in [`docs/`](docs).
 - A monorepo scaffold for API, mobile, admin, and shared domain contracts.
-- A Phase 1 identity/RBAC foundation with a runnable API stub and route-shell placeholders for mobile and admin.
+- A Phase 1 identity/RBAC foundation with a MongoDB-backed API slice and route-shell placeholders for mobile and admin.
 
 The current code is intentionally dependency-light so it can run in this environment without downloading packages. The backend architecture is still aimed at a TypeScript modular monolith with NestJS once dependency installation is available.
 
@@ -44,9 +44,25 @@ npm run typecheck
 npm test
 ```
 
-These scripts validate the current scaffold and execute foundational policy tests without requiring external package installation.
+These scripts validate the current scaffold and execute foundational policy tests.
 
-### 3. Run the API placeholder server
+### 3. Start local services
+
+```bash
+docker compose up -d
+```
+
+MongoDB listens on `localhost:27018` and Redis listens on `localhost:6380` by default.
+
+### 4. Verify local startup
+
+```bash
+npm run verify:startup
+```
+
+This checks the admin placeholder, mobile placeholder, and API startup against MongoDB.
+
+### 5. Run the API server
 
 ```bash
 npm run dev --workspace @kuli/api
@@ -59,6 +75,7 @@ The server exposes:
 - `GET /api/v1/me`
 - `PATCH /api/v1/me`
 - `GET /api/v1/admin/users`
+- `POST /api/v1/admin/users`
 - `POST /api/v1/admin/staff-users`
 - `PATCH /api/v1/admin/users/:userId/status`
 
@@ -78,7 +95,7 @@ Example:
 Authorization: Bearer dev:client-demo-001
 ```
 
-This only exists to unblock Phase 1 architecture work. It must be replaced with real Supabase JWT verification in a later iteration before production readiness.
+This exists to unblock local Phase 1 work. Set `SUPABASE_JWT_MODE=supabase` and provide the Supabase project values in `apps/api/.env` to use real Supabase JWT verification.
 
 ## Admin Bootstrap
 
@@ -102,12 +119,17 @@ docker compose up -d
 
 See [`docker-compose.yml`](docker-compose.yml).
 
+## Supabase Project Values
+
+For local Supabase verification, create `apps/api/.env`, `apps/mobile/.env`, and `apps/admin/.env` from the example files. The API can derive issuer and JWKS URLs from `SUPABASE_URL`, but the examples show the explicit values too.
+
+Do not put the Supabase service-role key in frontend env files or commit it anywhere.
+
 ## Current Limitations
 
-- No real database persistence yet; the API uses an in-memory repository for the auth/profile slice.
+- The Phase 1 API slice persists user profiles in MongoDB, but only the identity/profile/RBAC domain is implemented.
 - No installed frontend framework yet; mobile and admin apps currently expose route and RBAC scaffolds rather than full UI builds.
-- No real Supabase JWKS verification yet.
-- The sandbox used for this implementation blocks binding a local HTTP port, so API module loading and tests were verified but a live listener was not fully exercised here.
+- Supabase JWKS verification is wired in the API, but it still needs your project URL and anon key for real-device/auth-client testing.
 - No file storage, vehicle registry, quotes, or marketplace execution flows yet.
 
 Those remaining items are tracked in [`docs/progress_tracking.md`](docs/progress_tracking.md).

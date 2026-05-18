@@ -6,9 +6,15 @@ const requiredPaths = [
   'package.json',
   'docker-compose.yml',
   'apps/api/src/main.mjs',
+  'apps/api/src/config/env.mjs',
+  'apps/api/src/config/load-env-file.mjs',
+  'apps/api/src/config/mongo.mjs',
+  'apps/api/src/modules/accounts/account-service.mjs',
+  'apps/api/src/modules/accounts/mongo-user-repository.mjs',
   'apps/admin/src/main.mjs',
   'apps/mobile/src/main.mjs',
   'packages/shared/src/index.mjs',
+  'tools/verify-startup.mjs',
   'docs/project_overview.md',
   'docs/system_architecture.md',
   'docs/feature_specifications.md',
@@ -32,4 +38,3 @@ for (const filePath of requiredPaths) {
 }
 
 console.log(`lint: validated ${requiredPaths.length} required files`);
-

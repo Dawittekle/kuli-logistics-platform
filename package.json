@@ -11,9 +11,13 @@
     "lint": "node tools/lint.mjs",
     "typecheck": "node tools/typecheck.mjs",
     "test": "node --test",
+    "verify:startup": "node tools/verify-startup.mjs",
     "dev:api": "npm run dev --workspace @kuli/api",
     "dev:admin": "npm run dev --workspace @kuli/admin",
     "dev:mobile": "npm run dev --workspace @kuli/mobile"
+  },
+  "dependencies": {
+    "jose": "^6.2.3",
+    "mongodb": "^7.2.0"
   }
 }
-

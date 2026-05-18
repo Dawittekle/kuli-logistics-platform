@@ -4,20 +4,20 @@ export class InMemoryUserRepository {
     this.userIdsBySupabaseUserId = new Map();
   }
 
-  list() {
+  async list() {
     return Array.from(this.usersById.values());
   }
 
-  findById(id) {
+  async findById(id) {
     return this.usersById.get(id) ?? null;
   }
 
-  findBySupabaseUserId(supabaseUserId) {
+  async findBySupabaseUserId(supabaseUserId) {
     const id = this.userIdsBySupabaseUserId.get(supabaseUserId);
     return id ? this.findById(id) : null;
   }
 
-  save(user) {
+  async save(user) {
     const record = {
       ...user,
       updatedAt: new Date().toISOString()

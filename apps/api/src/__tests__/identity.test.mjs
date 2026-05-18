@@ -7,6 +7,7 @@ import { InMemoryUserRepository } from '../modules/accounts/in-memory-user-repos
 import { AccountService } from '../modules/accounts/account-service.mjs';
 import { AppError } from '../common/errors/app-error.mjs';
 import { assertPublicRegistrationRole } from '../modules/identity/profile-sync-policy.mjs';
+import { SupabaseTokenVerifier } from '../integrations/supabase/token-verifier.mjs';
 
 test('public profile sync allows client accounts', () => {
   assert.doesNotThrow(() => assertPublicRegistrationRole(roles.client));
@@ -43,12 +44,12 @@ test('role guard blocks truck owner from admin route', () => {
   );
 });
 
-test('account service syncs and updates a public profile', () => {
+test('account service syncs and updates a public profile', async () => {
   const service = new AccountService({
     userRepository: new InMemoryUserRepository()
   });
 
-  const first = service.syncProfile({
+  const first = await service.syncProfile({
     authUser: { sub: 'client-auth-001' },
     role: roles.client,
     fullName: 'Client Demo',
@@ -59,7 +60,7 @@ test('account service syncs and updates a public profile', () => {
   assert.equal(first.created, true);
   assert.equal(first.user.role, roles.client);
 
-  const second = service.syncProfile({
+  const second = await service.syncProfile({
     authUser: { sub: 'client-auth-001' },
     role: roles.admin,
     fullName: 'Client Demo Updated',
@@ -73,12 +74,12 @@ test('account service syncs and updates a public profile', () => {
   assert.equal(second.user.email, 'client-updated@example.com');
 });
 
-test('staff accounts are provisioned by admin flow, not public self-registration', () => {
+test('staff accounts are provisioned by admin flow, not public self-registration', async () => {
   const service = new AccountService({
     userRepository: new InMemoryUserRepository()
   });
 
-  const admin = service.provisionStaffUser({
+  const admin = await service.provisionStaffUser({
     actor: {
       id: 'usr_system',
       role: roles.admin,
@@ -91,7 +92,7 @@ test('staff accounts are provisioned by admin flow, not public self-registration
     phone: undefined
   });
 
-  const assistant = service.provisionStaffUser({
+  const assistant = await service.provisionStaffUser({
     actor: admin,
     supabaseUserId: 'assistant-001',
     role: roles.assistant,
@@ -102,4 +103,27 @@ test('staff accounts are provisioned by admin flow, not public self-registration
 
   assert.equal(assistant.role, roles.assistant);
   assert.throws(() => assertPublicRegistrationRole(roles.assistant), AppError);
+});
+
+test('development token verifier resolves dev bearer tokens', async () => {
+  const verifier = new SupabaseTokenVerifier({
+    mode: 'development_stub'
+  });
+
+  const authUser = await verifier.verifyAuthorizationHeader('Bearer dev:client-auth-001');
+
+  assert.equal(authUser.sub, 'client-auth-001');
+});
+
+test('supabase verifier fails closed when project verification config is missing', async () => {
+  const verifier = new SupabaseTokenVerifier({
+    mode: 'supabase',
+    issuer: '',
+    jwksUrl: ''
+  });
+
+  await assert.rejects(
+    () => verifier.verifyAuthorizationHeader('Bearer real-token-placeholder'),
+    (error) => error instanceof AppError && error.code === 'SUPABASE_CONFIG_MISSING'
+  );
 });
