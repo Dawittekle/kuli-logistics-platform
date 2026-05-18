@@ -119,11 +119,49 @@ test('supabase verifier fails closed when project verification config is missing
   const verifier = new SupabaseTokenVerifier({
     mode: 'supabase',
     issuer: '',
-    jwksUrl: ''
+    jwksUrl: '',
+    supabaseUrl: '',
+    anonKey: ''
   });
 
+  const hs256UserJwt =
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdXRoLXVzZXItMDAxIiwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJleHAiOjk5OTk5OTk5OTl9.signature';
+
   await assert.rejects(
-    () => verifier.verifyAuthorizationHeader('Bearer real-token-placeholder'),
+    () => verifier.verifyAuthorizationHeader(`Bearer ${hs256UserJwt}`),
     (error) => error instanceof AppError && error.code === 'SUPABASE_CONFIG_MISSING'
   );
+});
+
+test('supabase verifier validates shared-secret projects through auth server', async () => {
+  const verifier = new SupabaseTokenVerifier({
+    mode: 'supabase',
+    issuer: 'https://example.supabase.co/auth/v1',
+    jwksUrl: 'https://example.supabase.co/auth/v1/.well-known/jwks.json',
+    supabaseUrl: 'https://example.supabase.co',
+    anonKey: 'anon-key',
+    fetchImpl: async (url, options) => {
+      assert.equal(url, 'https://example.supabase.co/auth/v1/user');
+      assert.equal(options.headers.apikey, 'anon-key');
+
+      return {
+        ok: true,
+        async json() {
+          return {
+            id: 'auth-user-001',
+            email: 'auth-user@example.com',
+            phone: '+251911111111',
+            app_metadata: {}
+          };
+        }
+      };
+    }
+  });
+
+  const hs256UserJwt =
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhdXRoLXVzZXItMDAxIiwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJleHAiOjk5OTk5OTk5OTl9.signature';
+
+  const authUser = await verifier.verifyAuthorizationHeader(`Bearer ${hs256UserJwt}`);
+
+  assert.equal(authUser.sub, 'auth-user-001');
 });

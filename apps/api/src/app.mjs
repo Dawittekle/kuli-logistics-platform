@@ -151,7 +151,9 @@ export const createAppContext = async (config = env) => {
     mode: config.supabaseJwtMode,
     issuer: config.supabaseJwtIssuer,
     audience: config.supabaseJwtAudience,
-    jwksUrl: config.supabaseJwksUrl
+    jwksUrl: config.supabaseJwksUrl,
+    supabaseUrl: config.supabaseUrl,
+    anonKey: config.supabaseAnonKey
   });
 
   await bootstrapAdmin({

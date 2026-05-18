@@ -123,7 +123,12 @@ See [`docker-compose.yml`](docker-compose.yml).
 
 For local Supabase verification, create `apps/api/.env`, `apps/mobile/.env`, and `apps/admin/.env` from the example files. The API can derive issuer and JWKS URLs from `SUPABASE_URL`, but the examples show the explicit values too.
 
-Do not put the Supabase service-role key in frontend env files or commit it anywhere.
+The backend follows Supabase's current JWT guidance:
+
+- Asymmetric user access tokens are verified against `SUPABASE_JWKS_URL`.
+- Legacy/shared-secret `HS256` user access tokens are verified through `GET /auth/v1/user` with `SUPABASE_ANON_KEY`.
+
+Do not put the Supabase service-role key in frontend env files or commit it anywhere. Phase 1 does not need the service-role key or JWT secret for normal user-token verification.
 
 ## Current Limitations
 

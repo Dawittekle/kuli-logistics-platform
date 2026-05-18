@@ -1,5 +1,5 @@
 import { AppError } from '../../common/errors/app-error.mjs';
-import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { createRemoteJWKSet, decodeProtectedHeader, jwtVerify } from 'jose';
 
 const parseDevelopmentToken = (token) => {
   if (!token.startsWith('dev:')) {
@@ -21,12 +21,52 @@ const parseDevelopmentToken = (token) => {
 };
 
 export class SupabaseTokenVerifier {
-  constructor({ mode, issuer, audience, jwksUrl }) {
+  constructor({ mode, issuer, audience, jwksUrl, supabaseUrl, anonKey, fetchImpl = fetch }) {
     this.mode = mode;
     this.issuer = issuer;
     this.audience = audience;
     this.jwksUrl = jwksUrl;
+    this.supabaseUrl = supabaseUrl;
+    this.anonKey = anonKey;
+    this.fetchImpl = fetchImpl;
     this.jwks = null;
+  }
+
+  async verifyWithAuthServer(token) {
+    if (!this.supabaseUrl || !this.anonKey || this.anonKey === 'replace-me') {
+      throw new AppError(
+        500,
+        'SUPABASE_CONFIG_MISSING',
+        'Supabase shared-secret verification requires SUPABASE_URL and SUPABASE_ANON_KEY.'
+      );
+    }
+
+    const response = await this.fetchImpl(`${this.supabaseUrl}/auth/v1/user`, {
+      headers: {
+        apikey: this.anonKey,
+        authorization: `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new AppError(401, 'INVALID_TOKEN', 'Supabase token verification failed.', {
+        statusCode: response.status
+      });
+    }
+
+    const user = await response.json();
+
+    if (!user?.id) {
+      throw new AppError(401, 'INVALID_TOKEN', 'Supabase token verification did not return a user.');
+    }
+
+    return {
+      sub: user.id,
+      email: user.email,
+      phone: user.phone,
+      app_metadata: user.app_metadata ?? {},
+      raw: user
+    };
   }
 
   async verifyAuthorizationHeader(authorizationHeader) {
@@ -38,6 +78,18 @@ export class SupabaseTokenVerifier {
 
     if (this.mode === 'development_stub') {
       return parseDevelopmentToken(token);
+    }
+
+    let header;
+
+    try {
+      header = decodeProtectedHeader(token);
+    } catch {
+      throw new AppError(401, 'INVALID_TOKEN', 'Supabase token is not a valid JWT.');
+    }
+
+    if (header.alg === 'HS256') {
+      return this.verifyWithAuthServer(token);
     }
 
     if (!this.issuer || !this.jwksUrl) {
@@ -66,9 +118,7 @@ export class SupabaseTokenVerifier {
         raw: payload
       };
     } catch (error) {
-      throw new AppError(401, 'INVALID_TOKEN', 'Supabase token verification failed.', {
-        reason: error instanceof Error ? error.message : String(error)
-      });
+      return this.verifyWithAuthServer(token);
     }
   }
 }
