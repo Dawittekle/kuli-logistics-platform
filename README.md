@@ -78,6 +78,16 @@ The server exposes:
 - `POST /api/v1/admin/users`
 - `POST /api/v1/admin/staff-users`
 - `PATCH /api/v1/admin/users/:userId/status`
+- `GET /api/v1/vehicle-classes`
+- `POST /api/v1/vehicles`
+- `GET /api/v1/vehicles/mine`
+- `GET /api/v1/vehicles/:id`
+- `PATCH /api/v1/vehicles/:id`
+- `POST /api/v1/files/upload-intent`
+- `POST /api/v1/vehicles/:id/documents`
+- `PATCH /api/v1/vehicles/:id/availability`
+- `GET /api/v1/admin/vehicles/pending`
+- `PATCH /api/v1/admin/vehicles/:id/verification`
 
 ## Development Tokens
 

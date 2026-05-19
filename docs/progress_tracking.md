@@ -79,21 +79,21 @@ Completion:
 
 ### Phase 2: Vehicle Registry and Verification
 
-- [ ] Seed vehicle classes.
-- [ ] Owner vehicle CRUD.
-- [ ] File upload intent.
-- [ ] Vehicle document metadata.
+- [x] Seed vehicle classes.
+- [x] Owner vehicle CRUD.
+- [x] File upload intent.
+- [x] Vehicle document metadata.
 - [ ] Owner registration form.
-- [ ] Admin pending queue.
+- [x] Admin pending queue.
 - [ ] Admin document preview.
-- [ ] Approve/reject workflow.
-- [ ] Owner rejection reason display.
-- [ ] Vehicle availability transition rules.
-- [ ] Verification audit logs.
+- [x] Approve/reject workflow.
+- [x] Owner rejection reason display.
+- [x] Vehicle availability transition rules.
+- [x] Verification audit logs.
 
 Completion:
 
-- [ ] Approved vehicle can go online.
+- [x] Approved vehicle can go online.
 - [ ] Pending/rejected vehicle cannot be matched.
 
 ### Phase 3: Quotes, Pricing, and Nearby Search
@@ -214,10 +214,10 @@ Completion:
 |---|---|---|---|
 | Authentication and RBAC | In progress | AI agents | Dev-token verifier and Supabase JWKS verifier are in place; real project env values still need to be supplied |
 | User profile management | In progress | AI agents | MongoDB-backed profile sync, `/me`, profile update, status guard, RBAC guard, and staff provisioning scaffolded |
-| Vehicle classes | Not started | TBD | Seed defaults first |
-| Vehicle registration | Not started | TBD | Requires file storage |
-| Vehicle verification | Not started | TBD | Admin queue |
-| Availability management | Not started | TBD | Separate from verification |
+| Vehicle classes | In progress | AI agents | Default classes are seeded; admin CRUD API scaffolded |
+| Vehicle registration | In progress | AI agents | Owner CRUD and document metadata APIs are in place; mobile form UI still pending |
+| Vehicle verification | In progress | AI agents | Admin pending queue and approve/reject workflow are in place; document preview UI still pending |
+| Availability management | In progress | AI agents | Vehicle availability transition rules block unapproved vehicles from going online |
 | Quotes and pricing | Not started | TBD | Versioned pricing rules |
 | Nearby matching | Not started | TBD | MongoDB 2dsphere |
 | Request creation | Not started | TBD | Needs idempotency |
@@ -269,7 +269,7 @@ Completion:
 - [ ] Integration tests configured.
 - [ ] E2E tests configured.
 - [x] Auth/RBAC tests.
-- [ ] Vehicle verification tests.
+- [x] Vehicle verification tests.
 - [ ] Matching tests.
 - [ ] Acceptance concurrency tests.
 - [ ] Trip state machine tests.

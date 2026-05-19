@@ -12,6 +12,12 @@ import { assertPublicRegistrationRole, normalizeRequestedRole } from './modules/
 import { AccountService } from './modules/accounts/account-service.mjs';
 import { MongoUserRepository } from './modules/accounts/mongo-user-repository.mjs';
 import { bootstrapAdmin } from './modules/admin/bootstrap-admin.mjs';
+import { MongoAuditLogRepository } from './modules/audit/mongo-audit-log-repository.mjs';
+import { MongoFileRepository } from './modules/files/mongo-file-repository.mjs';
+import { MongoVehicleClassRepository } from './modules/vehicle-registry/mongo-vehicle-class-repository.mjs';
+import { MongoVehicleDocumentRepository } from './modules/vehicle-registry/mongo-vehicle-document-repository.mjs';
+import { MongoVehicleRepository } from './modules/vehicle-registry/mongo-vehicle-repository.mjs';
+import { VehicleRegistryService } from './modules/vehicle-registry/vehicle-registry-service.mjs';
 
 const send = (response, result) => {
   response.writeHead(result.statusCode, result.headers);
@@ -49,6 +55,10 @@ const createRouteRequest = (context) => async (request) => {
       authMode: context.env.supabaseJwtMode,
       persistence: 'mongodb'
     });
+  }
+
+  if (method === 'GET' && path === '/api/v1/vehicle-classes') {
+    return success(await context.vehicleRegistryService.listActiveVehicleClasses());
   }
 
   if (method === 'POST' && path === '/api/v1/auth/sync-profile') {
@@ -91,6 +101,51 @@ const createRouteRequest = (context) => async (request) => {
     return success(await context.accountService.listUsers());
   }
 
+  if (method === 'POST' && path === '/api/v1/admin/vehicle-classes') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    return success(
+      await context.vehicleRegistryService.createVehicleClass({
+        actor: currentUser,
+        input: await parseJsonBody(request)
+      }),
+      201
+    );
+  }
+
+  if (method === 'PATCH' && path.startsWith('/api/v1/admin/vehicle-classes/')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    const vehicleClassId = path.split('/')[5];
+
+    return success(
+      await context.vehicleRegistryService.updateVehicleClass({
+        actor: currentUser,
+        vehicleClassId,
+        input: await parseJsonBody(request)
+      })
+    );
+  }
+
+  if (method === 'DELETE' && path.startsWith('/api/v1/admin/vehicle-classes/')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    const vehicleClassId = path.split('/')[5];
+
+    return success(
+      await context.vehicleRegistryService.deactivateVehicleClass({
+        actor: currentUser,
+        vehicleClassId
+      })
+    );
+  }
+
   if (method === 'POST' && (path === '/api/v1/admin/users' || path === '/api/v1/admin/staff-users')) {
     const { currentUser } = await resolveAuth();
     assertActiveAccount(currentUser);
@@ -128,6 +183,134 @@ const createRouteRequest = (context) => async (request) => {
     );
   }
 
+  if (method === 'POST' && path === '/api/v1/vehicles') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.truckOwner]);
+
+    return success(
+      await context.vehicleRegistryService.createVehicle({
+        actor: currentUser,
+        input: await parseJsonBody(request)
+      }),
+      201
+    );
+  }
+
+  if (method === 'GET' && path === '/api/v1/vehicles/mine') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.truckOwner]);
+
+    return success(await context.vehicleRegistryService.listOwnerVehicles({ actor: currentUser }));
+  }
+
+  if (method === 'GET' && path.startsWith('/api/v1/vehicles/')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.truckOwner]);
+
+    const vehicleId = path.split('/')[5];
+
+    return success(
+      await context.vehicleRegistryService.getOwnerVehicle({
+        actor: currentUser,
+        vehicleId
+      })
+    );
+  }
+
+  if (method === 'PATCH' && path.startsWith('/api/v1/vehicles/') && !path.endsWith('/availability')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.truckOwner]);
+
+    const vehicleId = path.split('/')[4];
+
+    return success(
+      await context.vehicleRegistryService.updateOwnerVehicle({
+        actor: currentUser,
+        vehicleId,
+        input: await parseJsonBody(request)
+      })
+    );
+  }
+
+  if (method === 'PATCH' && path.startsWith('/api/v1/vehicles/') && path.endsWith('/availability')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.truckOwner]);
+
+    const vehicleId = path.split('/')[4];
+
+    return success(
+      await context.vehicleRegistryService.updateAvailability({
+        actor: currentUser,
+        vehicleId,
+        input: await parseJsonBody(request)
+      })
+    );
+  }
+
+  if (method === 'POST' && path === '/api/v1/files/upload-intent') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.truckOwner]);
+
+    return success(
+      await context.vehicleRegistryService.createUploadIntent({
+        actor: currentUser,
+        input: await parseJsonBody(request)
+      }),
+      201
+    );
+  }
+
+  if (method === 'POST' && path.startsWith('/api/v1/vehicles/') && path.endsWith('/documents')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.truckOwner]);
+
+    const vehicleId = path.split('/')[4];
+
+    return success(
+      await context.vehicleRegistryService.attachVehicleDocument({
+        actor: currentUser,
+        vehicleId,
+        input: await parseJsonBody(request)
+      }),
+      201
+    );
+  }
+
+  if (method === 'GET' && path === '/api/v1/admin/vehicles/pending') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    return success(
+      await context.vehicleRegistryService.listPendingVerification({
+        actor: currentUser
+      })
+    );
+  }
+
+  if (method === 'PATCH' && path.startsWith('/api/v1/admin/vehicles/') && path.endsWith('/verification')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    const vehicleId = path.split('/')[4];
+
+    return success(
+      await context.vehicleRegistryService.decideVerification({
+        actor: currentUser,
+        vehicleId,
+        input: await parseJsonBody(request)
+      })
+    );
+  }
+
   return success(
     {
       message: 'Route scaffold exists but has not been implemented yet.',
@@ -143,10 +326,27 @@ export const createAppContext = async (config = env) => {
     serverSelectionTimeoutMs: config.mongodbServerSelectionTimeoutMs
   });
   const userRepository = new MongoUserRepository({ db });
+  const vehicleClassRepository = new MongoVehicleClassRepository({ db });
+  const vehicleRepository = new MongoVehicleRepository({ db });
+  const vehicleDocumentRepository = new MongoVehicleDocumentRepository({ db });
+  const fileRepository = new MongoFileRepository({ db });
+  const auditLogRepository = new MongoAuditLogRepository({ db });
 
   await userRepository.ensureIndexes();
+  await vehicleClassRepository.ensureIndexes();
+  await vehicleRepository.ensureIndexes();
+  await vehicleDocumentRepository.ensureIndexes();
+  await fileRepository.ensureIndexes();
+  await auditLogRepository.ensureIndexes();
 
   const accountService = new AccountService({ userRepository });
+  const vehicleRegistryService = new VehicleRegistryService({
+    vehicleClassRepository,
+    vehicleRepository,
+    vehicleDocumentRepository,
+    fileRepository,
+    auditLogRepository
+  });
   const tokenVerifier = new SupabaseTokenVerifier({
     mode: config.supabaseJwtMode,
     issuer: config.supabaseJwtIssuer,
@@ -161,12 +361,15 @@ export const createAppContext = async (config = env) => {
     config
   });
 
+  await vehicleRegistryService.seedDefaultVehicleClasses();
+
   return {
     env: config,
     mongoClient: client,
     db,
     userRepository,
     accountService,
+    vehicleRegistryService,
     tokenVerifier
   };
 };
