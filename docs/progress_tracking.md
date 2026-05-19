@@ -94,7 +94,7 @@ Completion:
 Completion:
 
 - [x] Approved vehicle can go online.
-- [ ] Pending/rejected vehicle cannot be matched.
+- [x] Pending/rejected vehicle cannot be matched.
 
 ### Phase 3: Quotes, Pricing, and Nearby Search
 
@@ -284,10 +284,10 @@ Completion:
 - [x] Auth token verification reviewed.
 - [x] Role escalation blocked.
 - [x] Staff account provisioning reviewed.
-- [ ] File upload validation reviewed.
+- [x] File upload validation reviewed.
 - [x] Document access authorization reviewed.
 - [ ] Rate limiting configured.
-- [ ] Audit logging coverage reviewed.
+- [x] Audit logging coverage reviewed.
 - [ ] Secrets management reviewed.
 - [ ] CORS configuration reviewed.
 - [x] Admin action audit trail reviewed.
