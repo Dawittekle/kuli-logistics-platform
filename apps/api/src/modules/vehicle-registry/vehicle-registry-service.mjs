@@ -214,6 +214,21 @@ export class VehicleRegistryService {
     };
   }
 
+  async getAdminVehicle({ actor, vehicleId }) {
+    assertAdmin(actor);
+
+    const vehicle = await this.vehicleRepository.findById(vehicleId);
+
+    if (!vehicle) {
+      throw new AppError(404, 'VEHICLE_NOT_FOUND', 'Vehicle was not found.');
+    }
+
+    return {
+      ...vehicle,
+      documents: await this.vehicleDocumentRepository.listByVehicleId(vehicle.id)
+    };
+  }
+
   async updateOwnerVehicle({ actor, vehicleId, input }) {
     assertTruckOwner(actor);
     const vehicle = await this.vehicleRepository.findById(vehicleId);
@@ -278,6 +293,43 @@ export class VehicleRegistryService {
         url: `local-dev://uploads/${file.storageKey}`,
         expiresInSeconds: 900
       }
+    };
+  }
+
+  async createSignedFileUrl({ actor, fileId }) {
+    const file = await this.fileRepository.findById(fileId);
+
+    if (!file) {
+      throw new AppError(404, 'FILE_NOT_FOUND', 'File metadata was not found.');
+    }
+
+    if (actor.role === roles.truckOwner && file.ownerId !== actor.id) {
+      throw new AppError(404, 'FILE_NOT_FOUND', 'File metadata was not found.');
+    }
+
+    if (![roles.admin, roles.truckOwner].includes(actor.role)) {
+      throw new AppError(403, 'FILE_ACCESS_FORBIDDEN', 'You do not have access to this file.');
+    }
+
+    if (actor.role === roles.admin) {
+      await this.auditLogRepository.write({
+        id: createId('audit'),
+        actorUserId: actor.id,
+        actorRole: actor.role,
+        action: 'file.signed_url.created',
+        targetType: 'file',
+        targetId: file.id,
+        metadata: {
+          linkedEntityType: file.linkedEntityType,
+          linkedEntityId: file.linkedEntityId
+        }
+      });
+    }
+
+    return {
+      fileId: file.id,
+      url: `local-dev://signed-read/${file.storageKey}`,
+      expiresInSeconds: 300
     };
   }
 

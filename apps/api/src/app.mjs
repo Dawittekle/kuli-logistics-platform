@@ -266,6 +266,21 @@ const createRouteRequest = (context) => async (request) => {
     );
   }
 
+  if (method === 'GET' && path.startsWith('/api/v1/files/') && path.endsWith('/signed-url')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.truckOwner, roles.admin]);
+
+    const fileId = path.split('/')[4];
+
+    return success(
+      await context.vehicleRegistryService.createSignedFileUrl({
+        actor: currentUser,
+        fileId
+      })
+    );
+  }
+
   if (method === 'POST' && path.startsWith('/api/v1/vehicles/') && path.endsWith('/documents')) {
     const { currentUser } = await resolveAuth();
     assertActiveAccount(currentUser);
@@ -291,6 +306,21 @@ const createRouteRequest = (context) => async (request) => {
     return success(
       await context.vehicleRegistryService.listPendingVerification({
         actor: currentUser
+      })
+    );
+  }
+
+  if (method === 'GET' && path.startsWith('/api/v1/admin/vehicles/') && !path.endsWith('/verification')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    const vehicleId = path.split('/')[5];
+
+    return success(
+      await context.vehicleRegistryService.getAdminVehicle({
+        actor: currentUser,
+        vehicleId
       })
     );
   }

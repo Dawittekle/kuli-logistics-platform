@@ -85,7 +85,7 @@ Completion:
 - [x] Vehicle document metadata.
 - [ ] Owner registration form.
 - [x] Admin pending queue.
-- [ ] Admin document preview.
+- [x] Admin document preview.
 - [x] Approve/reject workflow.
 - [x] Owner rejection reason display.
 - [x] Vehicle availability transition rules.
@@ -216,7 +216,7 @@ Completion:
 | User profile management | In progress | AI agents | MongoDB-backed profile sync, `/me`, profile update, status guard, RBAC guard, and staff provisioning scaffolded |
 | Vehicle classes | In progress | AI agents | Default classes are seeded; admin CRUD API scaffolded |
 | Vehicle registration | In progress | AI agents | Owner CRUD and document metadata APIs are in place; mobile form UI still pending |
-| Vehicle verification | In progress | AI agents | Admin pending queue and approve/reject workflow are in place; document preview UI still pending |
+| Vehicle verification | In progress | AI agents | Admin pending queue, detail, document signed URL, and approve/reject workflow are in place |
 | Availability management | In progress | AI agents | Vehicle availability transition rules block unapproved vehicles from going online |
 | Quotes and pricing | Not started | TBD | Versioned pricing rules |
 | Nearby matching | Not started | TBD | MongoDB 2dsphere |
@@ -285,12 +285,12 @@ Completion:
 - [x] Role escalation blocked.
 - [x] Staff account provisioning reviewed.
 - [ ] File upload validation reviewed.
-- [ ] Document access authorization reviewed.
+- [x] Document access authorization reviewed.
 - [ ] Rate limiting configured.
 - [ ] Audit logging coverage reviewed.
 - [ ] Secrets management reviewed.
 - [ ] CORS configuration reviewed.
-- [ ] Admin action audit trail reviewed.
+- [x] Admin action audit trail reviewed.
 
 ## Deployment Readiness
 

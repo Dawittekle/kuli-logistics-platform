@@ -216,3 +216,26 @@ test('vehicle document upload intent validates type and size', async () => {
   assert.equal(intent.file.mimeType, 'application/pdf');
   assert.equal(intent.upload.method, 'PUT');
 });
+
+test('admin file preview creates signed url and audit log', async () => {
+  const { service, auditLogRepository } = createService();
+  const intent = await service.createUploadIntent({
+    actor: truckOwner,
+    input: {
+      vehicleId: 'veh_001',
+      type: 'vehicle_registration',
+      mimeType: 'application/pdf',
+      sizeBytes: 4096,
+      originalFileName: 'registration.pdf'
+    }
+  });
+
+  const signedUrl = await service.createSignedFileUrl({
+    actor: admin,
+    fileId: intent.file.id
+  });
+
+  assert.equal(signedUrl.fileId, intent.file.id);
+  assert.match(signedUrl.url, /^local-dev:\/\/signed-read\//);
+  assert.equal(auditLogRepository.entries[0].action, 'file.signed_url.created');
+});

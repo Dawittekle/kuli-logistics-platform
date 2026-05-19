@@ -84,9 +84,11 @@ The server exposes:
 - `GET /api/v1/vehicles/:id`
 - `PATCH /api/v1/vehicles/:id`
 - `POST /api/v1/files/upload-intent`
+- `GET /api/v1/files/:id/signed-url`
 - `POST /api/v1/vehicles/:id/documents`
 - `PATCH /api/v1/vehicles/:id/availability`
 - `GET /api/v1/admin/vehicles/pending`
+- `GET /api/v1/admin/vehicles/:id`
 - `PATCH /api/v1/admin/vehicles/:id/verification`
 
 ## Development Tokens
