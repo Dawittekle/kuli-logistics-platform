@@ -32,6 +32,7 @@ const requiredPaths = [
   'apps/admin/src/pricing-shell.mjs',
   'apps/mobile/src/main.mjs',
   'apps/mobile/src/config.mjs',
+  'apps/mobile/src/marketplace-shell.mjs',
   'apps/mobile/src/quote-shell.mjs',
   'packages/shared/src/index.mjs',
   'tools/verify-startup.mjs',

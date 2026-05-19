@@ -116,21 +116,21 @@ Completion:
 
 ### Phase 4: Requests, Offers, Acceptance
 
-- [ ] Create KULI request endpoint.
-- [ ] Trip offer model.
-- [ ] Offer dispatch.
-- [ ] Owner offer inbox.
-- [ ] Accept/decline/viewed endpoints.
-- [ ] Atomic acceptance.
-- [ ] Competing offer expiry.
-- [ ] Timeout job.
-- [ ] Client waiting state.
-- [ ] Notifications for offer events.
+- [x] Create KULI request endpoint.
+- [x] Trip offer model.
+- [x] Offer dispatch.
+- [x] Owner offer inbox.
+- [x] Accept/decline/viewed endpoints.
+- [x] Atomic acceptance.
+- [x] Competing offer expiry.
+- [x] Timeout job.
+- [x] Client waiting state.
+- [x] Notifications for offer events.
 
 Completion:
 
-- [ ] Two simultaneous accepts produce one winner.
-- [ ] Timeout and cancellation clean up offers.
+- [x] Two simultaneous accepts produce one winner.
+- [x] Timeout and cancellation clean up offers.
 
 ### Phase 5: Trip Execution, Messaging, Notifications
 
@@ -220,11 +220,11 @@ Completion:
 | Availability management | In progress | AI agents | Vehicle availability transition rules block unapproved vehicles from going online |
 | Quotes and pricing | In progress | AI agents | Deterministic route adapter, seeded active pricing rule, admin pricing API, and quote endpoint are in place |
 | Nearby matching | In progress | AI agents | Approved/online nearby search, radius expansion, and deterministic ranking are tested |
-| Request creation | Not started | TBD | Needs idempotency |
-| Offer acceptance | Not started | TBD | Atomic first-accept-wins |
+| Request creation | In progress | AI agents | Idempotent KULI request endpoint creates pending requests and dispatches selected offers |
+| Offer acceptance | In progress | AI agents | Owner inbox, viewed/decline/accept commands, timeout cleanup, and first-accept-wins tests are in place |
 | Trip state machine | Not started | TBD | Manual status updates |
 | Messaging | Not started | TBD | Request-scoped |
-| Notifications | Not started | TBD | In-app first, external later |
+| Notifications | In progress | AI agents | Offer/request notification records are persisted; user notification inbox APIs and external delivery remain Phase 5 work |
 | Assisted booking | Not started | TBD | Ticket workflow |
 | Ratings | Not started | TBD | Terminal trips only |
 | Reports/disputes | Not started | TBD | Admin mediation |
@@ -271,7 +271,7 @@ Completion:
 - [x] Auth/RBAC tests.
 - [x] Vehicle verification tests.
 - [x] Matching tests.
-- [ ] Acceptance concurrency tests.
+- [x] Acceptance concurrency tests.
 - [ ] Trip state machine tests.
 - [ ] Assisted booking tests.
 - [ ] Payment/report/rating tests.
@@ -312,3 +312,4 @@ Completion:
 - MongoDB persistence is wired for the Phase 1 `users` slice. Installed frontend frameworks and real Supabase client testing are still pending before Phase 1 can be considered fully production-ready.
 - Staff provisioning is documented, bootstrapped for first-admin creation, and exposed through an admin-only scaffold route.
 - Local startup was verified with Docker Compose MongoDB/Redis, admin placeholder, mobile placeholder, and API listener startup.
+- Phase 4 has a backend request/offer acceptance slice with idempotent create, owner offer commands, first-accept-wins protection, timeout cleanup, cancellation cleanup, and lightweight mobile waiting/inbox screen contracts.
