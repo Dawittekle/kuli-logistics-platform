@@ -3,6 +3,7 @@ export const adminReportsWorkspace = {
   sourceEndpoints: {
     list: 'GET /api/v1/admin/reports',
     resolve: 'PATCH /api/v1/admin/reports/:id',
+    evidenceUpload: 'POST /api/v1/reports/:id/evidence/upload-intent',
     evidence: 'POST /api/v1/reports/:id/evidence'
   },
   filters: ['status', 'category', 'reportedUserId'],

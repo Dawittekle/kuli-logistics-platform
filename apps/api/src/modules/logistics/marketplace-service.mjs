@@ -1,4 +1,13 @@
-import { kuliStatuses, offerStatuses, roles, vehicleAvailabilityStatuses, verificationStatuses } from '../../../../../packages/shared/src/index.mjs';
+import {
+  kuliStatuses,
+  offerStatuses,
+  paymentFlows,
+  paymentMethods,
+  paymentStatuses,
+  roles,
+  vehicleAvailabilityStatuses,
+  verificationStatuses
+} from '../../../../../packages/shared/src/index.mjs';
 import { AppError } from '../../common/errors/app-error.mjs';
 
 const createId = (prefix) => `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
@@ -62,6 +71,7 @@ export class MarketplaceService {
     notificationRepository,
     statusEventRepository,
     messageRepository,
+    paymentRepository,
     quoteService
   }) {
     this.kuliRequestRepository = kuliRequestRepository;
@@ -70,6 +80,7 @@ export class MarketplaceService {
     this.notificationRepository = notificationRepository;
     this.statusEventRepository = statusEventRepository;
     this.messageRepository = messageRepository;
+    this.paymentRepository = paymentRepository;
     this.quoteService = quoteService;
   }
 
@@ -82,6 +93,31 @@ export class MarketplaceService {
       actorUserId: actor?.id ?? 'system',
       actorRole: actor?.role ?? 'system',
       reason
+    });
+  }
+
+  async ensureCompletedTripPaymentRecord(request) {
+    if (!this.paymentRepository || request.status !== kuliStatuses.completed || !request.selectedOwnerId) {
+      return null;
+    }
+
+    const existing = await this.paymentRepository.findByRequestId(request.id);
+
+    if (existing) {
+      return existing;
+    }
+
+    return this.paymentRepository.save({
+      id: createId('pay'),
+      requestId: request.id,
+      payerClientId: request.clientId,
+      payeeOwnerId: request.selectedOwnerId,
+      status: paymentStatuses.pending,
+      flow: paymentFlows.payOnDelivery,
+      method: paymentMethods.cash,
+      currency: request.quoteSnapshot?.currency ?? 'ETB',
+      amountExpected: request.quoteSnapshot?.totalEstimate ?? 0,
+      platformCommissionAmount: 0
     });
   }
 
@@ -592,6 +628,10 @@ export class MarketplaceService {
         vehicleId: updatedRequest.selectedVehicleId,
         activeTripId: updatedRequest.id
       });
+    }
+
+    if (nextStatus === kuliStatuses.completed) {
+      await this.ensureCompletedTripPaymentRecord(updatedRequest);
     }
 
     const event = await this.recordStatusEvent({

@@ -111,6 +111,7 @@ The server exposes:
 - `POST /api/v1/offers/:id/accept`
 - `POST /api/v1/offers/:id/decline`
 - `POST /api/v1/reports`
+- `POST /api/v1/reports/:id/evidence/upload-intent`
 - `POST /api/v1/reports/:id/evidence`
 - `GET /api/v1/notifications`
 - `PATCH /api/v1/notifications/:id/read`

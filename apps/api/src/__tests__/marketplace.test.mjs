@@ -430,6 +430,26 @@ class MemoryMessageRepository {
   }
 }
 
+class MemoryPaymentRepository {
+  constructor() {
+    this.records = new Map();
+  }
+
+  async findByRequestId(requestId) {
+    return Array.from(this.records.values()).find((payment) => payment.requestId === requestId) ?? null;
+  }
+
+  async save(payment) {
+    const saved = {
+      ...payment,
+      createdAt: payment.createdAt ?? new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    this.records.set(saved.id, saved);
+    return saved;
+  }
+}
+
 class StubQuoteService {
   async createQuote() {
     return {
@@ -472,6 +492,7 @@ const createService = () => {
   const notificationRepository = new MemoryNotificationRepository();
   const statusEventRepository = new MemoryStatusEventRepository();
   const messageRepository = new MemoryMessageRepository();
+  const paymentRepository = new MemoryPaymentRepository();
   const service = new MarketplaceService({
     kuliRequestRepository,
     tripOfferRepository,
@@ -479,6 +500,7 @@ const createService = () => {
     notificationRepository,
     statusEventRepository,
     messageRepository,
+    paymentRepository,
     quoteService: new StubQuoteService()
   });
 
@@ -489,7 +511,8 @@ const createService = () => {
     vehicleRepository,
     notificationRepository,
     statusEventRepository,
-    messageRepository
+    messageRepository,
+    paymentRepository
   };
 };
 
@@ -655,7 +678,7 @@ test('accepting an expired offer fails with conflict', async () => {
 });
 
 test('assigned owner can execute trip lifecycle and every transition creates an event', async () => {
-  const { service, vehicleRepository } = createService();
+  const { service, vehicleRepository, paymentRepository } = createService();
   const created = await service.createRequest({
     actor: client,
     input: requestInput,
@@ -692,11 +715,14 @@ test('assigned owner can execute trip lifecycle and every transition creates an 
     requestId: current.id
   });
   const releasedVehicle = vehicleRepository.records.get(accepted.request.selectedVehicleId);
+  const payment = await paymentRepository.findByRequestId(current.id);
 
   assert.equal(current.status, kuliStatuses.completed);
   assert.equal(events.length, 7);
   assert.deepEqual(events.map((event) => event.toStatus), [kuliStatuses.accepted, ...statuses]);
   assert.equal(releasedVehicle.availabilityStatus, vehicleAvailabilityStatuses.onlineAvailable);
+  assert.equal(payment.status, 'pending');
+  assert.equal(payment.amountExpected, 2200);
 });
 
 test('invalid and unauthorized status transitions are blocked', async () => {

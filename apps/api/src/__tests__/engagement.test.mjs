@@ -150,6 +150,13 @@ class MemoryUserRepository {
   constructor() {
     this.records = new Map([
       [
+        admin.id,
+        {
+          id: admin.id,
+          role: roles.admin
+        }
+      ],
+      [
         owner.id,
         {
           id: owner.id,
@@ -166,6 +173,10 @@ class MemoryUserRepository {
 
   async findById(id) {
     return this.records.get(id) ?? null;
+  }
+
+  async list() {
+    return Array.from(this.records.values());
   }
 
   async save(user) {
@@ -185,19 +196,45 @@ class MemoryAuditLogRepository {
   }
 }
 
+class MemoryFileRepository {
+  constructor() {
+    this.records = new Map();
+  }
+
+  async save(file) {
+    this.records.set(file.id, file);
+    return file;
+  }
+}
+
+class MemoryNotificationRepository {
+  constructor() {
+    this.records = [];
+  }
+
+  async insertMany(notifications) {
+    this.records.push(...notifications);
+    return notifications;
+  }
+}
+
 const createService = () => {
   const paymentRepository = new MemoryPaymentRepository();
   const ratingRepository = new MemoryRatingRepository();
   const reportRepository = new MemoryReportRepository();
   const userRepository = new MemoryUserRepository();
   const auditLogRepository = new MemoryAuditLogRepository();
+  const fileRepository = new MemoryFileRepository();
+  const notificationRepository = new MemoryNotificationRepository();
   const service = new EngagementService({
     kuliRequestRepository: new MemoryKuliRequestRepository(),
     paymentRepository,
     ratingRepository,
     reportRepository,
     userRepository,
-    auditLogRepository
+    auditLogRepository,
+    fileRepository,
+    notificationRepository
   });
 
   return {
@@ -206,7 +243,9 @@ const createService = () => {
     ratingRepository,
     reportRepository,
     userRepository,
-    auditLogRepository
+    auditLogRepository,
+    fileRepository,
+    notificationRepository
   };
 };
 
@@ -237,7 +276,7 @@ test('payment confirmation is blocked before completion and allowed after comple
 });
 
 test('client can dispute payment and admin resolution requires note and audit log', async () => {
-  const { service, auditLogRepository } = createService();
+  const { service, auditLogRepository, notificationRepository } = createService();
   const disputed = await service.disputePayment({
     actor: client,
     requestId: completedRequest.id,
@@ -267,6 +306,8 @@ test('client can dispute payment and admin resolution requires note and audit lo
 
   assert.equal(resolved.status, paymentStatuses.resolved);
   assert.equal(auditLogRepository.records.at(-1).action, 'payment.resolved');
+  assert.equal(notificationRepository.records.length, 1);
+  assert.equal(notificationRepository.records[0].recipientUserId, admin.id);
 });
 
 test('rating is terminal-only and duplicate rating is rejected while aggregate updates', async () => {
@@ -312,7 +353,7 @@ test('rating is terminal-only and duplicate rating is rejected while aggregate u
 });
 
 test('report evidence and admin resolution require reason and apply visibility penalty', async () => {
-  const { service, userRepository, auditLogRepository } = createService();
+  const { service, userRepository, auditLogRepository, fileRepository } = createService();
   const report = await service.createReport({
     actor: client,
     input: {
@@ -326,6 +367,15 @@ test('report evidence and admin resolution require reason and apply visibility p
     reportId: report.id,
     input: {
       evidenceFileIds: ['file_damage_001']
+    }
+  });
+  const uploadIntent = await service.createReportEvidenceUploadIntent({
+    actor: client,
+    reportId: report.id,
+    input: {
+      mimeType: 'image/jpeg',
+      sizeBytes: 1200,
+      originalFileName: 'damage.jpg'
     }
   });
 
@@ -352,6 +402,8 @@ test('report evidence and admin resolution require reason and apply visibility p
   const updatedOwner = await userRepository.findById(owner.id);
 
   assert.equal(withEvidence.evidenceFileIds.length, 1);
+  assert.equal(fileRepository.records.get(uploadIntent.file.id).linkedEntityType, 'report');
+  assert.equal(uploadIntent.upload.method, 'PUT');
   assert.equal(resolved.status, reportStatuses.resolved);
   assert.equal(updatedOwner.truckOwnerMeta.visibilityPenaltyScore, 5);
   assert.equal(auditLogRepository.records.at(-1).action, 'report.resolved');

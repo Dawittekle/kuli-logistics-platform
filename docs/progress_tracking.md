@@ -227,8 +227,8 @@ Completion:
 | Notifications | In progress | AI agents | In-app notification records, list/read APIs, preferences route, and disabled push/SMS/email adapter placeholders are in place |
 | Assisted booking | In progress | AI agents | Hotline tickets, claim/status flow, client lookup, assisted request creation, ticket/request linking, SMS confirmation intents, and assistant console shells are in place |
 | Ratings | In progress | AI agents | Terminal-trip rating API, duplicate guard, owner aggregate updates, and mobile rating shell are in place |
-| Reports/disputes | In progress | AI agents | Report creation, evidence file linking, admin resolution, audit logging, visibility penalties, and admin trust shells are in place |
-| Payment records | In progress | AI agents | Cash/manual payment records, owner confirmation, client dispute, admin resolution, and finance console shells are in place |
+| Reports/disputes | In progress | AI agents | Report creation, evidence upload intents/linking, admin resolution, audit logging, visibility penalties, and admin trust shells are in place |
+| Payment records | In progress | AI agents | Cash/manual payment records are created on completion, with owner confirmation, client dispute/admin notification, admin resolution, and finance console shells in place |
 | Admin dashboard | Not started | TBD | Operations control |
 
 ## Infrastructure Tracking

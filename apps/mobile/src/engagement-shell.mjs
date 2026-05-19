@@ -4,6 +4,8 @@ export const clientPostTripActions = {
     request: 'GET /api/v1/kuli-requests/:id',
     rating: 'POST /api/v1/kuli-requests/:id/rating',
     report: 'POST /api/v1/reports',
+    evidenceUpload: 'POST /api/v1/reports/:id/evidence/upload-intent',
+    evidenceAttach: 'POST /api/v1/reports/:id/evidence',
     paymentDispute: 'POST /api/v1/kuli-requests/:id/payment/dispute'
   },
   panels: ['trip_summary', 'rating_form', 'report_form', 'payment_dispute'],

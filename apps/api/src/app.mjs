@@ -358,6 +358,23 @@ const createRouteRequest = (context) => async (request) => {
     );
   }
 
+  if (method === 'POST' && path.startsWith('/api/v1/reports/') && path.endsWith('/evidence/upload-intent')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.client, roles.assistant, roles.admin]);
+
+    const reportId = path.split('/')[4];
+
+    return success(
+      await context.engagementService.createReportEvidenceUploadIntent({
+        actor: currentUser,
+        reportId,
+        input: await parseJsonBody(request)
+      }),
+      201
+    );
+  }
+
   if (method === 'POST' && path.startsWith('/api/v1/reports/') && path.endsWith('/evidence')) {
     const { currentUser } = await resolveAuth();
     assertActiveAccount(currentUser);
@@ -965,6 +982,7 @@ export const createAppContext = async (config = env) => {
     notificationRepository,
     statusEventRepository,
     messageRepository,
+    paymentRepository,
     quoteService
   });
   const supportService = new SupportService({
@@ -979,7 +997,9 @@ export const createAppContext = async (config = env) => {
     ratingRepository,
     reportRepository,
     userRepository,
-    auditLogRepository
+    auditLogRepository,
+    fileRepository,
+    notificationRepository
   });
   const tokenVerifier = new SupabaseTokenVerifier({
     mode: config.supabaseJwtMode,

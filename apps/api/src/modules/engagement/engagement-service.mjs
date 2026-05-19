@@ -1,4 +1,5 @@
 import {
+  fileLinkedEntityTypes,
   kuliStatuses,
   paymentFlows,
   paymentMethods,
@@ -14,6 +15,8 @@ import { AppError } from '../../common/errors/app-error.mjs';
 const createId = (prefix) => `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 const reportCode = () => `REP-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 const terminalRatingStatuses = [kuliStatuses.completed, kuliStatuses.cancelled];
+const supportedEvidenceMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+const maxEvidenceSizeBytes = 10 * 1024 * 1024;
 
 const assertAdmin = (actor) => {
   if (actor.role !== roles.admin) {
@@ -34,7 +37,9 @@ export class EngagementService {
     ratingRepository,
     reportRepository,
     userRepository,
-    auditLogRepository
+    auditLogRepository,
+    fileRepository,
+    notificationRepository
   }) {
     this.kuliRequestRepository = kuliRequestRepository;
     this.paymentRepository = paymentRepository;
@@ -42,6 +47,8 @@ export class EngagementService {
     this.reportRepository = reportRepository;
     this.userRepository = userRepository;
     this.auditLogRepository = auditLogRepository;
+    this.fileRepository = fileRepository;
+    this.notificationRepository = notificationRepository;
   }
 
   async ensurePaymentRecord(request) {
@@ -131,13 +138,25 @@ export class EngagementService {
       throw new AppError(409, 'PAYMENT_ALREADY_RESOLVED', 'Resolved payments cannot be disputed.');
     }
 
+    const disputedPayment = await this.paymentRepository.save({
+      ...payment,
+      status: paymentStatuses.disputed,
+      disputedByUserId: actor.id,
+      disputeReason: reason
+    });
+
+    await this.notifyAdmins({
+      type: 'payment.disputed',
+      title: 'Payment disputed',
+      body: 'A client disputed a cash/manual payment.',
+      data: {
+        requestId: request.id,
+        paymentId: disputedPayment.id
+      }
+    });
+
     return {
-      payment: await this.paymentRepository.save({
-        ...payment,
-        status: paymentStatuses.disputed,
-        disputedByUserId: actor.id,
-        disputeReason: reason
-      })
+      payment: disputedPayment
     };
   }
 
@@ -207,6 +226,10 @@ export class EngagementService {
 
     if (!Number.isInteger(input.rating) || input.rating < 1 || input.rating > 5) {
       throw new AppError(422, 'INVALID_RATING', 'Rating must be an integer between 1 and 5.');
+    }
+
+    if (input.reviewText && input.reviewText.length > 1000) {
+      throw new AppError(422, 'REVIEW_TEXT_TOO_LONG', 'Review text must be 1000 characters or fewer.');
     }
 
     const existing = await this.ratingRepository.findByRequestRaterAndOwner({
@@ -310,6 +333,56 @@ export class EngagementService {
     });
   }
 
+  async createReportEvidenceUploadIntent({ actor, reportId, input }) {
+    const report = await this.reportRepository.findById(reportId);
+
+    if (!report) {
+      throw new AppError(404, 'REPORT_NOT_FOUND', 'Report was not found.');
+    }
+
+    const canUpload = report.reporterId === actor.id || [roles.assistant, roles.admin].includes(actor.role);
+
+    if (!canUpload) {
+      throw new AppError(403, 'REPORT_EVIDENCE_FORBIDDEN', 'Only the reporter or staff can upload report evidence.');
+    }
+
+    if (!supportedEvidenceMimeTypes.includes(input.mimeType)) {
+      throw new AppError(422, 'EVIDENCE_UPLOAD_INVALID', 'Report evidence must be an image or PDF.', {
+        mimeType: input.mimeType
+      });
+    }
+
+    if (!input.sizeBytes || input.sizeBytes <= 0 || input.sizeBytes > maxEvidenceSizeBytes) {
+      throw new AppError(422, 'EVIDENCE_UPLOAD_INVALID', 'Report evidence file size is invalid.', {
+        maxSizeBytes: maxEvidenceSizeBytes
+      });
+    }
+
+    const fileId = createId('file');
+    const originalFileName = input.originalFileName ?? 'report-evidence';
+    const file = await this.fileRepository.save({
+      id: fileId,
+      ownerId: actor.id,
+      linkedEntityType: fileLinkedEntityTypes.report,
+      linkedEntityId: report.id,
+      storageProvider: 'local_dev',
+      storageKey: `local-dev/report-evidence/${actor.id}/${fileId}-${originalFileName}`,
+      originalFileName,
+      mimeType: input.mimeType,
+      sizeBytes: input.sizeBytes,
+      visibility: 'staff_only'
+    });
+
+    return {
+      file,
+      upload: {
+        method: 'PUT',
+        url: `local-dev://uploads/${file.storageKey}`,
+        expiresInSeconds: 900
+      }
+    };
+  }
+
   async addReportEvidence({ actor, reportId, input }) {
     const report = await this.reportRepository.findById(reportId);
 
@@ -404,5 +477,28 @@ export class EngagementService {
         visibilityPenaltyScore: (owner.truckOwnerMeta?.visibilityPenaltyScore ?? 0) + 5
       }
     });
+  }
+
+  async notifyAdmins({ type, title, body, data }) {
+    if (!this.notificationRepository || typeof this.userRepository.list !== 'function') {
+      return [];
+    }
+
+    const admins = (await this.userRepository.list()).filter((user) => user.role === roles.admin);
+    const now = new Date().toISOString();
+
+    return this.notificationRepository.insertMany(
+      admins.map((admin) => ({
+        id: createId('notif'),
+        recipientUserId: admin.id,
+        type,
+        title,
+        body,
+        data,
+        channels: ['in_app'],
+        deliveryStatus: 'pending',
+        createdAt: now
+      }))
+    );
   }
 }
