@@ -25,6 +25,11 @@ const ownerTwo = {
   role: roles.truckOwner
 };
 
+const assistant = {
+  id: 'usr_assistant_001',
+  role: roles.assistant
+};
+
 const outsider = {
   id: 'usr_outsider_001',
   role: roles.truckOwner
@@ -59,6 +64,14 @@ class MemoryKuliRequestRepository {
         (record) => record.clientId === clientId && record.idempotencyKey === idempotencyKey
       ) ?? null
     );
+  }
+
+  async findByHotlineTicketId(hotlineTicketId) {
+    if (!hotlineTicketId) {
+      return null;
+    }
+
+    return Array.from(this.records.values()).find((record) => record.hotlineTicketId === hotlineTicketId) ?? null;
   }
 
   async listMine({ userId, role }) {
@@ -770,4 +783,39 @@ test('request-scoped messages are idempotent and limited to participants', async
       }),
     (error) => error instanceof AppError && error.code === 'KULI_REQUEST_NOT_FOUND'
   );
+});
+
+test('assistant can create assisted request with ticket linkage', async () => {
+  const { service } = createService();
+
+  const created = await service.createAssistedRequest({
+    actor: assistant,
+    input: {
+      ...requestInput,
+      hotlineTicketId: 'ticket_001',
+      clientContactSnapshot: {
+        phone: '+251911111111'
+      }
+    },
+    idempotencyKey: 'assistant-booking-001'
+  });
+  const replay = await service.createAssistedRequest({
+    actor: assistant,
+    input: {
+      ...requestInput,
+      hotlineTicketId: 'ticket_001',
+      clientContactSnapshot: {
+        phone: '+251911111111'
+      }
+    },
+    idempotencyKey: 'assistant-booking-001'
+  });
+
+  assert.equal(created.request.status, kuliStatuses.pending);
+  assert.equal(created.request.createdByAssistantId, assistant.id);
+  assert.equal(created.request.hotlineTicketId, 'ticket_001');
+  assert.equal(created.request.clientContactSnapshot.phone, '+251911111111');
+  assert.equal(created.offers.length, 2);
+  assert.equal(replay.request.id, created.request.id);
+  assert.equal(replay.idempotentReplay, true);
 });

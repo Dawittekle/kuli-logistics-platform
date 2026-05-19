@@ -8,8 +8,8 @@ const defaultInitialRadiusKm = 10;
 const defaultExpandedRadiusKm = 20;
 
 const assertClientOrAssistant = (user) => {
-  if (![roles.client, roles.assistant].includes(user.role)) {
-    throw new AppError(403, 'QUOTE_FORBIDDEN', 'Only clients and assistants can create quotes.');
+  if (![roles.client, roles.assistant, roles.admin].includes(user.role)) {
+    throw new AppError(403, 'QUOTE_FORBIDDEN', 'Only clients, assistants, and admins can create quotes.');
   }
 };
 

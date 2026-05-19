@@ -87,6 +87,21 @@ export const offerStatuses = {
   cancelled: 'cancelled'
 };
 
+export const ticketStatuses = {
+  open: 'open',
+  assigned: 'assigned',
+  inProgress: 'in_progress',
+  pendingClient: 'pending_client',
+  closed: 'closed',
+  cancelled: 'cancelled'
+};
+
+export const ticketSources = {
+  incomingCall: 'incoming_call',
+  missedCall: 'missed_call',
+  manual: 'manual'
+};
+
 export const routeVisibility = {
   mobileOnlyRoles: [roles.client, roles.truckOwner],
   staffOnlyRoles: [roles.assistant, roles.admin]

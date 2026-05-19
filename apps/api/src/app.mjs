@@ -23,7 +23,10 @@ import { MongoTripOfferRepository } from './modules/logistics/mongo-trip-offer-r
 import { QuoteService } from './modules/logistics/quote-service.mjs';
 import { MarketplaceService } from './modules/logistics/marketplace-service.mjs';
 import { MongoNotificationRepository } from './modules/notifications/mongo-notification-repository.mjs';
+import { MongoNotificationIntentRepository } from './modules/notifications/mongo-notification-intent-repository.mjs';
 import { createExternalNotificationAdapters } from './modules/notifications/notification-adapters.mjs';
+import { MongoHotlineTicketRepository } from './modules/support/mongo-hotline-ticket-repository.mjs';
+import { SupportService } from './modules/support/support-service.mjs';
 import { MongoVehicleClassRepository } from './modules/vehicle-registry/mongo-vehicle-class-repository.mjs';
 import { MongoVehicleDocumentRepository } from './modules/vehicle-registry/mongo-vehicle-document-repository.mjs';
 import { MongoVehicleRepository } from './modules/vehicle-registry/mongo-vehicle-repository.mjs';
@@ -274,6 +277,96 @@ const createRouteRequest = (context) => async (request) => {
     return success(notification);
   }
 
+  if (method === 'GET' && path === '/api/v1/assistant/tickets') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.assistant, roles.admin]);
+
+    return success(
+      await context.supportService.listTickets({
+        actor: currentUser,
+        filters: {
+          status: url.query.status,
+          assignedAssistantId: url.query.assignedAssistantId,
+          callerPhone: url.query.callerPhone
+        }
+      })
+    );
+  }
+
+  if (method === 'POST' && path === '/api/v1/assistant/tickets') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.assistant, roles.admin]);
+
+    return success(
+      await context.supportService.createTicket({
+        actor: currentUser,
+        input: await parseJsonBody(request)
+      }),
+      201
+    );
+  }
+
+  if (method === 'GET' && path.startsWith('/api/v1/assistant/tickets/')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.assistant, roles.admin]);
+
+    const ticketId = path.split('/')[5];
+
+    return success(
+      await context.supportService.getTicket({
+        actor: currentUser,
+        ticketId
+      })
+    );
+  }
+
+  if (method === 'PATCH' && path.startsWith('/api/v1/assistant/tickets/') && path.endsWith('/status')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.assistant, roles.admin]);
+
+    const ticketId = path.split('/')[5];
+
+    return success(
+      await context.supportService.transitionTicket({
+        actor: currentUser,
+        ticketId,
+        input: await parseJsonBody(request)
+      })
+    );
+  }
+
+  if (method === 'POST' && path === '/api/v1/assistant/bookings') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.assistant, roles.admin]);
+
+    return success(
+      await context.supportService.createAssistedBooking({
+        actor: currentUser,
+        input: await parseJsonBody(request),
+        idempotencyKey: request.headers['idempotency-key']
+      }),
+      201
+    );
+  }
+
+  if (method === 'GET' && path === '/api/v1/assistant/clients/search') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.assistant, roles.admin]);
+
+    return success(
+      await context.supportService.searchClients({
+        actor: currentUser,
+        phone: url.query.phone
+      })
+    );
+  }
+
   if (method === 'GET' && path === '/api/v1/admin/users') {
     const { currentUser } = await resolveAuth();
     assertActiveAccount(currentUser);
@@ -374,6 +467,18 @@ const createRouteRequest = (context) => async (request) => {
     assertRole(currentUser, [roles.admin]);
 
     return success(await context.marketplaceService.expireTimedOutOffers());
+  }
+
+  if (method === 'POST' && path === '/api/v1/admin/jobs/expire-pending-client-tickets') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    return success(
+      await context.supportService.expirePendingClientTickets({
+        actor: currentUser
+      })
+    );
   }
 
   if (method === 'POST' && (path === '/api/v1/admin/users' || path === '/api/v1/admin/staff-users')) {
@@ -656,6 +761,8 @@ export const createAppContext = async (config = env) => {
   const messageRepository = new MongoMessageRepository({ db });
   const tripOfferRepository = new MongoTripOfferRepository({ db });
   const notificationRepository = new MongoNotificationRepository({ db });
+  const notificationIntentRepository = new MongoNotificationIntentRepository({ db });
+  const hotlineTicketRepository = new MongoHotlineTicketRepository({ db });
   const notificationAdapters = createExternalNotificationAdapters();
 
   await userRepository.ensureIndexes();
@@ -670,6 +777,8 @@ export const createAppContext = async (config = env) => {
   await messageRepository.ensureIndexes();
   await tripOfferRepository.ensureIndexes();
   await notificationRepository.ensureIndexes();
+  await notificationIntentRepository.ensureIndexes();
+  await hotlineTicketRepository.ensureIndexes();
 
   const accountService = new AccountService({ userRepository });
   const vehicleRegistryService = new VehicleRegistryService({
@@ -694,6 +803,12 @@ export const createAppContext = async (config = env) => {
     statusEventRepository,
     messageRepository,
     quoteService
+  });
+  const supportService = new SupportService({
+    hotlineTicketRepository,
+    userRepository,
+    marketplaceService,
+    notificationIntentRepository
   });
   const tokenVerifier = new SupabaseTokenVerifier({
     mode: config.supabaseJwtMode,
@@ -721,7 +836,9 @@ export const createAppContext = async (config = env) => {
     vehicleRegistryService,
     quoteService,
     marketplaceService,
+    supportService,
     notificationRepository,
+    notificationIntentRepository,
     notificationAdapters,
     tokenVerifier
   };

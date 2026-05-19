@@ -32,6 +32,12 @@ const assertTruckOwner = (user) => {
   }
 };
 
+const assertAssistantOrAdmin = (user) => {
+  if (![roles.assistant, roles.admin].includes(user.role)) {
+    throw new AppError(403, 'ASSISTANT_REQUIRED', 'Only assistants or admins can create assisted requests.');
+  }
+};
+
 const isStaff = (user) => [roles.admin, roles.assistant].includes(user.role);
 
 const isRequestParticipant = (user, request) =>
@@ -157,6 +163,100 @@ export class MarketplaceService {
           data: {
             requestId: request.id,
             offerId: offer.id
+          }
+        })
+      )
+    );
+
+    return {
+      request,
+      offers,
+      waitingState: {
+        status: 'waiting_for_owner_acceptance',
+        offerCount: offers.length,
+        expiresAt
+      }
+    };
+  }
+
+  async createAssistedRequest({ actor, input, idempotencyKey }) {
+    assertAssistantOrAdmin(actor);
+
+    const existing = await this.kuliRequestRepository.findByHotlineTicketId(input.hotlineTicketId);
+
+    if (existing) {
+      return {
+        request: existing,
+        offers: await this.tripOfferRepository.listByRequestId(existing.id),
+        idempotentReplay: true
+      };
+    }
+
+    const quote = await this.quoteService.createQuote({
+      actor,
+      input
+    });
+    const selectedVehicleIds = input.selectedVehicleIds?.length
+      ? input.selectedVehicleIds
+      : quote.candidates.map((candidate) => candidate.vehicleId).slice(0, 3);
+
+    if (selectedVehicleIds.length === 0) {
+      throw new AppError(422, 'NO_SELECTED_VEHICLES', 'Select at least one candidate vehicle before sending a request.');
+    }
+
+    const vehicles = await this.vehicleRepository.findByIds(selectedVehicleIds);
+    const eligibleVehicles = vehicles.filter(
+      (vehicle) =>
+        vehicle.verificationStatus === verificationStatuses.approved &&
+        vehicle.availabilityStatus === vehicleAvailabilityStatuses.onlineAvailable
+    );
+
+    if (eligibleVehicles.length === 0) {
+      throw new AppError(422, 'NO_ELIGIBLE_SELECTED_VEHICLES', 'Selected vehicles are no longer available.');
+    }
+
+    const request = await this.kuliRequestRepository.save({
+      id: createId('kreq'),
+      requestCode: requestCode(),
+      clientId: input.clientId,
+      clientContactSnapshot: input.clientContactSnapshot,
+      createdByAssistantId: actor.id,
+      hotlineTicketId: input.hotlineTicketId,
+      status: kuliStatuses.pending,
+      pickupLocation: input.pickupLocation,
+      destinationLocation: input.destinationLocation,
+      requestedPickupTime: input.requestedPickupTime,
+      loadDetails: quote.loadDetails,
+      requestedVehicleClassId: quote.requestedVehicleClass.id,
+      quoteSnapshot: quote.quoteSnapshot,
+      idempotencyKey
+    });
+
+    const expiresAt = new Date(Date.now() + offerExpiryMinutes * 60 * 1000).toISOString();
+    const offers = await this.tripOfferRepository.insertMany(
+      eligibleVehicles.map((vehicle) => ({
+        id: createId('offer'),
+        requestId: request.id,
+        ownerId: vehicle.ownerId,
+        vehicleId: vehicle.id,
+        status: offerStatuses.sent,
+        distanceKmAtOffer: quote.candidates.find((candidate) => candidate.vehicleId === vehicle.id)?.distanceKm,
+        etaMinutesAtOffer: quote.route.etaMinutes,
+        expiresAt
+      }))
+    );
+
+    await this.notificationRepository.insertMany(
+      offers.map((offer) =>
+        createNotification({
+          recipientUserId: offer.ownerId,
+          type: 'offer.sent',
+          title: 'Assisted KULI request',
+          body: 'A hotline assistant selected your vehicle for a pending KULI request.',
+          data: {
+            requestId: request.id,
+            offerId: offer.id,
+            hotlineTicketId: input.hotlineTicketId
           }
         })
       )
@@ -377,19 +477,23 @@ export class MarketplaceService {
       exceptOfferId: offer.id
     });
 
-    await this.notificationRepository.insertMany([
-      createNotification({
-        recipientUserId: acceptedRequest.clientId,
-        type: 'offer.accepted',
-        title: 'Truck owner accepted',
-        body: 'Your KULI request has been accepted.',
-        data: {
-          requestId: acceptedRequest.id,
-          offerId: offer.id,
-          ownerId: actor.id
-        }
-      })
-    ]);
+    await this.notificationRepository.insertMany(
+      acceptedRequest.clientId
+        ? [
+            createNotification({
+              recipientUserId: acceptedRequest.clientId,
+              type: 'offer.accepted',
+              title: 'Truck owner accepted',
+              body: 'Your KULI request has been accepted.',
+              data: {
+                requestId: acceptedRequest.id,
+                offerId: offer.id,
+                ownerId: actor.id
+              }
+            })
+          ]
+        : []
+    );
 
     return {
       request: acceptedRequest,

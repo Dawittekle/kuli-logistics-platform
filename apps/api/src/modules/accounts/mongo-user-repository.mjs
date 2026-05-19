@@ -57,6 +57,23 @@ export class MongoUserRepository {
     return normalizeMongoUser(await this.collection.findOne({ supabaseUserId }));
   }
 
+  async findClientsByPhone(phone) {
+    const documents = await this.collection
+      .find(
+        {
+          role: 'client',
+          phone
+        },
+        {
+          sort: { createdAt: -1 },
+          limit: 10
+        }
+      )
+      .toArray();
+
+    return documents.map(normalizeMongoUser);
+  }
+
   async save(user) {
     const now = new Date().toISOString();
     const record = {

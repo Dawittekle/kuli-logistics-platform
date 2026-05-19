@@ -31,6 +31,12 @@ export class MongoKuliRequestRepository {
         name: 'kuli_requests_client_idempotency_unique'
       },
       {
+        key: { hotlineTicketId: 1 },
+        unique: true,
+        sparse: true,
+        name: 'kuli_requests_hotline_ticket_unique'
+      },
+      {
         key: { clientId: 1, status: 1, createdAt: -1 },
         name: 'kuli_requests_client_status_created_idx'
       },
@@ -61,8 +67,23 @@ export class MongoKuliRequestRepository {
     return normalize(await this.collection.findOne({ clientId, idempotencyKey, deletedAt: { $exists: false } }));
   }
 
+  async findByHotlineTicketId(hotlineTicketId) {
+    if (!hotlineTicketId) {
+      return null;
+    }
+
+    return normalize(await this.collection.findOne({ hotlineTicketId, deletedAt: { $exists: false } }));
+  }
+
   async listMine({ userId, role }) {
-    const query = role === 'truck_owner' ? { selectedOwnerId: userId } : { clientId: userId };
+    const query =
+      role === 'truck_owner'
+        ? { selectedOwnerId: userId }
+        : role === 'assistant'
+          ? { createdByAssistantId: userId }
+          : role === 'admin'
+            ? {}
+            : { clientId: userId };
     const documents = await this.collection.find(query, { sort: { createdAt: -1 } }).toArray();
     return documents.map(normalize);
   }
