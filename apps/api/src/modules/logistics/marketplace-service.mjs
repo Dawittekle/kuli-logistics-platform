@@ -3,6 +3,20 @@ import { AppError } from '../../common/errors/app-error.mjs';
 
 const createId = (prefix) => `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 const offerExpiryMinutes = 10;
+const terminalRequestStatuses = [kuliStatuses.cancelled, kuliStatuses.timedOut];
+
+const statusTransitions = {
+  [kuliStatuses.pending]: [kuliStatuses.cancelled, kuliStatuses.timedOut],
+  [kuliStatuses.accepted]: [kuliStatuses.enRouteToPickup, kuliStatuses.cancelled],
+  [kuliStatuses.enRouteToPickup]: [kuliStatuses.arrivedAtPickup, kuliStatuses.cancelled],
+  [kuliStatuses.arrivedAtPickup]: [kuliStatuses.loading, kuliStatuses.cancelled],
+  [kuliStatuses.loading]: [kuliStatuses.inTransit, kuliStatuses.cancelled],
+  [kuliStatuses.inTransit]: [kuliStatuses.unloading, kuliStatuses.cancelled],
+  [kuliStatuses.unloading]: [kuliStatuses.completed, kuliStatuses.cancelled],
+  [kuliStatuses.completed]: [],
+  [kuliStatuses.cancelled]: [],
+  [kuliStatuses.timedOut]: []
+};
 
 const requestCode = () => `KULI-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
@@ -17,6 +31,11 @@ const assertTruckOwner = (user) => {
     throw new AppError(403, 'TRUCK_OWNER_REQUIRED', 'Only truck owners can respond to offers.');
   }
 };
+
+const isStaff = (user) => [roles.admin, roles.assistant].includes(user.role);
+
+const isRequestParticipant = (user, request) =>
+  request.clientId === user.id || request.selectedOwnerId === user.id || isStaff(user);
 
 const createNotification = ({ recipientUserId, type, title, body, data }) => ({
   id: createId('notif'),
@@ -35,13 +54,29 @@ export class MarketplaceService {
     tripOfferRepository,
     vehicleRepository,
     notificationRepository,
+    statusEventRepository,
+    messageRepository,
     quoteService
   }) {
     this.kuliRequestRepository = kuliRequestRepository;
     this.tripOfferRepository = tripOfferRepository;
     this.vehicleRepository = vehicleRepository;
     this.notificationRepository = notificationRepository;
+    this.statusEventRepository = statusEventRepository;
+    this.messageRepository = messageRepository;
     this.quoteService = quoteService;
+  }
+
+  async recordStatusEvent({ request, fromStatus, toStatus, actor, reason }) {
+    return this.statusEventRepository.insert({
+      id: createId('ksev'),
+      requestId: request.id,
+      fromStatus,
+      toStatus,
+      actorUserId: actor?.id ?? 'system',
+      actorRole: actor?.role ?? 'system',
+      reason
+    });
   }
 
   async createRequest({ actor, input, idempotencyKey }) {
@@ -169,10 +204,33 @@ export class MarketplaceService {
       throw new AppError(403, 'CLIENT_REQUIRED', 'Only clients can cancel their pending KULI requests in this flow.');
     }
 
-    const cancelledRequest = await this.kuliRequestRepository.cancelPending({
+    const request = await this.kuliRequestRepository.findById(requestId);
+
+    if (!request || request.clientId !== actor.id) {
+      throw new AppError(404, 'KULI_REQUEST_NOT_FOUND', 'KULI request was not found.');
+    }
+
+    const clientCancellableStatuses = [
+      kuliStatuses.pending,
+      kuliStatuses.accepted,
+      kuliStatuses.enRouteToPickup
+    ];
+
+    if (!clientCancellableStatuses.includes(request.status)) {
+      throw new AppError(409, 'REQUEST_CANNOT_BE_CANCELLED', 'This request cannot be cancelled.');
+    }
+
+    const cancelledRequest = await this.kuliRequestRepository.transitionStatus({
       requestId,
-      actorUserId: actor.id,
-      reason: input.reason ?? 'client_cancelled'
+      fromStatus: request.status,
+      toStatus: kuliStatuses.cancelled,
+      update: {
+        cancellation: {
+          cancelledByUserId: actor.id,
+          reason: input.reason ?? 'client_cancelled',
+          cancelledAt: new Date().toISOString()
+        }
+      }
     });
 
     if (!cancelledRequest) {
@@ -180,6 +238,21 @@ export class MarketplaceService {
     }
 
     await this.tripOfferRepository.cancelForRequest(requestId);
+
+    if (cancelledRequest.selectedVehicleId) {
+      await this.vehicleRepository.releaseIfActiveTrip({
+        vehicleId: cancelledRequest.selectedVehicleId,
+        activeTripId: cancelledRequest.id
+      });
+    }
+
+    await this.recordStatusEvent({
+      request: cancelledRequest,
+      fromStatus: request.status,
+      toStatus: kuliStatuses.cancelled,
+      actor,
+      reason: input.reason ?? 'client_cancelled'
+    });
 
     const offers = await this.tripOfferRepository.listByRequestId(requestId);
     await this.notificationRepository.insertMany(
@@ -276,6 +349,14 @@ export class MarketplaceService {
       throw new AppError(409, 'REQUEST_ALREADY_ACCEPTED', 'Request already accepted or unavailable.');
     }
 
+    await this.recordStatusEvent({
+      request: acceptedRequest,
+      fromStatus: kuliStatuses.pending,
+      toStatus: kuliStatuses.accepted,
+      actor,
+      reason: 'offer_accepted'
+    });
+
     const acceptedOffer = await this.tripOfferRepository.markAccepted({
       offerId: offer.id,
       ownerId: actor.id,
@@ -330,6 +411,13 @@ export class MarketplaceService {
         const request = await this.kuliRequestRepository.markTimedOutIfPending(requestId);
 
         if (request) {
+          await this.recordStatusEvent({
+            request,
+            fromStatus: kuliStatuses.pending,
+            toStatus: kuliStatuses.timedOut,
+            actor: null,
+            reason: 'offer_timeout'
+          });
           timedOutRequests.push(request);
         }
       }
@@ -339,5 +427,193 @@ export class MarketplaceService {
       expiredOfferCount: staleOffers.length,
       timedOutRequests
     };
+  }
+
+  async transitionRequestStatus({ actor, requestId, input }) {
+    const request = await this.kuliRequestRepository.findById(requestId);
+
+    if (!request) {
+      throw new AppError(404, 'KULI_REQUEST_NOT_FOUND', 'KULI request was not found.');
+    }
+
+    const nextStatus = input.status;
+
+    if (!Object.values(kuliStatuses).includes(nextStatus)) {
+      throw new AppError(422, 'INVALID_STATUS', 'Unknown KULI request status.', {
+        attemptedStatus: nextStatus
+      });
+    }
+
+    const allowed = statusTransitions[request.status] ?? [];
+
+    if (!allowed.includes(nextStatus)) {
+      throw new AppError(409, 'INVALID_STATUS_TRANSITION', 'This trip cannot move between those statuses.', {
+        fromStatus: request.status,
+        toStatus: nextStatus
+      });
+    }
+
+    const isSelectedOwner = request.selectedOwnerId === actor.id;
+    const isForwardOwnerUpdate =
+      isSelectedOwner && actor.role === roles.truckOwner && nextStatus !== kuliStatuses.cancelled;
+    const isOwnerCancellation = isSelectedOwner && actor.role === roles.truckOwner && nextStatus === kuliStatuses.cancelled;
+
+    if (!isForwardOwnerUpdate && !isOwnerCancellation && !isStaff(actor)) {
+      throw new AppError(403, 'STATUS_UPDATE_FORBIDDEN', 'Only the assigned owner or staff can update trip status.');
+    }
+
+    const update =
+      nextStatus === kuliStatuses.cancelled
+        ? {
+            cancellation: {
+              cancelledByUserId: actor.id,
+              reason: input.reason ?? 'trip_cancelled',
+              cancelledAt: new Date().toISOString()
+            }
+          }
+        : {};
+    const updatedRequest = await this.kuliRequestRepository.transitionStatus({
+      requestId,
+      fromStatus: request.status,
+      toStatus: nextStatus,
+      update
+    });
+
+    if (!updatedRequest) {
+      throw new AppError(409, 'INVALID_STATUS_TRANSITION', 'This trip status changed before the command completed.');
+    }
+
+    if ([kuliStatuses.completed, kuliStatuses.cancelled].includes(nextStatus) && updatedRequest.selectedVehicleId) {
+      await this.vehicleRepository.releaseIfActiveTrip({
+        vehicleId: updatedRequest.selectedVehicleId,
+        activeTripId: updatedRequest.id
+      });
+    }
+
+    const event = await this.recordStatusEvent({
+      request: updatedRequest,
+      fromStatus: request.status,
+      toStatus: nextStatus,
+      actor,
+      reason: input.reason ?? `status_${nextStatus}`
+    });
+
+    await this.notifyRequestParticipants({
+      request: updatedRequest,
+      actor,
+      type: 'trip.status_changed',
+      title: 'Trip status updated',
+      body: `KULI request is now ${nextStatus.replaceAll('_', ' ')}.`,
+      data: {
+        requestId: updatedRequest.id,
+        fromStatus: request.status,
+        toStatus: nextStatus,
+        statusEventId: event.id
+      }
+    });
+
+    return {
+      request: updatedRequest,
+      event
+    };
+  }
+
+  async listStatusEvents({ actor, requestId }) {
+    const request = await this.kuliRequestRepository.findById(requestId);
+
+    if (!request || !isRequestParticipant(actor, request)) {
+      throw new AppError(404, 'KULI_REQUEST_NOT_FOUND', 'KULI request was not found.');
+    }
+
+    return this.statusEventRepository.listByRequestId(requestId);
+  }
+
+  async sendMessage({ actor, requestId, input, idempotencyKey }) {
+    const request = await this.kuliRequestRepository.findById(requestId);
+
+    if (!request || !isRequestParticipant(actor, request)) {
+      throw new AppError(404, 'KULI_REQUEST_NOT_FOUND', 'KULI request was not found.');
+    }
+
+    if (terminalRequestStatuses.includes(request.status)) {
+      throw new AppError(409, 'MESSAGE_THREAD_CLOSED', 'This request no longer accepts new messages.');
+    }
+
+    const body = typeof input.body === 'string' ? input.body.trim() : '';
+
+    if (!body || body.length > 2000) {
+      throw new AppError(422, 'INVALID_MESSAGE_BODY', 'Message body must be between 1 and 2000 characters.');
+    }
+
+    const clientGeneratedId = idempotencyKey ?? input.clientGeneratedId;
+    const existing = await this.messageRepository.findBySenderAndClientGeneratedId({
+      senderId: actor.id,
+      clientGeneratedId
+    });
+
+    if (existing) {
+      return {
+        message: existing,
+        idempotentReplay: true
+      };
+    }
+
+    const message = await this.messageRepository.insert({
+      id: createId('msg'),
+      requestId,
+      senderId: actor.id,
+      senderRole: actor.role,
+      body,
+      clientGeneratedId,
+      readBy: [
+        {
+          userId: actor.id,
+          readAt: new Date().toISOString()
+        }
+      ]
+    });
+
+    await this.notifyRequestParticipants({
+      request,
+      actor,
+      type: 'message.created',
+      title: 'New trip message',
+      body: 'A new message was sent on your KULI request.',
+      data: {
+        requestId,
+        messageId: message.id
+      }
+    });
+
+    return {
+      message
+    };
+  }
+
+  async listMessages({ actor, requestId }) {
+    const request = await this.kuliRequestRepository.findById(requestId);
+
+    if (!request || !isRequestParticipant(actor, request)) {
+      throw new AppError(404, 'KULI_REQUEST_NOT_FOUND', 'KULI request was not found.');
+    }
+
+    return this.messageRepository.listByRequestId(requestId);
+  }
+
+  async notifyRequestParticipants({ request, actor, type, title, body, data }) {
+    const recipientIds = [request.clientId, request.selectedOwnerId].filter(Boolean);
+    const notifications = [...new Set(recipientIds)]
+      .filter((recipientUserId) => recipientUserId !== actor?.id)
+      .map((recipientUserId) =>
+        createNotification({
+          recipientUserId,
+          type,
+          title,
+          body,
+          data
+        })
+      );
+
+    return this.notificationRepository.insertMany(notifications);
   }
 }

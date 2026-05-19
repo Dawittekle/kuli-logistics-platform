@@ -112,6 +112,29 @@ export class MongoKuliRequestRepository {
     return normalize(result);
   }
 
+  async transitionStatus({ requestId, fromStatus, toStatus, update = {} }) {
+    const now = new Date().toISOString();
+    const result = await this.collection.findOneAndUpdate(
+      {
+        _id: requestId,
+        status: fromStatus,
+        deletedAt: { $exists: false }
+      },
+      {
+        $set: {
+          ...update,
+          status: toStatus,
+          updatedAt: now
+        }
+      },
+      {
+        returnDocument: 'after'
+      }
+    );
+
+    return normalize(result);
+  }
+
   async markTimedOutIfPending(requestId) {
     const result = await this.collection.findOneAndUpdate(
       {

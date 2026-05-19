@@ -25,6 +25,11 @@ const ownerTwo = {
   role: roles.truckOwner
 };
 
+const outsider = {
+  id: 'usr_outsider_001',
+  role: roles.truckOwner
+};
+
 const pickupLocation = {
   point: { type: 'Point', coordinates: [38.7892, 8.9806] },
   addressText: 'Bole, Addis Ababa'
@@ -90,6 +95,24 @@ class MemoryKuliRequestRepository {
     this.records.set(requestId, accepted);
 
     return accepted;
+  }
+
+  async transitionStatus({ requestId, fromStatus, toStatus, update = {} }) {
+    const record = this.records.get(requestId);
+
+    if (!record || record.status !== fromStatus) {
+      return null;
+    }
+
+    const updated = {
+      ...record,
+      ...update,
+      status: toStatus,
+      updatedAt: new Date().toISOString()
+    };
+    this.records.set(requestId, updated);
+
+    return updated;
   }
 
   async markTimedOutIfPending(requestId) {
@@ -328,6 +351,70 @@ class MemoryNotificationRepository {
     this.records.push(...notifications);
     return notifications;
   }
+
+  async listByRecipientId(recipientUserId) {
+    return this.records.filter((notification) => notification.recipientUserId === recipientUserId);
+  }
+
+  async markRead({ notificationId, recipientUserId }) {
+    const notification = this.records.find((entry) => entry.id === notificationId && entry.recipientUserId === recipientUserId);
+
+    if (!notification) {
+      return null;
+    }
+
+    notification.deliveryStatus = 'read';
+    notification.readAt = new Date().toISOString();
+    return notification;
+  }
+}
+
+class MemoryStatusEventRepository {
+  constructor() {
+    this.records = [];
+  }
+
+  async insert(event) {
+    const saved = {
+      ...event,
+      createdAt: event.createdAt ?? new Date().toISOString()
+    };
+    this.records.push(saved);
+    return saved;
+  }
+
+  async listByRequestId(requestId) {
+    return this.records.filter((event) => event.requestId === requestId);
+  }
+}
+
+class MemoryMessageRepository {
+  constructor() {
+    this.records = [];
+  }
+
+  async findBySenderAndClientGeneratedId({ senderId, clientGeneratedId }) {
+    if (!clientGeneratedId) {
+      return null;
+    }
+
+    return (
+      this.records.find((message) => message.senderId === senderId && message.clientGeneratedId === clientGeneratedId) ?? null
+    );
+  }
+
+  async insert(message) {
+    const saved = {
+      ...message,
+      createdAt: message.createdAt ?? new Date().toISOString()
+    };
+    this.records.push(saved);
+    return saved;
+  }
+
+  async listByRequestId(requestId) {
+    return this.records.filter((message) => message.requestId === requestId);
+  }
 }
 
 class StubQuoteService {
@@ -370,11 +457,15 @@ const createService = () => {
   const tripOfferRepository = new MemoryTripOfferRepository();
   const vehicleRepository = new MemoryVehicleRepository();
   const notificationRepository = new MemoryNotificationRepository();
+  const statusEventRepository = new MemoryStatusEventRepository();
+  const messageRepository = new MemoryMessageRepository();
   const service = new MarketplaceService({
     kuliRequestRepository,
     tripOfferRepository,
     vehicleRepository,
     notificationRepository,
+    statusEventRepository,
+    messageRepository,
     quoteService: new StubQuoteService()
   });
 
@@ -383,7 +474,9 @@ const createService = () => {
     kuliRequestRepository,
     tripOfferRepository,
     vehicleRepository,
-    notificationRepository
+    notificationRepository,
+    statusEventRepository,
+    messageRepository
   };
 };
 
@@ -444,7 +537,7 @@ test('owner can view and decline an offer', async () => {
 });
 
 test('two simultaneous accepts produce one winner', async () => {
-  const { service, vehicleRepository } = createService();
+  const { service, vehicleRepository, statusEventRepository } = createService();
   const created = await service.createRequest({
     actor: client,
     input: requestInput,
@@ -471,6 +564,7 @@ test('two simultaneous accepts produce one winner', async () => {
   assert.equal(rejected.length, 1);
   assert.equal(rejected[0].reason.code, 'REQUEST_ALREADY_ACCEPTED');
   assert.equal(fulfilled[0].value.request.status, kuliStatuses.accepted);
+  assert.equal(statusEventRepository.records.filter((event) => event.toStatus === kuliStatuses.accepted).length, 1);
 
   const releasedLosingVehicle = Array.from(vehicleRepository.records.values()).find(
     (vehicle) => vehicle.ownerId !== fulfilled[0].value.request.selectedOwnerId
@@ -503,7 +597,7 @@ test('timeout job expires stale offers and pending request', async () => {
 });
 
 test('client cancellation cancels pending offers and notifies owners', async () => {
-  const { service, notificationRepository } = createService();
+  const { service, notificationRepository, statusEventRepository } = createService();
   const created = await service.createRequest({
     actor: client,
     input: requestInput,
@@ -521,6 +615,7 @@ test('client cancellation cancels pending offers and notifies owners', async () 
   assert.equal(cancelled.request.status, kuliStatuses.cancelled);
   assert.ok(cancelled.offers.every((offer) => offer.status === offerStatuses.cancelled));
   assert.equal(notificationRepository.records.filter((entry) => entry.type === 'request.cancelled').length, 2);
+  assert.equal(statusEventRepository.records.at(-1).toStatus, kuliStatuses.cancelled);
 });
 
 test('accepting an expired offer fails with conflict', async () => {
@@ -543,5 +638,136 @@ test('accepting an expired offer fails with conflict', async () => {
         offerId: offer.id
       }),
     (error) => error instanceof AppError && error.code === 'OFFER_NOT_AVAILABLE'
+  );
+});
+
+test('assigned owner can execute trip lifecycle and every transition creates an event', async () => {
+  const { service, vehicleRepository } = createService();
+  const created = await service.createRequest({
+    actor: client,
+    input: requestInput,
+    idempotencyKey: 'idem-007'
+  });
+  const offer = created.offers.find((entry) => entry.ownerId === ownerOne.id);
+  const accepted = await service.acceptOffer({
+    actor: ownerOne,
+    offerId: offer.id
+  });
+
+  const statuses = [
+    kuliStatuses.enRouteToPickup,
+    kuliStatuses.arrivedAtPickup,
+    kuliStatuses.loading,
+    kuliStatuses.inTransit,
+    kuliStatuses.unloading,
+    kuliStatuses.completed
+  ];
+
+  let current = accepted.request;
+
+  for (const status of statuses) {
+    const result = await service.transitionRequestStatus({
+      actor: ownerOne,
+      requestId: current.id,
+      input: { status }
+    });
+    current = result.request;
+  }
+
+  const events = await service.listStatusEvents({
+    actor: client,
+    requestId: current.id
+  });
+  const releasedVehicle = vehicleRepository.records.get(accepted.request.selectedVehicleId);
+
+  assert.equal(current.status, kuliStatuses.completed);
+  assert.equal(events.length, 7);
+  assert.deepEqual(events.map((event) => event.toStatus), [kuliStatuses.accepted, ...statuses]);
+  assert.equal(releasedVehicle.availabilityStatus, vehicleAvailabilityStatuses.onlineAvailable);
+});
+
+test('invalid and unauthorized status transitions are blocked', async () => {
+  const { service } = createService();
+  const created = await service.createRequest({
+    actor: client,
+    input: requestInput,
+    idempotencyKey: 'idem-008'
+  });
+  const offer = created.offers.find((entry) => entry.ownerId === ownerOne.id);
+  const accepted = await service.acceptOffer({
+    actor: ownerOne,
+    offerId: offer.id
+  });
+
+  await assert.rejects(
+    () =>
+      service.transitionRequestStatus({
+        actor: ownerOne,
+        requestId: accepted.request.id,
+        input: { status: kuliStatuses.completed }
+      }),
+    (error) => error instanceof AppError && error.code === 'INVALID_STATUS_TRANSITION'
+  );
+
+  await assert.rejects(
+    () =>
+      service.transitionRequestStatus({
+        actor: client,
+        requestId: accepted.request.id,
+        input: { status: kuliStatuses.enRouteToPickup }
+      }),
+    (error) => error instanceof AppError && error.code === 'STATUS_UPDATE_FORBIDDEN'
+  );
+});
+
+test('request-scoped messages are idempotent and limited to participants', async () => {
+  const { service, notificationRepository } = createService();
+  const created = await service.createRequest({
+    actor: client,
+    input: requestInput,
+    idempotencyKey: 'idem-009'
+  });
+  const offer = created.offers.find((entry) => entry.ownerId === ownerOne.id);
+  const accepted = await service.acceptOffer({
+    actor: ownerOne,
+    offerId: offer.id
+  });
+
+  const first = await service.sendMessage({
+    actor: client,
+    requestId: accepted.request.id,
+    input: {
+      body: 'I am waiting near the gate.',
+      clientGeneratedId: 'mobile-msg-001'
+    }
+  });
+  const second = await service.sendMessage({
+    actor: client,
+    requestId: accepted.request.id,
+    input: {
+      body: 'I am waiting near the gate.',
+      clientGeneratedId: 'mobile-msg-001'
+    }
+  });
+  const messages = await service.listMessages({
+    actor: ownerOne,
+    requestId: accepted.request.id
+  });
+
+  assert.equal(first.message.id, second.message.id);
+  assert.equal(second.idempotentReplay, true);
+  assert.equal(messages.length, 1);
+  assert.equal(notificationRepository.records.filter((entry) => entry.type === 'message.created').length, 1);
+
+  await assert.rejects(
+    () =>
+      service.sendMessage({
+        actor: outsider,
+        requestId: accepted.request.id,
+        input: {
+          body: 'Can I see this?'
+        }
+      }),
+    (error) => error instanceof AppError && error.code === 'KULI_REQUEST_NOT_FOUND'
   );
 });

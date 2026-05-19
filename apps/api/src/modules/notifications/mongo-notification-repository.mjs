@@ -46,4 +46,34 @@ export class MongoNotificationRepository {
     await this.collection.insertMany(documents);
     return documents.map(normalize);
   }
+
+  async listByRecipientId(recipientUserId) {
+    const documents = await this.collection
+      .find({ recipientUserId }, { sort: { createdAt: -1 }, limit: 50 })
+      .toArray();
+
+    return documents.map(normalize);
+  }
+
+  async markRead({ notificationId, recipientUserId }) {
+    const now = new Date().toISOString();
+    const result = await this.collection.findOneAndUpdate(
+      {
+        _id: notificationId,
+        recipientUserId
+      },
+      {
+        $set: {
+          deliveryStatus: 'read',
+          readAt: now,
+          updatedAt: now
+        }
+      },
+      {
+        returnDocument: 'after'
+      }
+    );
+
+    return normalize(result);
+  }
 }

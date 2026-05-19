@@ -17,6 +17,8 @@ const requiredPaths = [
   'apps/api/src/modules/logistics/default-pricing-rule.mjs',
   'apps/api/src/modules/logistics/marketplace-service.mjs',
   'apps/api/src/modules/logistics/mongo-kuli-request-repository.mjs',
+  'apps/api/src/modules/logistics/mongo-kuli-status-event-repository.mjs',
+  'apps/api/src/modules/logistics/mongo-message-repository.mjs',
   'apps/api/src/modules/logistics/mongo-pricing-rule-repository.mjs',
   'apps/api/src/modules/logistics/mongo-trip-offer-repository.mjs',
   'apps/api/src/modules/logistics/quote-service.mjs',

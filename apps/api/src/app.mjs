@@ -17,6 +17,8 @@ import { MongoAuditLogRepository } from './modules/audit/mongo-audit-log-reposit
 import { MongoFileRepository } from './modules/files/mongo-file-repository.mjs';
 import { MongoPricingRuleRepository } from './modules/logistics/mongo-pricing-rule-repository.mjs';
 import { MongoKuliRequestRepository } from './modules/logistics/mongo-kuli-request-repository.mjs';
+import { MongoKuliStatusEventRepository } from './modules/logistics/mongo-kuli-status-event-repository.mjs';
+import { MongoMessageRepository } from './modules/logistics/mongo-message-repository.mjs';
 import { MongoTripOfferRepository } from './modules/logistics/mongo-trip-offer-repository.mjs';
 import { QuoteService } from './modules/logistics/quote-service.mjs';
 import { MarketplaceService } from './modules/logistics/marketplace-service.mjs';
@@ -100,7 +102,7 @@ const createRouteRequest = (context) => async (request) => {
   if (method === 'GET' && path === '/api/v1/kuli-requests/mine') {
     const { currentUser } = await resolveAuth();
     assertActiveAccount(currentUser);
-    assertRole(currentUser, [roles.client, roles.truckOwner, roles.admin]);
+    assertRole(currentUser, [roles.client, roles.truckOwner, roles.assistant, roles.admin]);
 
     return success(
       await context.marketplaceService.listMine({
@@ -125,10 +127,74 @@ const createRouteRequest = (context) => async (request) => {
     );
   }
 
+  if (method === 'PATCH' && path.startsWith('/api/v1/kuli-requests/') && path.endsWith('/status')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.truckOwner, roles.assistant, roles.admin]);
+
+    const requestId = path.split('/')[4];
+
+    return success(
+      await context.marketplaceService.transitionRequestStatus({
+        actor: currentUser,
+        requestId,
+        input: await parseJsonBody(request)
+      })
+    );
+  }
+
+  if (method === 'GET' && path.startsWith('/api/v1/kuli-requests/') && path.endsWith('/events')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.client, roles.truckOwner, roles.assistant, roles.admin]);
+
+    const requestId = path.split('/')[4];
+
+    return success(
+      await context.marketplaceService.listStatusEvents({
+        actor: currentUser,
+        requestId
+      })
+    );
+  }
+
+  if (method === 'GET' && path.startsWith('/api/v1/kuli-requests/') && path.endsWith('/messages')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.client, roles.truckOwner, roles.assistant, roles.admin]);
+
+    const requestId = path.split('/')[4];
+
+    return success(
+      await context.marketplaceService.listMessages({
+        actor: currentUser,
+        requestId
+      })
+    );
+  }
+
+  if (method === 'POST' && path.startsWith('/api/v1/kuli-requests/') && path.endsWith('/messages')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.client, roles.truckOwner, roles.assistant, roles.admin]);
+
+    const requestId = path.split('/')[4];
+
+    return success(
+      await context.marketplaceService.sendMessage({
+        actor: currentUser,
+        requestId,
+        input: await parseJsonBody(request),
+        idempotencyKey: request.headers['idempotency-key']
+      }),
+      201
+    );
+  }
+
   if (method === 'GET' && path.startsWith('/api/v1/kuli-requests/')) {
     const { currentUser } = await resolveAuth();
     assertActiveAccount(currentUser);
-    assertRole(currentUser, [roles.client, roles.truckOwner, roles.admin]);
+    assertRole(currentUser, [roles.client, roles.truckOwner, roles.assistant, roles.admin]);
 
     const requestId = path.split('/')[4];
 
@@ -170,6 +236,41 @@ const createRouteRequest = (context) => async (request) => {
 
     const body = await parseJsonBody(request);
     return success(await context.accountService.updateOwnProfile(authUser, body));
+  }
+
+  if (method === 'PATCH' && path === '/api/v1/me/notification-preferences') {
+    const { authUser, currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+
+    return success(
+      await context.accountService.updateOwnProfile(authUser, {
+        notificationPreferences: await parseJsonBody(request)
+      })
+    );
+  }
+
+  if (method === 'GET' && path === '/api/v1/notifications') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+
+    return success(await context.notificationRepository.listByRecipientId(currentUser.id));
+  }
+
+  if (method === 'PATCH' && path.startsWith('/api/v1/notifications/') && path.endsWith('/read')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+
+    const notificationId = path.split('/')[4];
+    const notification = await context.notificationRepository.markRead({
+      notificationId,
+      recipientUserId: currentUser.id
+    });
+
+    if (!notification) {
+      throw new AppError(404, 'NOTIFICATION_NOT_FOUND', 'Notification was not found.');
+    }
+
+    return success(notification);
   }
 
   if (method === 'GET' && path === '/api/v1/admin/users') {
@@ -550,6 +651,8 @@ export const createAppContext = async (config = env) => {
   const auditLogRepository = new MongoAuditLogRepository({ db });
   const pricingRuleRepository = new MongoPricingRuleRepository({ db });
   const kuliRequestRepository = new MongoKuliRequestRepository({ db });
+  const statusEventRepository = new MongoKuliStatusEventRepository({ db });
+  const messageRepository = new MongoMessageRepository({ db });
   const tripOfferRepository = new MongoTripOfferRepository({ db });
   const notificationRepository = new MongoNotificationRepository({ db });
 
@@ -561,6 +664,8 @@ export const createAppContext = async (config = env) => {
   await auditLogRepository.ensureIndexes();
   await pricingRuleRepository.ensureIndexes();
   await kuliRequestRepository.ensureIndexes();
+  await statusEventRepository.ensureIndexes();
+  await messageRepository.ensureIndexes();
   await tripOfferRepository.ensureIndexes();
   await notificationRepository.ensureIndexes();
 
@@ -584,6 +689,8 @@ export const createAppContext = async (config = env) => {
     tripOfferRepository,
     vehicleRepository,
     notificationRepository,
+    statusEventRepository,
+    messageRepository,
     quoteService
   });
   const tokenVerifier = new SupabaseTokenVerifier({
@@ -612,6 +719,7 @@ export const createAppContext = async (config = env) => {
     vehicleRegistryService,
     quoteService,
     marketplaceService,
+    notificationRepository,
     tokenVerifier
   };
 };
