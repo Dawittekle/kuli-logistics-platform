@@ -16,7 +16,11 @@ import { bootstrapAdmin } from './modules/admin/bootstrap-admin.mjs';
 import { MongoAuditLogRepository } from './modules/audit/mongo-audit-log-repository.mjs';
 import { MongoFileRepository } from './modules/files/mongo-file-repository.mjs';
 import { MongoPricingRuleRepository } from './modules/logistics/mongo-pricing-rule-repository.mjs';
+import { MongoKuliRequestRepository } from './modules/logistics/mongo-kuli-request-repository.mjs';
+import { MongoTripOfferRepository } from './modules/logistics/mongo-trip-offer-repository.mjs';
 import { QuoteService } from './modules/logistics/quote-service.mjs';
+import { MarketplaceService } from './modules/logistics/marketplace-service.mjs';
+import { MongoNotificationRepository } from './modules/notifications/mongo-notification-repository.mjs';
 import { MongoVehicleClassRepository } from './modules/vehicle-registry/mongo-vehicle-class-repository.mjs';
 import { MongoVehicleDocumentRepository } from './modules/vehicle-registry/mongo-vehicle-document-repository.mjs';
 import { MongoVehicleRepository } from './modules/vehicle-registry/mongo-vehicle-repository.mjs';
@@ -75,6 +79,64 @@ const createRouteRequest = (context) => async (request) => {
         input: await parseJsonBody(request)
       }),
       201
+    );
+  }
+
+  if (method === 'POST' && path === '/api/v1/kuli-requests') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.client]);
+
+    return success(
+      await context.marketplaceService.createRequest({
+        actor: currentUser,
+        input: await parseJsonBody(request),
+        idempotencyKey: request.headers['idempotency-key']
+      }),
+      201
+    );
+  }
+
+  if (method === 'GET' && path === '/api/v1/kuli-requests/mine') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.client, roles.truckOwner, roles.admin]);
+
+    return success(
+      await context.marketplaceService.listMine({
+        actor: currentUser
+      })
+    );
+  }
+
+  if (method === 'POST' && path.startsWith('/api/v1/kuli-requests/') && path.endsWith('/cancel')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.client]);
+
+    const requestId = path.split('/')[4];
+
+    return success(
+      await context.marketplaceService.cancelRequest({
+        actor: currentUser,
+        requestId,
+        input: await parseJsonBody(request)
+      })
+    );
+  }
+
+  if (method === 'GET' && path.startsWith('/api/v1/kuli-requests/')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.client, roles.truckOwner, roles.admin]);
+
+    const requestId = path.split('/')[4];
+
+    return success(
+      await context.marketplaceService.getRequest({
+        actor: currentUser,
+        requestId
+      })
     );
   }
 
@@ -202,6 +264,14 @@ const createRouteRequest = (context) => async (request) => {
         pricingRuleId
       })
     );
+  }
+
+  if (method === 'POST' && path === '/api/v1/admin/jobs/expire-offers') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    return success(await context.marketplaceService.expireTimedOutOffers());
   }
 
   if (method === 'POST' && (path === '/api/v1/admin/users' || path === '/api/v1/admin/staff-users')) {
@@ -368,6 +438,65 @@ const createRouteRequest = (context) => async (request) => {
     );
   }
 
+  if (method === 'GET' && path === '/api/v1/owner/offers') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.truckOwner]);
+
+    return success(
+      await context.marketplaceService.listOwnerOffers({
+        actor: currentUser
+      })
+    );
+  }
+
+  if (method === 'POST' && path.startsWith('/api/v1/offers/') && path.endsWith('/viewed')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.truckOwner]);
+
+    const offerId = path.split('/')[4];
+
+    return success(
+      await context.marketplaceService.markOfferViewed({
+        actor: currentUser,
+        offerId
+      })
+    );
+  }
+
+  if (method === 'POST' && path.startsWith('/api/v1/offers/') && path.endsWith('/decline')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.truckOwner]);
+
+    const offerId = path.split('/')[4];
+
+    return success(
+      await context.marketplaceService.declineOffer({
+        actor: currentUser,
+        offerId,
+        input: await parseJsonBody(request)
+      })
+    );
+  }
+
+  if (method === 'POST' && path.startsWith('/api/v1/offers/') && path.endsWith('/accept')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.truckOwner]);
+
+    const offerId = path.split('/')[4];
+
+    return success(
+      await context.marketplaceService.acceptOffer({
+        actor: currentUser,
+        offerId,
+        idempotencyKey: request.headers['idempotency-key']
+      })
+    );
+  }
+
   if (method === 'GET' && path.startsWith('/api/v1/admin/vehicles/') && !path.endsWith('/verification')) {
     const { currentUser } = await resolveAuth();
     assertActiveAccount(currentUser);
@@ -420,6 +549,9 @@ export const createAppContext = async (config = env) => {
   const fileRepository = new MongoFileRepository({ db });
   const auditLogRepository = new MongoAuditLogRepository({ db });
   const pricingRuleRepository = new MongoPricingRuleRepository({ db });
+  const kuliRequestRepository = new MongoKuliRequestRepository({ db });
+  const tripOfferRepository = new MongoTripOfferRepository({ db });
+  const notificationRepository = new MongoNotificationRepository({ db });
 
   await userRepository.ensureIndexes();
   await vehicleClassRepository.ensureIndexes();
@@ -428,6 +560,9 @@ export const createAppContext = async (config = env) => {
   await fileRepository.ensureIndexes();
   await auditLogRepository.ensureIndexes();
   await pricingRuleRepository.ensureIndexes();
+  await kuliRequestRepository.ensureIndexes();
+  await tripOfferRepository.ensureIndexes();
+  await notificationRepository.ensureIndexes();
 
   const accountService = new AccountService({ userRepository });
   const vehicleRegistryService = new VehicleRegistryService({
@@ -443,6 +578,13 @@ export const createAppContext = async (config = env) => {
     vehicleRepository,
     userRepository,
     mapsProvider: new DeterministicMapsProvider()
+  });
+  const marketplaceService = new MarketplaceService({
+    kuliRequestRepository,
+    tripOfferRepository,
+    vehicleRepository,
+    notificationRepository,
+    quoteService
   });
   const tokenVerifier = new SupabaseTokenVerifier({
     mode: config.supabaseJwtMode,
@@ -469,6 +611,7 @@ export const createAppContext = async (config = env) => {
     accountService,
     vehicleRegistryService,
     quoteService,
+    marketplaceService,
     tokenVerifier
   };
 };

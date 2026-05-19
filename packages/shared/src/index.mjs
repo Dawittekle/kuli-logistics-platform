@@ -65,6 +65,28 @@ export const locationSources = {
   assistantEntry: 'assistant_entry'
 };
 
+export const kuliStatuses = {
+  pending: 'pending',
+  accepted: 'accepted',
+  enRouteToPickup: 'en_route_to_pickup',
+  arrivedAtPickup: 'arrived_at_pickup',
+  loading: 'loading',
+  inTransit: 'in_transit',
+  unloading: 'unloading',
+  completed: 'completed',
+  cancelled: 'cancelled',
+  timedOut: 'timed_out'
+};
+
+export const offerStatuses = {
+  sent: 'sent',
+  viewed: 'viewed',
+  accepted: 'accepted',
+  declined: 'declined',
+  expired: 'expired',
+  cancelled: 'cancelled'
+};
+
 export const routeVisibility = {
   mobileOnlyRoles: [roles.client, roles.truckOwner],
   staffOnlyRoles: [roles.assistant, roles.admin]

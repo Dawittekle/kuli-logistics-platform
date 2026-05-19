@@ -64,6 +64,11 @@ export class MongoVehicleRepository {
     return normalize(await this.collection.findOne({ _id: id, deletedAt: { $exists: false } }));
   }
 
+  async findByIds(ids) {
+    const documents = await this.collection.find({ _id: { $in: ids }, deletedAt: { $exists: false } }).toArray();
+    return documents.map(normalize);
+  }
+
   async findApprovedAvailableNearby({ point, radiusKm, vehicleClassId = undefined }) {
     const query = {
       verificationStatus: 'approved',
@@ -104,5 +109,53 @@ export class MongoVehicleRepository {
     );
 
     return this.findById(id);
+  }
+
+  async markBusyIfAvailable({ vehicleId, activeTripId }) {
+    const result = await this.collection.findOneAndUpdate(
+      {
+        _id: vehicleId,
+        verificationStatus: 'approved',
+        availabilityStatus: 'online_available',
+        deletedAt: { $exists: false }
+      },
+      {
+        $set: {
+          availabilityStatus: 'busy_on_job',
+          activeTripId,
+          updatedAt: new Date().toISOString()
+        }
+      },
+      {
+        returnDocument: 'after'
+      }
+    );
+
+    return normalize(result);
+  }
+
+  async releaseIfActiveTrip({ vehicleId, activeTripId }) {
+    const result = await this.collection.findOneAndUpdate(
+      {
+        _id: vehicleId,
+        activeTripId,
+        availabilityStatus: 'busy_on_job',
+        deletedAt: { $exists: false }
+      },
+      {
+        $set: {
+          availabilityStatus: 'online_available',
+          updatedAt: new Date().toISOString()
+        },
+        $unset: {
+          activeTripId: ''
+        }
+      },
+      {
+        returnDocument: 'after'
+      }
+    );
+
+    return normalize(result);
   }
 }
