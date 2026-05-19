@@ -102,10 +102,16 @@ The server exposes:
 - `GET /api/v1/kuli-requests/:id/events`
 - `GET /api/v1/kuli-requests/:id/messages`
 - `POST /api/v1/kuli-requests/:id/messages`
+- `POST /api/v1/kuli-requests/:id/rating`
+- `POST /api/v1/kuli-requests/:id/payment/confirm`
+- `POST /api/v1/kuli-requests/:id/payment/dispute`
 - `GET /api/v1/owner/offers`
+- `GET /api/v1/owners/:id/ratings`
 - `POST /api/v1/offers/:id/viewed`
 - `POST /api/v1/offers/:id/accept`
 - `POST /api/v1/offers/:id/decline`
+- `POST /api/v1/reports`
+- `POST /api/v1/reports/:id/evidence`
 - `GET /api/v1/notifications`
 - `PATCH /api/v1/notifications/:id/read`
 - `PATCH /api/v1/me/notification-preferences`
@@ -117,6 +123,10 @@ The server exposes:
 - `POST /api/v1/assistant/bookings`
 - `GET /api/v1/assistant/clients/search`
 - `POST /api/v1/admin/jobs/expire-pending-client-tickets`
+- `GET /api/v1/admin/reports`
+- `PATCH /api/v1/admin/reports/:id`
+- `GET /api/v1/admin/payments`
+- `PATCH /api/v1/admin/payments/:id`
 
 ## Development Tokens
 
@@ -171,9 +181,9 @@ Do not put the Supabase service-role key in frontend env files or commit it anyw
 
 ## Current Limitations
 
-- The API currently covers identity/profile/RBAC, vehicle verification, quote/pricing/search, request/offer acceptance, manual trip execution, request-scoped messages, in-app notification records, and assisted booking tickets.
+- The API currently covers identity/profile/RBAC, vehicle verification, quote/pricing/search, request/offer acceptance, manual trip execution, request-scoped messages, in-app notification records, assisted booking tickets, ratings, reports, and cash/manual payment records.
 - No installed frontend framework yet; mobile and admin apps currently expose route and RBAC scaffolds rather than full UI builds.
 - Supabase JWKS verification is wired in the API, but it still needs your project URL and anon key for real-device/auth-client testing.
-- No file storage, payment, rating, report, telephony integration, or production notification delivery flows yet.
+- No file storage, telephony integration, digital payment gateway, automated commission collection, or production notification delivery flows yet.
 
 Those remaining items are tracked in [`docs/progress_tracking.md`](docs/progress_tracking.md).

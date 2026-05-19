@@ -171,22 +171,22 @@ Completion:
 
 ### Phase 7: Ratings, Reports, Payments
 
-- [ ] Payment record model.
-- [ ] Owner payment confirmation.
-- [ ] Client payment dispute.
-- [ ] Admin payment resolution.
-- [ ] Rating model.
-- [ ] Rating form.
-- [ ] Owner aggregate rating.
-- [ ] Report model.
-- [ ] Evidence upload.
-- [ ] Admin report resolution.
-- [ ] Dispute penalty in matching.
+- [x] Payment record model.
+- [x] Owner payment confirmation.
+- [x] Client payment dispute.
+- [x] Admin payment resolution.
+- [x] Rating model.
+- [x] Rating form.
+- [x] Owner aggregate rating.
+- [x] Report model.
+- [x] Evidence upload.
+- [x] Admin report resolution.
+- [x] Dispute penalty in matching.
 
 Completion:
 
-- [ ] Completed trip can be paid, rated, and reported.
-- [ ] Admin can resolve report with audit trail.
+- [x] Completed trip can be paid, rated, and reported.
+- [x] Admin can resolve report with audit trail.
 
 ### Phase 8: Hardening and Release Readiness
 
@@ -226,9 +226,9 @@ Completion:
 | Messaging | In progress | AI agents | Request-scoped message collection, idempotent send, participant access rules, and mobile thread shell are in place |
 | Notifications | In progress | AI agents | In-app notification records, list/read APIs, preferences route, and disabled push/SMS/email adapter placeholders are in place |
 | Assisted booking | In progress | AI agents | Hotline tickets, claim/status flow, client lookup, assisted request creation, ticket/request linking, SMS confirmation intents, and assistant console shells are in place |
-| Ratings | Not started | TBD | Terminal trips only |
-| Reports/disputes | Not started | TBD | Admin mediation |
-| Payment records | Not started | TBD | Cash/manual first |
+| Ratings | In progress | AI agents | Terminal-trip rating API, duplicate guard, owner aggregate updates, and mobile rating shell are in place |
+| Reports/disputes | In progress | AI agents | Report creation, evidence file linking, admin resolution, audit logging, visibility penalties, and admin trust shells are in place |
+| Payment records | In progress | AI agents | Cash/manual payment records, owner confirmation, client dispute, admin resolution, and finance console shells are in place |
 | Admin dashboard | Not started | TBD | Operations control |
 
 ## Infrastructure Tracking
@@ -274,7 +274,7 @@ Completion:
 - [x] Acceptance concurrency tests.
 - [x] Trip state machine tests.
 - [x] Assisted booking tests.
-- [ ] Payment/report/rating tests.
+- [x] Payment/report/rating tests.
 - [ ] Accessibility checks.
 - [ ] Mobile device smoke tests.
 - [ ] Admin dashboard smoke tests.
@@ -315,3 +315,4 @@ Completion:
 - Phase 4 has a backend request/offer acceptance slice with idempotent create, owner offer commands, first-accept-wins protection, timeout cleanup, cancellation cleanup, and lightweight mobile waiting/inbox screen contracts.
 - Phase 5 has manual trip execution, status events, request-scoped messaging, in-app notification read/list, notification preferences, disabled external adapter placeholders, and lightweight mobile active-trip/message/notification screen contracts.
 - Phase 6 has hotline ticket persistence, ticket transitions, assistant assignment, client phone lookup, assisted request creation, ticket/request linking, SMS confirmation intents, pending-client cleanup, and lightweight assistant console screen contracts.
+- Phase 7 has cash/manual payment records, owner payment confirmation, client payment disputes, admin payment resolution, terminal-trip ratings with owner aggregates, reports with evidence links, admin report resolution with audit logs, visibility penalties for matching, and lightweight mobile/admin trust screen contracts.
