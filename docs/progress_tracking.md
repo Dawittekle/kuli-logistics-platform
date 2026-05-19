@@ -98,21 +98,21 @@ Completion:
 
 ### Phase 3: Quotes, Pricing, and Nearby Search
 
-- [ ] Mapping provider adapter.
-- [ ] Route distance/ETA.
-- [ ] Pricing rule model.
-- [ ] Quote endpoint.
-- [ ] Admin pricing rule UI.
-- [ ] Geospatial vehicle search.
-- [ ] Radius expansion.
-- [ ] Ranking score.
-- [ ] Client request form.
-- [ ] Candidate result UI.
+- [x] Mapping provider adapter.
+- [x] Route distance/ETA.
+- [x] Pricing rule model.
+- [x] Quote endpoint.
+- [x] Admin pricing rule UI.
+- [x] Geospatial vehicle search.
+- [x] Radius expansion.
+- [x] Ranking score.
+- [x] Client request form.
+- [x] Candidate result UI.
 
 Completion:
 
-- [ ] Quote returns correct breakdown.
-- [ ] Search filters and ranking are tested.
+- [x] Quote returns correct breakdown.
+- [x] Search filters and ranking are tested.
 
 ### Phase 4: Requests, Offers, Acceptance
 
@@ -218,8 +218,8 @@ Completion:
 | Vehicle registration | In progress | AI agents | Owner CRUD and document metadata APIs are in place; mobile form UI still pending |
 | Vehicle verification | In progress | AI agents | Admin pending queue, detail, document signed URL, and approve/reject workflow are in place |
 | Availability management | In progress | AI agents | Vehicle availability transition rules block unapproved vehicles from going online |
-| Quotes and pricing | Not started | TBD | Versioned pricing rules |
-| Nearby matching | Not started | TBD | MongoDB 2dsphere |
+| Quotes and pricing | In progress | AI agents | Deterministic route adapter, seeded active pricing rule, admin pricing API, and quote endpoint are in place |
+| Nearby matching | In progress | AI agents | Approved/online nearby search, radius expansion, and deterministic ranking are tested |
 | Request creation | Not started | TBD | Needs idempotency |
 | Offer acceptance | Not started | TBD | Atomic first-accept-wins |
 | Trip state machine | Not started | TBD | Manual status updates |
@@ -270,7 +270,7 @@ Completion:
 - [ ] E2E tests configured.
 - [x] Auth/RBAC tests.
 - [x] Vehicle verification tests.
-- [ ] Matching tests.
+- [x] Matching tests.
 - [ ] Acceptance concurrency tests.
 - [ ] Trip state machine tests.
 - [ ] Assisted booking tests.

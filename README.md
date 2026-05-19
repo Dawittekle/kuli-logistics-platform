@@ -90,6 +90,10 @@ The server exposes:
 - `GET /api/v1/admin/vehicles/pending`
 - `GET /api/v1/admin/vehicles/:id`
 - `PATCH /api/v1/admin/vehicles/:id/verification`
+- `POST /api/v1/quotes`
+- `GET /api/v1/admin/pricing-rules`
+- `POST /api/v1/admin/pricing-rules`
+- `PATCH /api/v1/admin/pricing-rules/:id/activate`
 
 ## Development Tokens
 
