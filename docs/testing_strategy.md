@@ -191,4 +191,4 @@ Do not consider MVP release-ready until:
 - Trip state machine tests pass.
 - File access authorization tests pass.
 - At least one complete E2E happy path passes.
-
+- `npm run smoke:critical` passes for the dependency-light workflow checklist.

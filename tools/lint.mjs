@@ -45,6 +45,7 @@ const requiredPaths = [
   'apps/admin/src/main.mjs',
   'apps/admin/src/assistant-shell.mjs',
   'apps/admin/src/config.mjs',
+  'apps/admin/src/operations-shell.mjs',
   'apps/admin/src/pricing-shell.mjs',
   'apps/admin/src/trust-shell.mjs',
   'apps/mobile/src/main.mjs',

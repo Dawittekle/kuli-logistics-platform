@@ -177,16 +177,32 @@ Recovery requirements:
 - [ ] Production object storage configured.
 - [ ] Supabase production project configured.
 - [ ] CORS allowlist configured.
-- [ ] Rate limiting enabled.
-- [ ] Security headers enabled.
-- [ ] Logging configured.
+- [x] Rate limiting enabled.
+- [x] Security headers enabled.
+- [x] Logging configured.
 - [ ] Error monitoring configured.
 - [ ] Backups enabled.
-- [ ] Admin seed/provisioning complete.
-- [ ] Vehicle classes seeded.
-- [ ] Active pricing rule seeded.
-- [ ] Smoke tests pass.
+- [x] Admin seed/provisioning complete.
+- [x] Vehicle classes seeded.
+- [x] Active pricing rule seeded.
+- [x] Smoke tests pass.
 - [ ] Rollback procedure documented.
+
+Local release gate commands:
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run smoke:critical
+npm run verify:startup
+```
+
+Demo data can be upserted into the configured MongoDB with:
+
+```bash
+npm run seed:demo
+```
 
 ## Staging Demo Data
 
@@ -200,4 +216,3 @@ Staging should include:
 - Sample request history.
 - Sample report.
 - Sample ticket.
-

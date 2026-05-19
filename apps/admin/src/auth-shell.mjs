@@ -15,7 +15,8 @@ export const adminNavigationByRole = {
     '/admin/requests',
     '/admin/reports',
     '/admin/payments',
-    '/admin/audit-logs'
+    '/admin/audit-logs',
+    '/admin/release-readiness'
   ],
   [roles.assistant]: [
     '/assistant/tickets',
@@ -27,4 +28,3 @@ export const adminNavigationByRole = {
 
 export const isAllowedAdminRoute = (role, path) =>
   (adminNavigationByRole[role] ?? []).some((route) => path.startsWith(route.replace('/:id', '')));
-

@@ -42,6 +42,7 @@ Start with:
 npm run lint
 npm run typecheck
 npm test
+npm run smoke:critical
 ```
 
 These scripts validate the current scaffold and execute foundational policy tests.
@@ -75,6 +76,7 @@ The server exposes:
 - `GET /api/v1/me`
 - `PATCH /api/v1/me`
 - `GET /api/v1/admin/users`
+- `GET /api/v1/admin/users/:id`
 - `POST /api/v1/admin/users`
 - `POST /api/v1/admin/staff-users`
 - `PATCH /api/v1/admin/users/:userId/status`
@@ -128,6 +130,9 @@ The server exposes:
 - `PATCH /api/v1/admin/reports/:id`
 - `GET /api/v1/admin/payments`
 - `PATCH /api/v1/admin/payments/:id`
+- `GET /api/v1/admin/dashboard`
+- `GET /api/v1/admin/audit-logs`
+- `GET /api/v1/admin/release-readiness`
 
 ## Development Tokens
 
@@ -186,5 +191,6 @@ Do not put the Supabase service-role key in frontend env files or commit it anyw
 - No installed frontend framework yet; mobile and admin apps currently expose route and RBAC scaffolds rather than full UI builds.
 - Supabase JWKS verification is wired in the API, but it still needs your project URL and anon key for real-device/auth-client testing.
 - No file storage, telephony integration, digital payment gateway, automated commission collection, or production notification delivery flows yet.
+- Production deployment still requires real provider credentials, backups, monitoring, and a hosted environment even though release-readiness checks and smoke scripts are now scaffolded.
 
 Those remaining items are tracked in [`docs/progress_tracking.md`](docs/progress_tracking.md).

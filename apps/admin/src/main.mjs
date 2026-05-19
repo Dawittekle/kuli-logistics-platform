@@ -1,6 +1,7 @@
 import { adminEntryRouteByRole, adminNavigationByRole } from './auth-shell.mjs';
 import { assistedBookingWizard, assistantClientLookup, assistantTicketDetail, assistantTicketQueue } from './assistant-shell.mjs';
 import { adminAppConfig } from './config.mjs';
+import { adminAuditLogWorkspace, adminDashboardWorkspace, adminUserManagementWorkspace, releaseReadinessWorkspace } from './operations-shell.mjs';
 import { adminPricingWorkspace } from './pricing-shell.mjs';
 import { adminPaymentsWorkspace, adminReportsWorkspace, trustSignalsWorkspace } from './trust-shell.mjs';
 
@@ -20,6 +21,12 @@ console.log(
         reports: adminReportsWorkspace,
         payments: adminPaymentsWorkspace,
         signals: trustSignalsWorkspace
+      },
+      operationsWorkspace: {
+        dashboard: adminDashboardWorkspace,
+        users: adminUserManagementWorkspace,
+        auditLogs: adminAuditLogWorkspace,
+        releaseReadiness: releaseReadinessWorkspace
       },
       loginRoute: '/login',
       entryRoutes: adminEntryRouteByRole,
