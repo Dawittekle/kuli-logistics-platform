@@ -14,6 +14,10 @@ import { AccountService } from './modules/accounts/account-service.mjs';
 import { MongoUserRepository } from './modules/accounts/mongo-user-repository.mjs';
 import { bootstrapAdmin } from './modules/admin/bootstrap-admin.mjs';
 import { MongoAuditLogRepository } from './modules/audit/mongo-audit-log-repository.mjs';
+import { EngagementService } from './modules/engagement/engagement-service.mjs';
+import { MongoPaymentRepository } from './modules/engagement/mongo-payment-repository.mjs';
+import { MongoRatingRepository } from './modules/engagement/mongo-rating-repository.mjs';
+import { MongoReportRepository } from './modules/engagement/mongo-report-repository.mjs';
 import { MongoFileRepository } from './modules/files/mongo-file-repository.mjs';
 import { MongoPricingRuleRepository } from './modules/logistics/mongo-pricing-rule-repository.mjs';
 import { MongoKuliRequestRepository } from './modules/logistics/mongo-kuli-request-repository.mjs';
@@ -195,6 +199,55 @@ const createRouteRequest = (context) => async (request) => {
     );
   }
 
+  if (method === 'POST' && path.startsWith('/api/v1/kuli-requests/') && path.endsWith('/rating')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.client, roles.assistant, roles.admin]);
+
+    const requestId = path.split('/')[4];
+
+    return success(
+      await context.engagementService.submitRating({
+        actor: currentUser,
+        requestId,
+        input: await parseJsonBody(request)
+      }),
+      201
+    );
+  }
+
+  if (method === 'POST' && path.startsWith('/api/v1/kuli-requests/') && path.endsWith('/payment/confirm')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.truckOwner]);
+
+    const requestId = path.split('/')[4];
+
+    return success(
+      await context.engagementService.confirmPayment({
+        actor: currentUser,
+        requestId,
+        input: await parseJsonBody(request)
+      })
+    );
+  }
+
+  if (method === 'POST' && path.startsWith('/api/v1/kuli-requests/') && path.endsWith('/payment/dispute')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.client]);
+
+    const requestId = path.split('/')[4];
+
+    return success(
+      await context.engagementService.disputePayment({
+        actor: currentUser,
+        requestId,
+        input: await parseJsonBody(request)
+      })
+    );
+  }
+
   if (method === 'GET' && path.startsWith('/api/v1/kuli-requests/')) {
     const { currentUser } = await resolveAuth();
     assertActiveAccount(currentUser);
@@ -275,6 +328,50 @@ const createRouteRequest = (context) => async (request) => {
     }
 
     return success(notification);
+  }
+
+  if (method === 'GET' && path.startsWith('/api/v1/owners/') && path.endsWith('/ratings')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+
+    const ownerId = path.split('/')[4];
+
+    return success(
+      await context.engagementService.listOwnerRatings({
+        actor: currentUser,
+        ownerId
+      })
+    );
+  }
+
+  if (method === 'POST' && path === '/api/v1/reports') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.client, roles.truckOwner, roles.assistant, roles.admin]);
+
+    return success(
+      await context.engagementService.createReport({
+        actor: currentUser,
+        input: await parseJsonBody(request)
+      }),
+      201
+    );
+  }
+
+  if (method === 'POST' && path.startsWith('/api/v1/reports/') && path.endsWith('/evidence')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.client, roles.truckOwner, roles.assistant, roles.admin]);
+
+    const reportId = path.split('/')[4];
+
+    return success(
+      await context.engagementService.addReportEvidence({
+        actor: currentUser,
+        reportId,
+        input: await parseJsonBody(request)
+      })
+    );
   }
 
   if (method === 'GET' && path === '/api/v1/assistant/tickets') {
@@ -477,6 +574,66 @@ const createRouteRequest = (context) => async (request) => {
     return success(
       await context.supportService.expirePendingClientTickets({
         actor: currentUser
+      })
+    );
+  }
+
+  if (method === 'GET' && path === '/api/v1/admin/payments') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    return success(
+      await context.engagementService.listPayments({
+        actor: currentUser
+      })
+    );
+  }
+
+  if (method === 'PATCH' && path.startsWith('/api/v1/admin/payments/')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    const paymentId = path.split('/')[5];
+
+    return success(
+      await context.engagementService.resolvePayment({
+        actor: currentUser,
+        paymentId,
+        input: await parseJsonBody(request)
+      })
+    );
+  }
+
+  if (method === 'GET' && path === '/api/v1/admin/reports') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    return success(
+      await context.engagementService.listReports({
+        actor: currentUser,
+        filters: {
+          status: url.query.status,
+          category: url.query.category
+        }
+      })
+    );
+  }
+
+  if (method === 'PATCH' && path.startsWith('/api/v1/admin/reports/')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    const reportId = path.split('/')[5];
+
+    return success(
+      await context.engagementService.resolveReport({
+        actor: currentUser,
+        reportId,
+        input: await parseJsonBody(request)
       })
     );
   }
@@ -755,6 +912,9 @@ export const createAppContext = async (config = env) => {
   const vehicleDocumentRepository = new MongoVehicleDocumentRepository({ db });
   const fileRepository = new MongoFileRepository({ db });
   const auditLogRepository = new MongoAuditLogRepository({ db });
+  const paymentRepository = new MongoPaymentRepository({ db });
+  const ratingRepository = new MongoRatingRepository({ db });
+  const reportRepository = new MongoReportRepository({ db });
   const pricingRuleRepository = new MongoPricingRuleRepository({ db });
   const kuliRequestRepository = new MongoKuliRequestRepository({ db });
   const statusEventRepository = new MongoKuliStatusEventRepository({ db });
@@ -771,6 +931,9 @@ export const createAppContext = async (config = env) => {
   await vehicleDocumentRepository.ensureIndexes();
   await fileRepository.ensureIndexes();
   await auditLogRepository.ensureIndexes();
+  await paymentRepository.ensureIndexes();
+  await ratingRepository.ensureIndexes();
+  await reportRepository.ensureIndexes();
   await pricingRuleRepository.ensureIndexes();
   await kuliRequestRepository.ensureIndexes();
   await statusEventRepository.ensureIndexes();
@@ -810,6 +973,14 @@ export const createAppContext = async (config = env) => {
     marketplaceService,
     notificationIntentRepository
   });
+  const engagementService = new EngagementService({
+    kuliRequestRepository,
+    paymentRepository,
+    ratingRepository,
+    reportRepository,
+    userRepository,
+    auditLogRepository
+  });
   const tokenVerifier = new SupabaseTokenVerifier({
     mode: config.supabaseJwtMode,
     issuer: config.supabaseJwtIssuer,
@@ -837,6 +1008,7 @@ export const createAppContext = async (config = env) => {
     quoteService,
     marketplaceService,
     supportService,
+    engagementService,
     notificationRepository,
     notificationIntentRepository,
     notificationAdapters,

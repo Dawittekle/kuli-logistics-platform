@@ -102,6 +102,60 @@ export const ticketSources = {
   manual: 'manual'
 };
 
+export const paymentStatuses = {
+  notRequired: 'not_required',
+  pending: 'pending',
+  confirmedByOwner: 'confirmed_by_owner',
+  disputed: 'disputed',
+  resolved: 'resolved',
+  cancelled: 'cancelled'
+};
+
+export const paymentFlows = {
+  payOnAcceptance: 'pay_on_acceptance',
+  payOnDelivery: 'pay_on_delivery',
+  payInAdvance: 'pay_in_advance'
+};
+
+export const paymentMethods = {
+  cash: 'cash',
+  manual: 'manual',
+  digitalGateway: 'digital_gateway'
+};
+
+export const ratingModerationStatuses = {
+  visible: 'visible',
+  hidden: 'hidden',
+  flagged: 'flagged'
+};
+
+export const reportStatuses = {
+  open: 'open',
+  underReview: 'under_review',
+  awaitingResponse: 'awaiting_response',
+  resolved: 'resolved',
+  rejected: 'rejected'
+};
+
+export const reportCategories = {
+  overcharge: 'overcharge',
+  noShow: 'no_show',
+  misconduct: 'misconduct',
+  damage: 'damage',
+  safety: 'safety',
+  platformIssue: 'platform_issue',
+  other: 'other'
+};
+
+export const reportResolutionOutcomes = {
+  warning: 'warning',
+  suspension: 'suspension',
+  rejected: 'rejected',
+  resolvedNoAction: 'resolved_no_action',
+  refundRecommended: 'refund_recommended',
+  visibilityPenalty: 'visibility_penalty'
+};
+
 export const routeVisibility = {
   mobileOnlyRoles: [roles.client, roles.truckOwner],
   staffOnlyRoles: [roles.assistant, roles.admin]
