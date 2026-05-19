@@ -11,6 +11,8 @@
     "lint": "node tools/lint.mjs",
     "typecheck": "node tools/typecheck.mjs",
     "test": "node --test",
+    "smoke:critical": "node tools/smoke-critical-workflows.mjs",
+    "seed:demo": "node tools/seed-demo-data.mjs",
     "verify:startup": "node tools/verify-startup.mjs",
     "dev:api": "npm run dev --workspace @kuli/api",
     "dev:admin": "npm run dev --workspace @kuli/admin",

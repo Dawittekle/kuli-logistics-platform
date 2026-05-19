@@ -74,6 +74,20 @@ export class AccountService {
     return this.userRepository.list();
   }
 
+  async getUser({ actor, targetUserId }) {
+    if (actor.role !== roles.admin) {
+      throw new AppError(403, 'ADMIN_REQUIRED', 'Only admins can inspect user records.');
+    }
+
+    const user = await this.userRepository.findById(targetUserId);
+
+    if (!user) {
+      throw new AppError(404, 'USER_NOT_FOUND', 'Target user was not found.');
+    }
+
+    return user;
+  }
+
   async setAccountStatus({ actor, targetUserId, accountStatus }) {
     if (!Object.values(accountStatuses).includes(accountStatus)) {
       throw new AppError(422, 'INVALID_ACCOUNT_STATUS', 'Unknown account status.', {

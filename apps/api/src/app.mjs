@@ -1,9 +1,13 @@
 import { parse } from 'node:url';
 import { env } from './config/env.mjs';
+import { assertRuntimeConfig } from './config/release-readiness.mjs';
 import { connectToMongo } from './config/mongo.mjs';
 import { AppError } from './common/errors/app-error.mjs';
+import { InMemoryRateLimiter } from './common/http/rate-limit.mjs';
 import { parseJsonBody } from './common/http/body.mjs';
 import { failure, success } from './common/http/json-response.mjs';
+import { withSecurityHeaders } from './common/http/security-headers.mjs';
+import { createRequestLogger } from './common/logging/structured-logger.mjs';
 import { assertActiveAccount } from './common/guards/account-status-guard.mjs';
 import { assertRole } from './common/guards/role-guard.mjs';
 import { roles } from '../../../packages/shared/src/index.mjs';
@@ -29,6 +33,7 @@ import { MarketplaceService } from './modules/logistics/marketplace-service.mjs'
 import { MongoNotificationRepository } from './modules/notifications/mongo-notification-repository.mjs';
 import { MongoNotificationIntentRepository } from './modules/notifications/mongo-notification-intent-repository.mjs';
 import { createExternalNotificationAdapters } from './modules/notifications/notification-adapters.mjs';
+import { OperationsService } from './modules/operations/operations-service.mjs';
 import { MongoHotlineTicketRepository } from './modules/support/mongo-hotline-ticket-repository.mjs';
 import { SupportService } from './modules/support/support-service.mjs';
 import { MongoVehicleClassRepository } from './modules/vehicle-registry/mongo-vehicle-class-repository.mjs';
@@ -36,10 +41,18 @@ import { MongoVehicleDocumentRepository } from './modules/vehicle-registry/mongo
 import { MongoVehicleRepository } from './modules/vehicle-registry/mongo-vehicle-repository.mjs';
 import { VehicleRegistryService } from './modules/vehicle-registry/vehicle-registry-service.mjs';
 
-const send = (response, result) => {
-  response.writeHead(result.statusCode, result.headers);
+const createRequestId = () => `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+const send = (response, result, requestId = createRequestId()) => {
+  response.writeHead(result.statusCode, withSecurityHeaders({
+    ...result.headers,
+    'x-request-id': requestId
+  }));
   response.end(result.body);
 };
+
+const clientAddress = (request) =>
+  String(request.headers['x-forwarded-for'] ?? request.socket?.remoteAddress ?? 'local').split(',')[0].trim();
 
 const createRouteRequest = (context) => async (request) => {
   const method = request.method ?? 'GET';
@@ -489,6 +502,62 @@ const createRouteRequest = (context) => async (request) => {
     return success(await context.accountService.listUsers());
   }
 
+  if (method === 'GET' && path.startsWith('/api/v1/admin/users/')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    const userId = path.split('/')[5];
+
+    return success(
+      await context.accountService.getUser({
+        actor: currentUser,
+        targetUserId: userId
+      })
+    );
+  }
+
+  if (method === 'GET' && path === '/api/v1/admin/dashboard') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    return success(
+      await context.operationsService.dashboardMetrics({
+        actor: currentUser
+      })
+    );
+  }
+
+  if (method === 'GET' && path === '/api/v1/admin/audit-logs') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    return success(
+      await context.operationsService.listAuditLogs({
+        actor: currentUser,
+        filters: {
+          actorUserId: url.query.actorUserId,
+          action: url.query.action,
+          targetType: url.query.targetType
+        }
+      })
+    );
+  }
+
+  if (method === 'GET' && path === '/api/v1/admin/release-readiness') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    return success(
+      await context.operationsService.releaseReadiness({
+        actor: currentUser
+      })
+    );
+  }
+
   if (method === 'POST' && path === '/api/v1/admin/vehicle-classes') {
     const { currentUser } = await resolveAuth();
     assertActiveAccount(currentUser);
@@ -920,6 +989,7 @@ const createRouteRequest = (context) => async (request) => {
 };
 
 export const createAppContext = async (config = env) => {
+  assertRuntimeConfig(config);
   const { client, db } = await connectToMongo(config.mongodbUri, {
     serverSelectionTimeoutMs: config.mongodbServerSelectionTimeoutMs
   });
@@ -941,6 +1011,10 @@ export const createAppContext = async (config = env) => {
   const notificationIntentRepository = new MongoNotificationIntentRepository({ db });
   const hotlineTicketRepository = new MongoHotlineTicketRepository({ db });
   const notificationAdapters = createExternalNotificationAdapters();
+  const requestLogger = createRequestLogger({
+    env: config.nodeEnv
+  });
+  const rateLimiter = new InMemoryRateLimiter();
 
   await userRepository.ensureIndexes();
   await vehicleClassRepository.ensureIndexes();
@@ -1001,6 +1075,11 @@ export const createAppContext = async (config = env) => {
     fileRepository,
     notificationRepository
   });
+  const operationsService = new OperationsService({
+    db,
+    config,
+    auditLogRepository
+  });
   const tokenVerifier = new SupabaseTokenVerifier({
     mode: config.supabaseJwtMode,
     issuer: config.supabaseJwtIssuer,
@@ -1029,10 +1108,13 @@ export const createAppContext = async (config = env) => {
     marketplaceService,
     supportService,
     engagementService,
+    operationsService,
     notificationRepository,
     notificationIntentRepository,
     notificationAdapters,
-    tokenVerifier
+    tokenVerifier,
+    requestLogger,
+    rateLimiter
   };
 };
 
@@ -1054,22 +1136,54 @@ export const resetAppContextForTests = () => {
 };
 
 export const handleRequest = async (request, response) => {
+  const requestId = request.headers['x-request-id'] ?? createRequestId();
+  const startedAt = Date.now();
+  let context;
+
   try {
-    const context = await getAppContext();
+    context = await getAppContext();
+    context.rateLimiter.check({
+      key: `${clientAddress(request)}:${request.method ?? 'GET'}:${parse(request.url ?? '/', true).pathname ?? '/'}`
+    });
     const routeRequest = createRouteRequest(context);
     const result = await routeRequest(request);
-    send(response, result);
+    send(response, result, requestId);
+    context.requestLogger.info('request.completed', {
+      requestId,
+      method: request.method,
+      path: parse(request.url ?? '/', true).pathname,
+      statusCode: result.statusCode,
+      latencyMs: Date.now() - startedAt
+    });
   } catch (error) {
     if (error instanceof AppError) {
-      send(response, failure(error));
+      send(response, failure(error), requestId);
+      context?.requestLogger.info('request.failed', {
+        requestId,
+        method: request.method,
+        path: parse(request.url ?? '/', true).pathname,
+        statusCode: error.statusCode,
+        errorCode: error.code,
+        latencyMs: Date.now() - startedAt
+      });
       return;
     }
 
+    const internalError = new AppError(500, 'INTERNAL_SERVER_ERROR', 'Unexpected server error.', {
+      originalError: error instanceof Error ? error.message : String(error)
+    });
     send(
       response,
-      failure(new AppError(500, 'INTERNAL_SERVER_ERROR', 'Unexpected server error.', {
-        originalError: error instanceof Error ? error.message : String(error)
-      }))
+      failure(internalError),
+      requestId
     );
+    context?.requestLogger.error('request.error', {
+      requestId,
+      method: request.method,
+      path: parse(request.url ?? '/', true).pathname,
+      statusCode: 500,
+      errorCode: internalError.code,
+      latencyMs: Date.now() - startedAt
+    });
   }
 };

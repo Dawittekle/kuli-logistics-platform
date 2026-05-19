@@ -1,5 +1,17 @@
 const collectionName = 'audit_logs';
 
+const normalize = (document) => {
+  if (!document) {
+    return null;
+  }
+
+  const { _id, ...rest } = document;
+  return {
+    id: String(_id),
+    ...rest
+  };
+};
+
 export class MongoAuditLogRepository {
   constructor({ db }) {
     this.collection = db.collection(collectionName);
@@ -45,5 +57,24 @@ export class MongoAuditLogRepository {
     });
 
     return record;
+  }
+
+  async list({ actorUserId, action, targetType } = {}) {
+    const query = {};
+
+    if (actorUserId) {
+      query.actorUserId = actorUserId;
+    }
+
+    if (action) {
+      query.action = action;
+    }
+
+    if (targetType) {
+      query.targetType = targetType;
+    }
+
+    const documents = await this.collection.find(query, { sort: { createdAt: -1 }, limit: 100 }).toArray();
+    return documents.map(normalize);
   }
 }
