@@ -34,6 +34,7 @@ const requiredPaths = [
   'apps/api/src/modules/vehicle-registry/vehicle-registry-service.mjs',
   'apps/api/src/modules/vehicle-registry/vehicle-state.mjs',
   'apps/admin/src/main.mjs',
+  'apps/admin/src/assistant-shell.mjs',
   'apps/admin/src/config.mjs',
   'apps/admin/src/pricing-shell.mjs',
   'apps/mobile/src/main.mjs',

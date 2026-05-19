@@ -110,6 +110,13 @@ The server exposes:
 - `PATCH /api/v1/notifications/:id/read`
 - `PATCH /api/v1/me/notification-preferences`
 - `POST /api/v1/admin/jobs/expire-offers`
+- `GET /api/v1/assistant/tickets`
+- `POST /api/v1/assistant/tickets`
+- `GET /api/v1/assistant/tickets/:id`
+- `PATCH /api/v1/assistant/tickets/:id/status`
+- `POST /api/v1/assistant/bookings`
+- `GET /api/v1/assistant/clients/search`
+- `POST /api/v1/admin/jobs/expire-pending-client-tickets`
 
 ## Development Tokens
 
@@ -164,9 +171,9 @@ Do not put the Supabase service-role key in frontend env files or commit it anyw
 
 ## Current Limitations
 
-- The API currently covers identity/profile/RBAC, vehicle verification, quote/pricing/search, request/offer acceptance, manual trip execution, request-scoped messages, and in-app notification records.
+- The API currently covers identity/profile/RBAC, vehicle verification, quote/pricing/search, request/offer acceptance, manual trip execution, request-scoped messages, in-app notification records, and assisted booking tickets.
 - No installed frontend framework yet; mobile and admin apps currently expose route and RBAC scaffolds rather than full UI builds.
 - Supabase JWKS verification is wired in the API, but it still needs your project URL and anon key for real-device/auth-client testing.
-- No file storage, payment, rating, report, assisted booking, or production notification delivery flows yet.
+- No file storage, payment, rating, report, telephony integration, or production notification delivery flows yet.
 
 Those remaining items are tracked in [`docs/progress_tracking.md`](docs/progress_tracking.md).

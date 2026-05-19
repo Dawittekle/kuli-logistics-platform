@@ -153,21 +153,21 @@ Completion:
 
 ### Phase 6: Assisted Booking
 
-- [ ] Hotline ticket schema.
-- [ ] Ticket state machine.
-- [ ] Assistant ticket queue.
-- [ ] Claim ticket.
-- [ ] Assisted booking wizard.
-- [ ] Client lookup by phone.
-- [ ] Create assisted request.
-- [ ] Link ticket/request.
-- [ ] SMS confirmation notification intent.
-- [ ] Pending-client timeout.
+- [x] Hotline ticket schema.
+- [x] Ticket state machine.
+- [x] Assistant ticket queue.
+- [x] Claim ticket.
+- [x] Assisted booking wizard.
+- [x] Client lookup by phone.
+- [x] Create assisted request.
+- [x] Link ticket/request.
+- [x] SMS confirmation notification intent.
+- [x] Pending-client timeout.
 
 Completion:
 
-- [ ] Assistant can create KULI request from ticket.
-- [ ] Closed ticket cannot be edited.
+- [x] Assistant can create KULI request from ticket.
+- [x] Closed ticket cannot be edited.
 
 ### Phase 7: Ratings, Reports, Payments
 
@@ -225,7 +225,7 @@ Completion:
 | Trip state machine | In progress | AI agents | Manual status endpoint, transition map, immutable event log, cancellation policy, and active trip shells are in place |
 | Messaging | In progress | AI agents | Request-scoped message collection, idempotent send, participant access rules, and mobile thread shell are in place |
 | Notifications | In progress | AI agents | In-app notification records, list/read APIs, preferences route, and disabled push/SMS/email adapter placeholders are in place |
-| Assisted booking | Not started | TBD | Ticket workflow |
+| Assisted booking | In progress | AI agents | Hotline tickets, claim/status flow, client lookup, assisted request creation, ticket/request linking, SMS confirmation intents, and assistant console shells are in place |
 | Ratings | Not started | TBD | Terminal trips only |
 | Reports/disputes | Not started | TBD | Admin mediation |
 | Payment records | Not started | TBD | Cash/manual first |
@@ -273,7 +273,7 @@ Completion:
 - [x] Matching tests.
 - [x] Acceptance concurrency tests.
 - [x] Trip state machine tests.
-- [ ] Assisted booking tests.
+- [x] Assisted booking tests.
 - [ ] Payment/report/rating tests.
 - [ ] Accessibility checks.
 - [ ] Mobile device smoke tests.
@@ -314,3 +314,4 @@ Completion:
 - Local startup was verified with Docker Compose MongoDB/Redis, admin placeholder, mobile placeholder, and API listener startup.
 - Phase 4 has a backend request/offer acceptance slice with idempotent create, owner offer commands, first-accept-wins protection, timeout cleanup, cancellation cleanup, and lightweight mobile waiting/inbox screen contracts.
 - Phase 5 has manual trip execution, status events, request-scoped messaging, in-app notification read/list, notification preferences, disabled external adapter placeholders, and lightweight mobile active-trip/message/notification screen contracts.
+- Phase 6 has hotline ticket persistence, ticket transitions, assistant assignment, client phone lookup, assisted request creation, ticket/request linking, SMS confirmation intents, pending-client cleanup, and lightweight assistant console screen contracts.
