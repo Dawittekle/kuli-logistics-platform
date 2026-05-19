@@ -2,6 +2,7 @@ import { mobileEntryRouteByRole, mobileNavigationByRole, publicAuthRoutes, publi
 import { mobileAppConfig } from './config.mjs';
 import { clientWaitingState, ownerOfferInbox } from './marketplace-shell.mjs';
 import { candidateResultCardFields, clientQuoteFlow } from './quote-shell.mjs';
+import { clientTripTimeline, notificationCenter, ownerActiveTripFlow, tripMessageThread } from './trip-shell.mjs';
 
 console.log('@kuli/mobile placeholder scaffold');
 console.log(
@@ -14,6 +15,10 @@ console.log(
       candidateResultCardFields,
       clientWaitingState,
       ownerOfferInbox,
+      ownerActiveTripFlow,
+      clientTripTimeline,
+      tripMessageThread,
+      notificationCenter,
       entryRoutes: mobileEntryRouteByRole,
       navigation: mobileNavigationByRole
     },

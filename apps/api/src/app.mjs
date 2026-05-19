@@ -23,6 +23,7 @@ import { MongoTripOfferRepository } from './modules/logistics/mongo-trip-offer-r
 import { QuoteService } from './modules/logistics/quote-service.mjs';
 import { MarketplaceService } from './modules/logistics/marketplace-service.mjs';
 import { MongoNotificationRepository } from './modules/notifications/mongo-notification-repository.mjs';
+import { createExternalNotificationAdapters } from './modules/notifications/notification-adapters.mjs';
 import { MongoVehicleClassRepository } from './modules/vehicle-registry/mongo-vehicle-class-repository.mjs';
 import { MongoVehicleDocumentRepository } from './modules/vehicle-registry/mongo-vehicle-document-repository.mjs';
 import { MongoVehicleRepository } from './modules/vehicle-registry/mongo-vehicle-repository.mjs';
@@ -655,6 +656,7 @@ export const createAppContext = async (config = env) => {
   const messageRepository = new MongoMessageRepository({ db });
   const tripOfferRepository = new MongoTripOfferRepository({ db });
   const notificationRepository = new MongoNotificationRepository({ db });
+  const notificationAdapters = createExternalNotificationAdapters();
 
   await userRepository.ensureIndexes();
   await vehicleClassRepository.ensureIndexes();
@@ -720,6 +722,7 @@ export const createAppContext = async (config = env) => {
     quoteService,
     marketplaceService,
     notificationRepository,
+    notificationAdapters,
     tokenVerifier
   };
 };

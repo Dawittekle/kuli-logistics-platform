@@ -134,22 +134,22 @@ Completion:
 
 ### Phase 5: Trip Execution, Messaging, Notifications
 
-- [ ] KULI state machine.
-- [ ] Status update endpoint.
-- [ ] Status event log.
-- [ ] Owner active trip UI.
-- [ ] Client timeline UI.
-- [ ] Cancellation policy.
-- [ ] Messages collection.
-- [ ] Message screens.
-- [ ] In-app notifications.
-- [ ] External notification adapters.
-- [ ] Notification preferences.
+- [x] KULI state machine.
+- [x] Status update endpoint.
+- [x] Status event log.
+- [x] Owner active trip UI.
+- [x] Client timeline UI.
+- [x] Cancellation policy.
+- [x] Messages collection.
+- [x] Message screens.
+- [x] In-app notifications.
+- [x] External notification adapters.
+- [x] Notification preferences.
 
 Completion:
 
-- [ ] UI can execute accepted to completed trip.
-- [ ] Invalid transitions blocked.
+- [x] UI can execute accepted to completed trip.
+- [x] Invalid transitions blocked.
 
 ### Phase 6: Assisted Booking
 
@@ -222,9 +222,9 @@ Completion:
 | Nearby matching | In progress | AI agents | Approved/online nearby search, radius expansion, and deterministic ranking are tested |
 | Request creation | In progress | AI agents | Idempotent KULI request endpoint creates pending requests and dispatches selected offers |
 | Offer acceptance | In progress | AI agents | Owner inbox, viewed/decline/accept commands, timeout cleanup, and first-accept-wins tests are in place |
-| Trip state machine | Not started | TBD | Manual status updates |
-| Messaging | Not started | TBD | Request-scoped |
-| Notifications | In progress | AI agents | Offer/request notification records are persisted; user notification inbox APIs and external delivery remain Phase 5 work |
+| Trip state machine | In progress | AI agents | Manual status endpoint, transition map, immutable event log, cancellation policy, and active trip shells are in place |
+| Messaging | In progress | AI agents | Request-scoped message collection, idempotent send, participant access rules, and mobile thread shell are in place |
+| Notifications | In progress | AI agents | In-app notification records, list/read APIs, preferences route, and disabled push/SMS/email adapter placeholders are in place |
 | Assisted booking | Not started | TBD | Ticket workflow |
 | Ratings | Not started | TBD | Terminal trips only |
 | Reports/disputes | Not started | TBD | Admin mediation |
@@ -272,7 +272,7 @@ Completion:
 - [x] Vehicle verification tests.
 - [x] Matching tests.
 - [x] Acceptance concurrency tests.
-- [ ] Trip state machine tests.
+- [x] Trip state machine tests.
 - [ ] Assisted booking tests.
 - [ ] Payment/report/rating tests.
 - [ ] Accessibility checks.
@@ -313,3 +313,4 @@ Completion:
 - Staff provisioning is documented, bootstrapped for first-admin creation, and exposed through an admin-only scaffold route.
 - Local startup was verified with Docker Compose MongoDB/Redis, admin placeholder, mobile placeholder, and API listener startup.
 - Phase 4 has a backend request/offer acceptance slice with idempotent create, owner offer commands, first-accept-wins protection, timeout cleanup, cancellation cleanup, and lightweight mobile waiting/inbox screen contracts.
+- Phase 5 has manual trip execution, status events, request-scoped messaging, in-app notification read/list, notification preferences, disabled external adapter placeholders, and lightweight mobile active-trip/message/notification screen contracts.

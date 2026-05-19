@@ -98,10 +98,17 @@ The server exposes:
 - `GET /api/v1/kuli-requests/mine`
 - `GET /api/v1/kuli-requests/:id`
 - `POST /api/v1/kuli-requests/:id/cancel`
+- `PATCH /api/v1/kuli-requests/:id/status`
+- `GET /api/v1/kuli-requests/:id/events`
+- `GET /api/v1/kuli-requests/:id/messages`
+- `POST /api/v1/kuli-requests/:id/messages`
 - `GET /api/v1/owner/offers`
 - `POST /api/v1/offers/:id/viewed`
 - `POST /api/v1/offers/:id/accept`
 - `POST /api/v1/offers/:id/decline`
+- `GET /api/v1/notifications`
+- `PATCH /api/v1/notifications/:id/read`
+- `PATCH /api/v1/me/notification-preferences`
 - `POST /api/v1/admin/jobs/expire-offers`
 
 ## Development Tokens
@@ -157,9 +164,9 @@ Do not put the Supabase service-role key in frontend env files or commit it anyw
 
 ## Current Limitations
 
-- The API currently covers identity/profile/RBAC, vehicle verification, quote/pricing/search, and Phase 4 request/offer acceptance flows.
+- The API currently covers identity/profile/RBAC, vehicle verification, quote/pricing/search, request/offer acceptance, manual trip execution, request-scoped messages, and in-app notification records.
 - No installed frontend framework yet; mobile and admin apps currently expose route and RBAC scaffolds rather than full UI builds.
 - Supabase JWKS verification is wired in the API, but it still needs your project URL and anon key for real-device/auth-client testing.
-- No file storage, trip execution, messaging, payment, rating, or production notification delivery flows yet.
+- No file storage, payment, rating, report, assisted booking, or production notification delivery flows yet.
 
 Those remaining items are tracked in [`docs/progress_tracking.md`](docs/progress_tracking.md).
