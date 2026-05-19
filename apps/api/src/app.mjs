@@ -8,12 +8,15 @@ import { assertActiveAccount } from './common/guards/account-status-guard.mjs';
 import { assertRole } from './common/guards/role-guard.mjs';
 import { roles } from '../../../packages/shared/src/index.mjs';
 import { SupabaseTokenVerifier } from './integrations/supabase/token-verifier.mjs';
+import { DeterministicMapsProvider } from './integrations/maps/deterministic-maps-provider.mjs';
 import { assertPublicRegistrationRole, normalizeRequestedRole } from './modules/identity/profile-sync-policy.mjs';
 import { AccountService } from './modules/accounts/account-service.mjs';
 import { MongoUserRepository } from './modules/accounts/mongo-user-repository.mjs';
 import { bootstrapAdmin } from './modules/admin/bootstrap-admin.mjs';
 import { MongoAuditLogRepository } from './modules/audit/mongo-audit-log-repository.mjs';
 import { MongoFileRepository } from './modules/files/mongo-file-repository.mjs';
+import { MongoPricingRuleRepository } from './modules/logistics/mongo-pricing-rule-repository.mjs';
+import { QuoteService } from './modules/logistics/quote-service.mjs';
 import { MongoVehicleClassRepository } from './modules/vehicle-registry/mongo-vehicle-class-repository.mjs';
 import { MongoVehicleDocumentRepository } from './modules/vehicle-registry/mongo-vehicle-document-repository.mjs';
 import { MongoVehicleRepository } from './modules/vehicle-registry/mongo-vehicle-repository.mjs';
@@ -59,6 +62,20 @@ const createRouteRequest = (context) => async (request) => {
 
   if (method === 'GET' && path === '/api/v1/vehicle-classes') {
     return success(await context.vehicleRegistryService.listActiveVehicleClasses());
+  }
+
+  if (method === 'POST' && path === '/api/v1/quotes') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.client, roles.assistant]);
+
+    return success(
+      await context.quoteService.createQuote({
+        actor: currentUser,
+        input: await parseJsonBody(request)
+      }),
+      201
+    );
   }
 
   if (method === 'POST' && path === '/api/v1/auth/sync-profile') {
@@ -142,6 +159,47 @@ const createRouteRequest = (context) => async (request) => {
       await context.vehicleRegistryService.deactivateVehicleClass({
         actor: currentUser,
         vehicleClassId
+      })
+    );
+  }
+
+  if (method === 'GET' && path === '/api/v1/admin/pricing-rules') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    return success(
+      await context.quoteService.listPricingRules({
+        actor: currentUser
+      })
+    );
+  }
+
+  if (method === 'POST' && path === '/api/v1/admin/pricing-rules') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    return success(
+      await context.quoteService.createPricingRule({
+        actor: currentUser,
+        input: await parseJsonBody(request)
+      }),
+      201
+    );
+  }
+
+  if (method === 'PATCH' && path.startsWith('/api/v1/admin/pricing-rules/') && path.endsWith('/activate')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    const pricingRuleId = path.split('/')[5];
+
+    return success(
+      await context.quoteService.activatePricingRule({
+        actor: currentUser,
+        pricingRuleId
       })
     );
   }
@@ -361,6 +419,7 @@ export const createAppContext = async (config = env) => {
   const vehicleDocumentRepository = new MongoVehicleDocumentRepository({ db });
   const fileRepository = new MongoFileRepository({ db });
   const auditLogRepository = new MongoAuditLogRepository({ db });
+  const pricingRuleRepository = new MongoPricingRuleRepository({ db });
 
   await userRepository.ensureIndexes();
   await vehicleClassRepository.ensureIndexes();
@@ -368,6 +427,7 @@ export const createAppContext = async (config = env) => {
   await vehicleDocumentRepository.ensureIndexes();
   await fileRepository.ensureIndexes();
   await auditLogRepository.ensureIndexes();
+  await pricingRuleRepository.ensureIndexes();
 
   const accountService = new AccountService({ userRepository });
   const vehicleRegistryService = new VehicleRegistryService({
@@ -376,6 +436,13 @@ export const createAppContext = async (config = env) => {
     vehicleDocumentRepository,
     fileRepository,
     auditLogRepository
+  });
+  const quoteService = new QuoteService({
+    pricingRuleRepository,
+    vehicleClassRepository,
+    vehicleRepository,
+    userRepository,
+    mapsProvider: new DeterministicMapsProvider()
   });
   const tokenVerifier = new SupabaseTokenVerifier({
     mode: config.supabaseJwtMode,
@@ -392,6 +459,7 @@ export const createAppContext = async (config = env) => {
   });
 
   await vehicleRegistryService.seedDefaultVehicleClasses();
+  await quoteService.seedDefaultPricingRule();
 
   return {
     env: config,
@@ -400,6 +468,7 @@ export const createAppContext = async (config = env) => {
     userRepository,
     accountService,
     vehicleRegistryService,
+    quoteService,
     tokenVerifier
   };
 };

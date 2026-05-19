@@ -64,6 +64,27 @@ export class MongoVehicleRepository {
     return normalize(await this.collection.findOne({ _id: id, deletedAt: { $exists: false } }));
   }
 
+  async findApprovedAvailableNearby({ point, radiusKm, vehicleClassId = undefined }) {
+    const query = {
+      verificationStatus: 'approved',
+      availabilityStatus: 'online_available',
+      deletedAt: { $exists: false },
+      'currentLocation.point': {
+        $nearSphere: {
+          $geometry: point,
+          $maxDistance: radiusKm * 1000
+        }
+      }
+    };
+
+    if (vehicleClassId) {
+      query.vehicleClassId = vehicleClassId;
+    }
+
+    const documents = await this.collection.find(query, { limit: 25 }).toArray();
+    return documents.map(normalize);
+  }
+
   async save(vehicle) {
     const now = new Date().toISOString();
     const record = {

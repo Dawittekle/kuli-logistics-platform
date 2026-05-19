@@ -52,6 +52,19 @@ export const fileLinkedEntityTypes = {
   message: 'message'
 };
 
+export const pricingRuleStatuses = {
+  draft: 'draft',
+  active: 'active',
+  retired: 'retired'
+};
+
+export const locationSources = {
+  gps: 'gps',
+  manualPin: 'manual_pin',
+  geocodedAddress: 'geocoded_address',
+  assistantEntry: 'assistant_entry'
+};
+
 export const routeVisibility = {
   mobileOnlyRoles: [roles.client, roles.truckOwner],
   staffOnlyRoles: [roles.assistant, roles.admin]
