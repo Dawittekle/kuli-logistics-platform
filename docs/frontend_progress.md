@@ -15,7 +15,7 @@ Related documents:
 - `apps/mobile` now has a real Expo React Native foundation with route-placeholder screens for client and truck owner workflows.
 - `apps/admin` now has a real React/Vite foundation with route-placeholder workspaces for admin and assistant workflows.
 - Backend APIs, shared enums, smoke checks, and local service setup are available for frontend integration.
-- The next frontend work should begin Frontend Phase 1 and replace the foundation placeholders with real authentication, profile sync, and role routing screens.
+- Frontend Phase 1 added auth/profile routing foundations; Frontend Phase 2 added owner vehicle onboarding and admin verification foundations.
 
 ## Environment Readiness
 
@@ -88,6 +88,7 @@ Validation:
 Notes:
 
 - Real Supabase credential/manual login checks remain open for client and truck-owner landing because no test account credentials were supplied during this phase.
+- Attempted random Supabase account creation on 2026-05-20. `example.com` addresses were rejected as invalid and valid-looking Gmail-format test addresses were rejected by Supabase email rate limits, so no random test accounts were created.
 - Mobile and admin now both route by backend `/me`; locally selected/public roles only affect public mobile registration.
 - Admin-only user management is hidden for assistants and still protected by backend RBAC.
 
@@ -95,22 +96,27 @@ Notes:
 
 Objective: complete the owner onboarding and admin verification UI.
 
-- [ ] Owner vehicle registration form.
-- [ ] Vehicle class selector.
-- [ ] Document upload fields with progress and retry states.
-- [ ] Owner vehicle list with pending, approved, rejected, and reason states.
-- [ ] Availability toggle gated by approval.
-- [ ] Admin pending verification queue.
-- [ ] Admin vehicle detail and document preview.
-- [ ] Approve/reject decision panel with required reason.
+- [x] Owner vehicle registration form.
+- [x] Vehicle class selector.
+- [x] Document upload fields with progress and retry states.
+- [x] Owner vehicle list with pending, approved, rejected, and reason states.
+- [x] Availability toggle gated by approval.
+- [x] Admin pending verification queue.
+- [x] Admin vehicle detail and document preview.
+- [x] Approve/reject decision panel with required reason.
 
 Validation:
 
-- [ ] Owner can submit vehicle and documents.
-- [ ] Invalid or missing document errors map to fields.
-- [ ] Admin can approve/reject with audit-producing API call.
-- [ ] Rejected vehicle reason appears to owner.
-- [ ] Unapproved vehicle cannot go online.
+- [ ] Owner can submit vehicle and documents with real authenticated owner credentials.
+- [x] Invalid or missing document errors map to fields.
+- [ ] Admin can approve/reject with audit-producing API call using real authenticated admin credentials.
+- [x] Rejected vehicle reason appears to owner.
+- [x] Unapproved vehicle cannot go online.
+
+Notes:
+
+- Phase 2 uses backend upload-intent and document metadata APIs. Real binary upload still depends on object storage configuration.
+- Live owner/admin API mutation checks need working Supabase test credentials; public signup is currently rate-limited by Supabase.
 
 ### Frontend Phase 3: Quotes, Pricing, Location, and Nearby Search
 

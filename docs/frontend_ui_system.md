@@ -91,3 +91,11 @@ Every phase should reuse the same concepts:
 - [x] Admin login has no public registration affordance.
 - [x] Route decisions come from backend `/me`.
 - [x] Account status is visible on authenticated home surfaces.
+
+## Phase 2 Consistency Checklist
+
+- [x] Vehicle verification and availability use separate visible statuses.
+- [x] Unapproved vehicles show an approval-required availability action.
+- [x] Admin document review uses dense queue/detail layout.
+- [x] Rejection decisions require a visible reason before submit.
+- [x] Owner document fields keep metadata visible and retryable.
