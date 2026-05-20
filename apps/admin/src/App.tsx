@@ -31,6 +31,30 @@ type UserProfile = {
   createdAt?: string;
 };
 
+type VehicleDocument = {
+  id: string;
+  type: string;
+  fileId: string;
+  status: string;
+};
+
+type Vehicle = {
+  id: string;
+  ownerId: string;
+  licensePlate: string;
+  vehicleClassSnapshot?: {
+    name: string;
+    slug: string;
+  };
+  capacityKg?: number;
+  capacityCubicMeters?: number;
+  description?: string;
+  verificationStatus: 'draft' | 'pending' | 'approved' | 'rejected';
+  availabilityStatus: string;
+  rejectionReason?: string;
+  documents?: VehicleDocument[];
+};
+
 type ApiEnvelope<T> = {
   data: T;
 };
@@ -296,6 +320,163 @@ function AdminUsersPanel({ enabled }: { enabled: boolean }) {
   );
 }
 
+function AdminVerificationPanel({ enabled }: { enabled: boolean }) {
+  const queryClient = useQueryClient();
+  const [selectedVehicleId, setSelectedVehicleId] = useState('');
+  const [decisionReason, setDecisionReason] = useState('');
+  const [signedUrlMessage, setSignedUrlMessage] = useState('');
+  const [decisionError, setDecisionError] = useState('');
+  const [pendingDecision, setPendingDecision] = useState(false);
+
+  const pendingVehiclesQuery = useQuery({
+    enabled,
+    queryKey: ['admin-vehicles', 'pending'],
+    queryFn: async () => ((await kuliApi.request('/admin/vehicles/pending')) as ApiEnvelope<Vehicle[]>).data
+  });
+
+  const selectedVehicle = selectedVehicleId || pendingVehiclesQuery.data?.[0]?.id || '';
+
+  const vehicleDetailQuery = useQuery({
+    enabled: enabled && Boolean(selectedVehicle),
+    queryKey: ['admin-vehicles', selectedVehicle],
+    queryFn: async () => ((await kuliApi.request(`/admin/vehicles/${selectedVehicle}`)) as ApiEnvelope<Vehicle>).data
+  });
+
+  if (!enabled) {
+    return null;
+  }
+
+  const decide = async (verificationStatus: 'approved' | 'rejected') => {
+    if (verificationStatus === 'rejected' && !decisionReason.trim()) {
+      setDecisionError('Rejection requires a reason.');
+      return;
+    }
+
+    if (!selectedVehicle) {
+      setDecisionError('Select a vehicle first.');
+      return;
+    }
+
+    setPendingDecision(true);
+    setDecisionError('');
+
+    try {
+      await kuliApi.request(`/admin/vehicles/${selectedVehicle}/verification`, {
+        method: 'PATCH',
+        body: {
+          verificationStatus,
+          reason: decisionReason.trim() || undefined
+        }
+      });
+      setDecisionReason('');
+      await queryClient.invalidateQueries({ queryKey: ['admin-vehicles'] });
+    } catch (error) {
+      setDecisionError(getErrorMessage(error));
+    } finally {
+      setPendingDecision(false);
+    }
+  };
+
+  const previewDocument = async (fileId: string) => {
+    setSignedUrlMessage('');
+
+    try {
+      const result = (await kuliApi.request(`/files/${fileId}/signed-url`)) as ApiEnvelope<{ url: string; expiresInSeconds: number }>;
+      setSignedUrlMessage(`${result.data.url} (${result.data.expiresInSeconds}s)`);
+    } catch (error) {
+      setSignedUrlMessage(getErrorMessage(error));
+    }
+  };
+
+  const detail = vehicleDetailQuery.data;
+  const pendingVehicles = pendingVehiclesQuery.data ?? [];
+
+  return (
+    <section className="panel panel--wide">
+      <div className="panel__header">
+        <div>
+          <p className="eyebrow">Verification queue</p>
+          <h2>Pending vehicles</h2>
+        </div>
+        <StatusBadge tone={pendingVehiclesQuery.isError ? 'blocked' : pendingVehicles.length ? 'warn' : 'ready'}>
+          {pendingVehiclesQuery.isError ? 'Needs token' : `${pendingVehicles.length} pending`}
+        </StatusBadge>
+      </div>
+      {pendingVehiclesQuery.isError ? <p className="field-error">{getErrorMessage(pendingVehiclesQuery.error)}</p> : null}
+      <div className="split-panel">
+        <div className="queue-list" aria-label="Pending vehicle queue">
+          {pendingVehicles.length === 0 ? <p className="muted">No pending vehicles.</p> : null}
+          {pendingVehicles.map((vehicle) => (
+            <button
+              className={`queue-item ${selectedVehicle === vehicle.id ? 'is-selected' : ''}`}
+              key={vehicle.id}
+              onClick={() => {
+                setSelectedVehicleId(vehicle.id);
+                setDecisionError('');
+                setSignedUrlMessage('');
+              }}
+              type="button"
+            >
+              <strong>{vehicle.licensePlate}</strong>
+              <span>{vehicle.vehicleClassSnapshot?.name || 'Vehicle class'}</span>
+              <StatusBadge tone="warn">{vehicle.verificationStatus}</StatusBadge>
+            </button>
+          ))}
+        </div>
+
+        <div className="decision-panel">
+          {detail ? (
+            <>
+              <div className="detail-heading">
+                <div>
+                  <h3>{detail.licensePlate}</h3>
+                  <p className="muted">{detail.vehicleClassSnapshot?.name} / {detail.capacityKg ?? 0}kg / {detail.capacityCubicMeters ?? 0}m3</p>
+                </div>
+                <StatusBadge tone={detail.verificationStatus === 'pending' ? 'warn' : detail.verificationStatus === 'approved' ? 'ready' : 'blocked'}>
+                  {detail.verificationStatus}
+                </StatusBadge>
+              </div>
+              <p className="muted">{detail.description || 'No owner notes submitted.'}</p>
+              <div className="document-list">
+                {(detail.documents ?? []).length === 0 ? <p className="muted">No documents attached yet.</p> : null}
+                {(detail.documents ?? []).map((doc) => (
+                  <button className="document-row" key={doc.id} onClick={() => previewDocument(doc.fileId)} type="button">
+                    <span>
+                      <strong>{doc.type}</strong>
+                      <small>{doc.status}</small>
+                    </span>
+                    <em>Preview signed URL</em>
+                  </button>
+                ))}
+              </div>
+              {signedUrlMessage ? <p className="muted">{signedUrlMessage}</p> : null}
+              <label className="decision-label">
+                Decision reason
+                <textarea
+                  onChange={(event) => setDecisionReason(event.target.value)}
+                  placeholder="Required for rejection; useful for approval notes."
+                  value={decisionReason}
+                />
+              </label>
+              {decisionError ? <p className="field-error" role="alert">{decisionError}</p> : null}
+              <div className="decision-actions">
+                <button className="icon-button" disabled={pendingDecision} onClick={() => decide('approved')} type="button">
+                  Approve
+                </button>
+                <button className="danger-button" disabled={pendingDecision} onClick={() => decide('rejected')} type="button">
+                  Reject
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="muted">Select a pending vehicle to inspect documents and record a decision.</p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function BlockedAccount({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
   return (
     <main className="login-shell">
@@ -369,6 +550,7 @@ function StaffWorkspace({ profile, onSignOut }: { profile: UserProfile; onSignOu
           <ApiHealthPanel />
           <RuntimePanel />
           <RouteTable title={workspace === 'admin' ? 'Admin routes' : 'Assistant routes'} routes={routes} />
+          <AdminVerificationPanel enabled={profile.role === 'admin'} />
           <AdminUsersPanel enabled={profile.role === 'admin'} />
         </div>
       </section>

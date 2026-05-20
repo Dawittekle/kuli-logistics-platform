@@ -406,6 +406,119 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+.split-panel {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(220px, 0.75fr) minmax(320px, 1.25fr);
+}
+
+.queue-list,
+.decision-panel,
+.document-list {
+  display: grid;
+  gap: 10px;
+}
+
+.queue-item,
+.document-row {
+  background: #fffdf7;
+  border: 1px solid #eadfce;
+  border-radius: 8px;
+  color: #172126;
+  cursor: pointer;
+  display: grid;
+  gap: 6px;
+  min-height: 64px;
+  padding: 12px;
+  text-align: left;
+}
+
+.queue-item.is-selected,
+.queue-item:hover,
+.queue-item:focus-visible,
+.document-row:hover,
+.document-row:focus-visible {
+  background: #f1eadf;
+  border-color: #0d5668;
+  outline: none;
+}
+
+.queue-item span,
+.document-row small,
+.document-row em {
+  color: #65757d;
+  font-style: normal;
+}
+
+.document-row {
+  align-items: center;
+  grid-template-columns: 1fr auto;
+}
+
+.document-row strong,
+.document-row small {
+  display: block;
+}
+
+.detail-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.detail-heading h3 {
+  font-size: 1.5rem;
+  line-height: 1;
+  margin: 0 0 6px;
+}
+
+.decision-label {
+  color: #172126;
+  display: grid;
+  font-size: 0.88rem;
+  font-weight: 900;
+  gap: 8px;
+}
+
+.decision-label textarea {
+  background: #fffdf7;
+  border: 1px solid #d8cbb8;
+  border-radius: 6px;
+  color: #172126;
+  font: inherit;
+  min-height: 92px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+.decision-label textarea:focus {
+  border-color: #0d5668;
+  outline: 3px solid rgb(13 86 104 / 18%);
+}
+
+.decision-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.danger-button {
+  align-items: center;
+  background: #b83f35;
+  border: 0;
+  border-radius: 8px;
+  color: #fffaf0;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 900;
+  gap: 8px;
+  justify-content: center;
+  min-height: 42px;
+  padding: 9px 14px;
+  width: fit-content;
+}
+
 @media (max-width: 900px) {
   .login-shell,
   .app-shell {
@@ -417,6 +530,10 @@ button:disabled {
   }
 
   .panel-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .split-panel {
     grid-template-columns: 1fr;
   }
 }
