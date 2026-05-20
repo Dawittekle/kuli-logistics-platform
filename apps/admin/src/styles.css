@@ -20,6 +20,81 @@ button {
   font: inherit;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.login-shell {
+  align-items: stretch;
+  background: #f5f0e6;
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(320px, 480px);
+  min-height: 100vh;
+}
+
+.login-brand {
+  align-content: center;
+  background: #0d3446;
+  color: #fffaf0;
+  display: grid;
+  gap: 20px;
+  padding: 40px;
+}
+
+.login-brand h1,
+.login-panel h1 {
+  font-size: clamp(2rem, 5vw, 4.8rem);
+  letter-spacing: 0;
+  line-height: 0.92;
+  margin: 0;
+  max-width: 11ch;
+}
+
+.login-brand p:not(.eyebrow),
+.login-panel p {
+  line-height: 1.5;
+  margin: 0;
+  max-width: 56ch;
+}
+
+.login-panel {
+  align-content: center;
+  background: #fffaf0;
+  display: grid;
+  gap: 18px;
+  padding: 40px;
+}
+
+.login-panel h2 {
+  font-size: clamp(1.6rem, 3vw, 2.4rem);
+  line-height: 1;
+  margin: 0;
+}
+
+.login-panel label {
+  color: #172126;
+  display: grid;
+  font-size: 0.88rem;
+  font-weight: 900;
+  gap: 8px;
+}
+
+.login-panel input {
+  background: #fffdf7;
+  border: 1px solid #d8cbb8;
+  border-radius: 6px;
+  color: #172126;
+  font: inherit;
+  min-height: 46px;
+  padding: 0 12px;
+}
+
+.login-panel input:focus {
+  border-color: #0d5668;
+  outline: 3px solid rgb(13 86 104 / 18%);
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: minmax(280px, 360px) 1fr;
@@ -41,6 +116,41 @@ button {
   line-height: 0.92;
   margin: 8px 0 0;
   max-width: 10ch;
+}
+
+.identity-card {
+  background: rgb(255 250 240 / 12%);
+  border: 1px solid rgb(255 250 240 / 22%);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+.identity-card strong,
+.identity-card span {
+  display: block;
+}
+
+.identity-card span {
+  color: #f0dcc0;
+  font-size: 0.92rem;
+}
+
+.sidebar-button {
+  align-items: center;
+  background: #fffaf0;
+  border: 0;
+  border-radius: 8px;
+  color: #0d3446;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 900;
+  gap: 8px;
+  justify-content: center;
+  min-height: 42px;
+  padding: 9px 14px;
+  width: fit-content;
 }
 
 .workspace {
@@ -140,6 +250,10 @@ button {
   background: #b83f35;
 }
 
+.status-badge--muted {
+  background: #65757d;
+}
+
 .segmented {
   background: rgb(255 250 240 / 12%);
   border: 1px solid rgb(255 250 240 / 22%);
@@ -199,6 +313,13 @@ button {
   gap: 10px;
 }
 
+.health-line {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
 .runtime-row {
   border-top: 1px solid #eadfce;
   padding-top: 10px;
@@ -249,7 +370,44 @@ button {
   line-height: 1.35;
 }
 
+.data-table {
+  border: 1px solid #eadfce;
+  border-radius: 8px;
+  display: grid;
+  overflow: hidden;
+}
+
+.data-row {
+  align-items: center;
+  background: #fffdf7;
+  border-bottom: 1px solid #eadfce;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(160px, 1.2fr) minmax(100px, 0.7fr) minmax(120px, 0.7fr) minmax(180px, 1fr);
+  min-height: 56px;
+  padding: 10px 12px;
+}
+
+.data-row:last-child {
+  border-bottom: 0;
+}
+
+.data-row--head {
+  background: #f1eadf;
+  color: #4d5b61;
+  font-size: 0.8rem;
+  font-weight: 900;
+  min-height: 42px;
+  text-transform: uppercase;
+}
+
+.data-row strong,
+.data-row span {
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 900px) {
+  .login-shell,
   .app-shell {
     grid-template-columns: 1fr;
   }
@@ -264,6 +422,8 @@ button {
 }
 
 @media (max-width: 620px) {
+  .login-brand,
+  .login-panel,
   .sidebar,
   .workspace {
     padding: 20px;
@@ -282,5 +442,14 @@ button {
 
   .route-row em {
     grid-column: 2;
+  }
+
+  .data-row {
+    align-items: start;
+    grid-template-columns: 1fr;
+  }
+
+  .data-row--head {
+    display: none;
   }
 }

@@ -1,11 +1,55 @@
-import { ReactNode, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ClipboardList, Gauge, LockKeyhole, RefreshCw, ShieldCheck, Truck, UsersRound } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ClipboardList,
+  Gauge,
+  LockKeyhole,
+  LogOut,
+  RefreshCw,
+  ShieldCheck,
+  Truck,
+  UsersRound
+} from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { runtimeConfig, runtimeReadiness } from './config/runtime';
 import { kuliApi } from './lib/api';
+import { supabase } from './lib/supabase';
 
-const adminRoutes = [
+type Role = 'client' | 'truck_owner' | 'assistant' | 'admin';
+type AccountStatus = 'active' | 'pending_verification' | 'suspended' | 'banned' | 'deleted';
+
+type UserProfile = {
+  id: string;
+  role: Role;
+  accountStatus: AccountStatus;
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  createdAt?: string;
+};
+
+type ApiEnvelope<T> = {
+  data: T;
+};
+
+type RouteItem = {
+  path: string;
+  label: string;
+  icon: typeof Gauge;
+  detail: string;
+};
+
+const roleLabels: Record<Role, string> = {
+  client: 'Client',
+  truck_owner: 'Truck owner',
+  assistant: 'Assistant',
+  admin: 'Admin'
+};
+
+const adminRoutes: RouteItem[] = [
   { path: '/admin/dashboard', label: 'Dashboard', icon: Gauge, detail: 'Operational metrics and release readiness.' },
   { path: '/admin/users', label: 'Users', icon: UsersRound, detail: 'Role, status, and account controls.' },
   { path: '/admin/vehicles/pending', label: 'Verification', icon: Truck, detail: 'Document review and approve/reject decisions.' },
@@ -13,40 +57,108 @@ const adminRoutes = [
   { path: '/admin/audit-logs', label: 'Audit', icon: ShieldCheck, detail: 'Privileged action trail and filters.' }
 ];
 
-const assistantRoutes = [
+const assistantRoutes: RouteItem[] = [
   { path: '/assistant/tickets', label: 'Tickets', icon: ClipboardList, detail: 'Claim, update, and close hotline tickets.' },
   { path: '/assistant/bookings/new', label: 'Assisted Booking', icon: Truck, detail: 'Create KULI requests during live calls.' },
   { path: '/assistant/clients', label: 'Client Lookup', icon: UsersRound, detail: 'Find clients by phone for assisted requests.' }
 ];
 
-function StatusBadge({ tone, children }: { tone: 'ready' | 'warn' | 'blocked'; children: ReactNode }) {
+const isBlockedStatus = (status: AccountStatus) => ['suspended', 'banned', 'deleted'].includes(status);
+
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return 'Something went wrong. Please try again.';
+};
+
+function StatusBadge({ tone, children }: { tone: 'ready' | 'warn' | 'blocked' | 'muted'; children: ReactNode }) {
   return <span className={`status-badge status-badge--${tone}`}>{children}</span>;
 }
 
-function ApiHealthPanel() {
-  const healthQuery = useQuery({
-    queryKey: ['api-health'],
-    queryFn: () => kuliApi.health()
-  });
-
+function Panel({ title, eyebrow, children }: { title: string; eyebrow?: string; children: ReactNode }) {
   return (
     <section className="panel">
       <div className="panel__header">
         <div>
-          <p className="eyebrow">Connection</p>
-          <h2>Backend health</h2>
+          {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
+          <h2>{title}</h2>
         </div>
-        <StatusBadge tone={healthQuery.isSuccess ? 'ready' : healthQuery.isError ? 'blocked' : 'warn'}>
-          {healthQuery.isSuccess ? 'Ready' : healthQuery.isError ? 'Needs API' : 'Checking'}
-        </StatusBadge>
       </div>
-      <p className="muted">{runtimeConfig.apiBaseUrl}</p>
-      {healthQuery.isError ? <p className="field-error">The admin app cannot reach the API from this browser runtime yet.</p> : null}
-      <button className="icon-button" type="button" onClick={() => healthQuery.refetch()}>
-        <RefreshCw aria-hidden="true" size={18} />
-        Check again
-      </button>
+      {children}
     </section>
+  );
+}
+
+function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfile, session: Session) => void }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+  const canSubmit = email.trim() && password.length >= 6;
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!canSubmit || pending) {
+      return;
+    }
+
+    setPending(true);
+    setError('');
+
+    try {
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password
+      });
+
+      if (authError) {
+        throw authError;
+      }
+
+      if (!data.session) {
+        throw new Error('No staff session was returned. Check Supabase email confirmation settings.');
+      }
+
+      const profile = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
+      onAuthenticated(profile.data, data.session);
+    } catch (loginError) {
+      setError(getErrorMessage(loginError));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <main className="login-shell">
+      <section className="login-brand" aria-label="KULI staff login context">
+        <p className="eyebrow">KULI operations</p>
+        <h1>Staff access for verified logistics work.</h1>
+        <p>Admins and assistants sign in here. Public client and truck-owner registration belongs in the mobile app.</p>
+      </section>
+      <form className="login-panel" onSubmit={submit}>
+        <div>
+          <p className="eyebrow">Secure staff login</p>
+          <h2>Use your provisioned Supabase account.</h2>
+        </div>
+        <label>
+          Email
+          <input autoComplete="email" onChange={(event) => setEmail(event.target.value)} placeholder="admin@kuli.local" type="email" value={email} />
+        </label>
+        <label>
+          Password
+          <input autoComplete="current-password" onChange={(event) => setPassword(event.target.value)} placeholder="Minimum 6 characters" type="password" value={password} />
+        </label>
+        {error ? <p className="field-error" role="alert">{error}</p> : null}
+        <button className="icon-button" disabled={!canSubmit || pending} type="submit">
+          <LockKeyhole aria-hidden="true" size={18} />
+          {pending ? 'Signing in...' : 'Sign in'}
+        </button>
+        <p className="muted">There is intentionally no staff self-registration path.</p>
+      </form>
+    </main>
   );
 }
 
@@ -61,14 +173,7 @@ function RuntimePanel() {
   );
 
   return (
-    <section className="panel">
-      <div className="panel__header">
-        <div>
-          <p className="eyebrow">Runtime</p>
-          <h2>Environment readiness</h2>
-        </div>
-        <LockKeyhole aria-hidden="true" />
-      </div>
+    <Panel title="Environment readiness" eyebrow="Runtime">
       <div className="runtime-list">
         {rows.map((row) => (
           <div className="runtime-row" key={row.label}>
@@ -77,19 +182,42 @@ function RuntimePanel() {
           </div>
         ))}
       </div>
-    </section>
+    </Panel>
   );
 }
 
-function RouteTable({ title, routes }: { title: string; routes: typeof adminRoutes }) {
+function ApiHealthPanel() {
+  const healthQuery = useQuery({
+    queryKey: ['api-health'],
+    queryFn: () => kuliApi.health()
+  });
+
+  return (
+    <Panel title="Backend health" eyebrow="Connection">
+      <div className="health-line">
+        <p className="muted">{runtimeConfig.apiBaseUrl}</p>
+        <StatusBadge tone={healthQuery.isSuccess ? 'ready' : healthQuery.isError ? 'blocked' : 'warn'}>
+          {healthQuery.isSuccess ? 'Ready' : healthQuery.isError ? 'Needs API' : 'Checking'}
+        </StatusBadge>
+      </div>
+      {healthQuery.isError ? <p className="field-error">The admin app cannot reach the API from this browser runtime yet.</p> : null}
+      <button className="icon-button" type="button" onClick={() => healthQuery.refetch()}>
+        <RefreshCw aria-hidden="true" size={18} />
+        Check again
+      </button>
+    </Panel>
+  );
+}
+
+function RouteTable({ title, routes }: { title: string; routes: RouteItem[] }) {
   return (
     <section className="panel panel--wide">
       <div className="panel__header">
         <div>
-          <p className="eyebrow">Guarded shell</p>
+          <p className="eyebrow">Guarded routes</p>
           <h2>{title}</h2>
         </div>
-        <StatusBadge tone="warn">Phase 0</StatusBadge>
+        <StatusBadge tone="ready">Backend role</StatusBadge>
       </div>
       <div className="route-table" role="table" aria-label={`${title} routes`}>
         {routes.map((route) => {
@@ -111,8 +239,97 @@ function RouteTable({ title, routes }: { title: string; routes: typeof adminRout
   );
 }
 
-export default function App() {
-  const [workspace, setWorkspace] = useState<'admin' | 'assistant'>('admin');
+function AdminUsersPanel({ enabled }: { enabled: boolean }) {
+  const usersQuery = useQuery({
+    enabled,
+    queryKey: ['admin-users'],
+    queryFn: async () => {
+      const result = (await kuliApi.request('/admin/users')) as ApiEnvelope<UserProfile[]>;
+      return result.data;
+    }
+  });
+
+  if (!enabled) {
+    return (
+      <section className="panel panel--wide">
+        <div className="panel__header">
+          <div>
+            <p className="eyebrow">Permissions</p>
+            <h2>Assistant view</h2>
+          </div>
+          <StatusBadge tone="muted">Hidden</StatusBadge>
+        </div>
+        <p className="muted">Admin-only user management is hidden for assistants. The backend still enforces the final authorization.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="panel panel--wide">
+      <div className="panel__header">
+        <div>
+          <p className="eyebrow">Admin users</p>
+          <h2>User table</h2>
+        </div>
+        <StatusBadge tone={usersQuery.isSuccess ? 'ready' : usersQuery.isError ? 'blocked' : 'warn'}>
+          {usersQuery.isSuccess ? `${usersQuery.data.length} records` : usersQuery.isError ? 'Needs token' : 'Loading'}
+        </StatusBadge>
+      </div>
+      {usersQuery.isError ? <p className="field-error">{getErrorMessage(usersQuery.error)}</p> : null}
+      <div className="data-table" role="table" aria-label="Admin users">
+        <div className="data-row data-row--head" role="row">
+          <span>Name</span>
+          <span>Role</span>
+          <span>Status</span>
+          <span>Contact</span>
+        </div>
+        {(usersQuery.data ?? []).map((user) => (
+          <div className="data-row" key={user.id} role="row">
+            <strong>{user.fullName || 'Unnamed profile'}</strong>
+            <span>{roleLabels[user.role]}</span>
+            <StatusBadge tone={user.accountStatus === 'active' ? 'ready' : isBlockedStatus(user.accountStatus) ? 'blocked' : 'warn'}>{user.accountStatus}</StatusBadge>
+            <span>{user.email || user.phone || 'No contact'}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function BlockedAccount({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
+  return (
+    <main className="login-shell">
+      <section className="login-panel">
+        <p className="eyebrow">Account status</p>
+        <h1>Staff commands are blocked.</h1>
+        <p className="muted">{profile.fullName || profile.email} is currently marked `{profile.accountStatus}`.</p>
+        <button className="icon-button" type="button" onClick={onSignOut}>
+          <LogOut aria-hidden="true" size={18} />
+          Sign out
+        </button>
+      </section>
+    </main>
+  );
+}
+
+function ForbiddenWorkspace({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
+  return (
+    <main className="login-shell">
+      <section className="login-panel">
+        <p className="eyebrow">Role mismatch</p>
+        <h1>Use the mobile app.</h1>
+        <p className="muted">{roleLabels[profile.role]} accounts are not allowed inside the staff dashboard.</p>
+        <button className="icon-button" type="button" onClick={onSignOut}>
+          <LogOut aria-hidden="true" size={18} />
+          Sign out
+        </button>
+      </section>
+    </main>
+  );
+}
+
+function StaffWorkspace({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
+  const workspace = profile.role === 'admin' ? 'admin' : 'assistant';
   const routes = workspace === 'admin' ? adminRoutes : assistantRoutes;
 
   return (
@@ -120,30 +337,31 @@ export default function App() {
       <aside className="sidebar" aria-label="Workspace navigation">
         <div>
           <p className="eyebrow">KULI operations</p>
-          <h1>Control room for verified truck logistics.</h1>
+          <h1>{workspace === 'admin' ? 'Control room for verified truck logistics.' : 'Fast console for live caller support.'}</h1>
         </div>
-        <div className="segmented" role="group" aria-label="Workspace role">
-          <button className={workspace === 'admin' ? 'is-active' : ''} type="button" onClick={() => setWorkspace('admin')}>
-            Admin
-          </button>
-          <button className={workspace === 'assistant' ? 'is-active' : ''} type="button" onClick={() => setWorkspace('assistant')}>
-            Assistant
-          </button>
+        <div className="identity-card">
+          <strong>{profile.fullName || profile.email}</strong>
+          <span>{roleLabels[profile.role]}</span>
+          <StatusBadge tone={profile.accountStatus === 'active' ? 'ready' : 'warn'}>{profile.accountStatus}</StatusBadge>
         </div>
         <div className="notice">
           <AlertTriangle aria-hidden="true" size={18} />
-          <p>Frontend authorization starts here, but the backend remains authoritative for every role and admin action.</p>
+          <p>Route visibility follows backend `/me`. Hidden controls are UX help, not security.</p>
         </div>
+        <button className="sidebar-button" type="button" onClick={onSignOut}>
+          <LogOut aria-hidden="true" size={18} />
+          Sign out
+        </button>
       </aside>
 
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Frontend Phase 0</p>
-            <h2>{workspace === 'admin' ? 'Admin dashboard foundation' : 'Assistant console foundation'}</h2>
+            <p className="eyebrow">Frontend Phase 1</p>
+            <h2>{workspace === 'admin' ? 'Admin dashboard' : 'Assistant console'}</h2>
           </div>
           <StatusBadge tone="ready">
-            <CheckCircle2 aria-hidden="true" size={14} /> Ready for Phase 1
+            <CheckCircle2 aria-hidden="true" size={14} /> Authenticated
           </StatusBadge>
         </header>
 
@@ -151,8 +369,127 @@ export default function App() {
           <ApiHealthPanel />
           <RuntimePanel />
           <RouteTable title={workspace === 'admin' ? 'Admin routes' : 'Assistant routes'} routes={routes} />
+          <AdminUsersPanel enabled={profile.role === 'admin'} />
         </div>
       </section>
     </main>
   );
+}
+
+function LoadingScreen() {
+  return (
+    <main className="login-shell">
+      <section className="login-panel">
+        <p className="eyebrow">KULI operations</p>
+        <h1>Checking staff session.</h1>
+        <p className="muted">Supabase session first, backend profile second.</p>
+      </section>
+    </main>
+  );
+}
+
+function ProfileMissingScreen({ onSignOut }: { onSignOut: () => void }) {
+  return (
+    <main className="login-shell">
+      <section className="login-panel">
+        <p className="eyebrow">Provisioning required</p>
+        <h1>No staff profile found.</h1>
+        <p className="muted">This Supabase identity must be provisioned by an admin before it can use the staff dashboard.</p>
+        <button className="icon-button" type="button" onClick={onSignOut}>
+          <LogOut aria-hidden="true" size={18} />
+          Sign out
+        </button>
+      </section>
+    </main>
+  );
+}
+
+export default function App() {
+  const queryClient = useQueryClient();
+  const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileMissing, setProfileMissing] = useState(false);
+
+  const loadCurrentProfile = useCallback(async (nextSession: Session | null) => {
+    setSession(nextSession);
+    setProfile(null);
+    setProfileMissing(false);
+
+    if (!nextSession) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const result = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
+      setProfile(result.data);
+    } catch (error) {
+      if ((error as { code?: string }).code === 'PROFILE_NOT_FOUND') {
+        setProfileMissing(true);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (mounted) {
+        loadCurrentProfile(data.session);
+      }
+    });
+
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      loadCurrentProfile(nextSession);
+    });
+
+    return () => {
+      mounted = false;
+      data.subscription.unsubscribe();
+    };
+  }, [loadCurrentProfile]);
+
+  const handleAuthenticated = (nextProfile: UserProfile, nextSession: Session) => {
+    setSession(nextSession);
+    setProfile(nextProfile);
+    setProfileMissing(false);
+    setLoading(false);
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    queryClient.clear();
+    setSession(null);
+    setProfile(null);
+    setProfileMissing(false);
+  };
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  if (!session) {
+    return <LoginScreen onAuthenticated={handleAuthenticated} />;
+  }
+
+  if (profileMissing) {
+    return <ProfileMissingScreen onSignOut={handleSignOut} />;
+  }
+
+  if (!profile) {
+    return <LoginScreen onAuthenticated={handleAuthenticated} />;
+  }
+
+  if (isBlockedStatus(profile.accountStatus)) {
+    return <BlockedAccount profile={profile} onSignOut={handleSignOut} />;
+  }
+
+  if (!['admin', 'assistant'].includes(profile.role)) {
+    return <ForbiddenWorkspace profile={profile} onSignOut={handleSignOut} />;
+  }
+
+  return <StaffWorkspace profile={profile} onSignOut={handleSignOut} />;
 }
