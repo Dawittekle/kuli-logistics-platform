@@ -519,6 +519,86 @@ button:disabled {
   width: fit-content;
 }
 
+.pricing-layout {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(360px, 1.25fr) minmax(280px, 0.75fr);
+}
+
+.pricing-editor,
+.pricing-history,
+.pricing-class-list {
+  display: grid;
+  gap: 12px;
+}
+
+.pricing-class-row {
+  background: #fffdf7;
+  border: 1px solid #eadfce;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(120px, 1fr) repeat(5, minmax(86px, 0.72fr));
+  padding: 12px;
+}
+
+.pricing-class-row strong {
+  align-self: center;
+}
+
+.pricing-class-row label,
+.rate-label {
+  color: #172126;
+  display: grid;
+  font-size: 0.78rem;
+  font-weight: 900;
+  gap: 6px;
+}
+
+.pricing-class-row input,
+.rate-label input {
+  background: #fffaf0;
+  border: 1px solid #d8cbb8;
+  border-radius: 6px;
+  color: #172126;
+  font: inherit;
+  min-height: 38px;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+.pricing-class-row input:focus,
+.rate-label input:focus {
+  border-color: #0d5668;
+  outline: 3px solid rgb(13 86 104 / 18%);
+}
+
+.status-toggle {
+  background: #fffdf7;
+  border: 1px solid #d8cbb8;
+  border-radius: 8px;
+  color: #0d3446;
+  cursor: pointer;
+  font-weight: 900;
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+.status-toggle.is-active {
+  background: #1e7a4d;
+  border-color: #1e7a4d;
+  color: #fffaf0;
+}
+
+.pricing-rule-card {
+  background: #fffdf7;
+  border: 1px solid #eadfce;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
 @media (max-width: 900px) {
   .login-shell,
   .app-shell {
@@ -534,6 +614,11 @@ button:disabled {
   }
 
   .split-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .pricing-layout,
+  .pricing-class-row {
     grid-template-columns: 1fr;
   }
 }

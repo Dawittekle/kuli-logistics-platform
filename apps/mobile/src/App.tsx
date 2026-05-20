@@ -11,6 +11,7 @@ import {
   TextInput,
   View
 } from 'react-native';
+import type { StyleProp, ViewStyle } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -48,9 +49,63 @@ type ProfileSyncResult = {
 type VehicleClass = {
   id: string;
   name: string;
+  slug?: string;
   description?: string;
   capacityKg?: number;
   capacityCubicMeters?: number;
+};
+
+type QuoteLocation = {
+  addressText: string;
+  point: {
+    type: 'Point';
+    coordinates: [number, number];
+  };
+  source: 'manual_pin';
+};
+
+type QuoteCandidate = {
+  vehicleId: string;
+  ownerId: string;
+  vehicleClassSnapshot?: {
+    name: string;
+    slug: string;
+  };
+  licensePlate: string;
+  distanceKm: number;
+  rating: number;
+  rankingScore: number;
+};
+
+type QuoteResult = {
+  quoteId: string;
+  route: {
+    distanceKm: number;
+    etaMinutes: number;
+  };
+  requestedVehicleClass: {
+    id: string;
+    slug?: string;
+    name: string;
+  };
+  quoteSnapshot: {
+    pricingRuleVersion: number;
+    currency: string;
+    baseFare: number;
+    distanceCharge: number;
+    durationCharge: number;
+    loadAdjustment: number;
+    fuelSurcharge: number;
+    tip: number;
+    minimumFare: number;
+    totalEstimate: number;
+  };
+  search: {
+    radiusKmUsed: number;
+    expanded: boolean;
+    noResults: boolean;
+  };
+  candidates: QuoteCandidate[];
 };
 
 type VehicleDocument = {
@@ -203,17 +258,19 @@ function Field({
   onChangeText,
   placeholder,
   secureTextEntry,
-  keyboardType = 'default'
+  keyboardType = 'default',
+  containerStyle
 }: {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
   placeholder: string;
   secureTextEntry?: boolean;
-  keyboardType?: 'default' | 'email-address' | 'phone-pad';
+  keyboardType?: 'default' | 'email-address' | 'phone-pad' | 'numeric' | 'decimal-pad';
+  containerStyle?: StyleProp<ViewStyle>;
 }) {
   return (
-    <View style={styles.field}>
+    <View style={[styles.field, containerStyle]}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
         accessibilityLabel={label}
@@ -834,6 +891,241 @@ function OwnerVehiclesScreen() {
   );
 }
 
+const loadTypeOptions = [
+  { key: 'household_move', label: 'Household', detail: 'Full move with mixed items.' },
+  { key: 'furniture', label: 'Furniture', detail: 'Sofas, beds, tables, cabinets.' },
+  { key: 'appliance', label: 'Appliance', detail: 'Fridge, washer, oven, electronics.' },
+  { key: 'business_delivery', label: 'Business', detail: 'Shop stock or repeat delivery.' }
+];
+
+const parsePositiveNumber = (value: string, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+};
+
+const buildManualLocation = ({ addressText, lon, lat }: { addressText: string; lon: string; lat: string }): QuoteLocation => ({
+  addressText: addressText.trim(),
+  source: 'manual_pin',
+  point: {
+    type: 'Point',
+    coordinates: [Number(lon), Number(lat)]
+  }
+});
+
+function PriceLine({ label, value, currency }: { label: string; value: number; currency: string }) {
+  return (
+    <View style={styles.priceLine}>
+      <Text style={styles.muted}>{label}</Text>
+      <Text style={styles.priceValue}>{currency} {value.toFixed(2)}</Text>
+    </View>
+  );
+}
+
+function CandidateCard({ candidate, capacityLabel }: { candidate: QuoteCandidate; capacityLabel: string }) {
+  return (
+    <View style={styles.candidateCard}>
+      <View style={styles.cardHeader}>
+        <View style={styles.flex}>
+          <Text style={styles.cardTitle}>{candidate.licensePlate}</Text>
+          <Text style={styles.muted}>{candidate.vehicleClassSnapshot?.name || 'Available vehicle'}</Text>
+        </View>
+        <StatusPill tone="ready">{candidate.distanceKm}km</StatusPill>
+      </View>
+      <View style={styles.metricGrid}>
+        <View style={styles.metricBox}>
+          <Text style={styles.metricValue}>{candidate.rating.toFixed(1)}</Text>
+          <Text style={styles.metricLabel}>rating</Text>
+        </View>
+        <View style={styles.metricBox}>
+          <Text style={styles.metricValue}>{candidate.rankingScore.toFixed(1)}</Text>
+          <Text style={styles.metricLabel}>match score</Text>
+        </View>
+        <View style={styles.metricBox}>
+          <Text style={styles.metricValue}>{capacityLabel}</Text>
+          <Text style={styles.metricLabel}>class capacity</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function ClientQuoteScreen() {
+  const [vehicleClassId, setVehicleClassId] = useState('');
+  const [pickupAddress, setPickupAddress] = useState('Bole, Addis Ababa');
+  const [pickupLon, setPickupLon] = useState('38.7903');
+  const [pickupLat, setPickupLat] = useState('8.9806');
+  const [destinationAddress, setDestinationAddress] = useState('Piassa, Addis Ababa');
+  const [destinationLon, setDestinationLon] = useState('38.7578');
+  const [destinationLat, setDestinationLat] = useState('9.0350');
+  const [pickupWindow, setPickupWindow] = useState('Today, flexible');
+  const [itemType, setItemType] = useState('household_move');
+  const [estimatedWeightKg, setEstimatedWeightKg] = useState('800');
+  const [estimatedVolumeCubicMeters, setEstimatedVolumeCubicMeters] = useState('8');
+  const [loadingAssistanceRequested, setLoadingAssistanceRequested] = useState(true);
+  const [specialHandlingInstructions, setSpecialHandlingInstructions] = useState('');
+  const [tip, setTip] = useState('0');
+  const [quote, setQuote] = useState<QuoteResult | null>(null);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+
+  const vehicleClassesQuery = useQuery({
+    queryKey: ['vehicle-classes'],
+    queryFn: async () => ((await kuliApi.vehicleClasses()) as ApiEnvelope<VehicleClass[]>).data
+  });
+
+  const vehicleClasses = vehicleClassesQuery.data ?? [];
+  const selectedVehicleClass = vehicleClasses.find((vehicleClass) => vehicleClass.id === vehicleClassId);
+  const selectedCapacityLabel = selectedVehicleClass?.capacityKg ? `${selectedVehicleClass.capacityKg}kg` : 'class';
+
+  useEffect(() => {
+    if (!vehicleClassId && vehicleClasses[0]) {
+      setVehicleClassId(vehicleClasses[0].id);
+    }
+  }, [vehicleClassId, vehicleClasses]);
+
+  const submitQuote = async () => {
+    const pickupLocation = buildManualLocation({ addressText: pickupAddress, lon: pickupLon, lat: pickupLat });
+    const destinationLocation = buildManualLocation({ addressText: destinationAddress, lon: destinationLon, lat: destinationLat });
+    const coordinates = [...pickupLocation.point.coordinates, ...destinationLocation.point.coordinates];
+
+    if (!vehicleClassId || !pickupLocation.addressText || !destinationLocation.addressText) {
+      setError('Pickup, destination, and vehicle class are required.');
+      return;
+    }
+
+    if (coordinates.some((coordinate) => !Number.isFinite(coordinate))) {
+      setError('Manual coordinates must be valid longitude and latitude numbers.');
+      return;
+    }
+
+    setPending(true);
+    setError('');
+
+    try {
+      const result = (await kuliApi.request('/quotes', {
+        method: 'POST',
+        body: {
+          pickupLocation,
+          destinationLocation,
+          requestedVehicleClassId: vehicleClassId,
+          loadDetails: {
+            itemType,
+            estimatedWeightKg: parsePositiveNumber(estimatedWeightKg),
+            estimatedVolumeCubicMeters: parsePositiveNumber(estimatedVolumeCubicMeters),
+            loadingAssistanceRequested,
+            specialHandlingInstructions: specialHandlingInstructions.trim() || undefined
+          },
+          tip: parsePositiveNumber(tip)
+        }
+      })) as ApiEnvelope<QuoteResult>;
+
+      setQuote(result.data);
+    } catch (quoteError) {
+      setError(getErrorMessage(quoteError));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const snapshot = quote?.quoteSnapshot;
+
+  return (
+    <SafeAreaView style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.eyebrow}>/client/request/new</Text>
+        <Text style={styles.title}>Price the move before you send it.</Text>
+        <Text style={styles.copy}>Manual coordinates keep this phase deterministic while the backend handles route estimate, pricing, and nearby approved trucks.</Text>
+
+        <ShellCard title="Route and load">
+          {vehicleClassesQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(vehicleClassesQuery.error)}</Text> : null}
+          <VehicleClassPicker vehicleClasses={vehicleClasses} selectedVehicleClassId={vehicleClassId} onSelect={setVehicleClassId} />
+          <Field label="Pickup address" value={pickupAddress} onChangeText={setPickupAddress} placeholder="Bole, Addis Ababa" />
+          <View style={styles.inlineFields}>
+            <Field containerStyle={styles.inlineField} label="Pickup lon" value={pickupLon} onChangeText={setPickupLon} placeholder="38.7903" keyboardType="decimal-pad" />
+            <Field containerStyle={styles.inlineField} label="Pickup lat" value={pickupLat} onChangeText={setPickupLat} placeholder="8.9806" keyboardType="decimal-pad" />
+          </View>
+          <Field label="Destination address" value={destinationAddress} onChangeText={setDestinationAddress} placeholder="Piassa, Addis Ababa" />
+          <View style={styles.inlineFields}>
+            <Field containerStyle={styles.inlineField} label="Destination lon" value={destinationLon} onChangeText={setDestinationLon} placeholder="38.7578" keyboardType="decimal-pad" />
+            <Field containerStyle={styles.inlineField} label="Destination lat" value={destinationLat} onChangeText={setDestinationLat} placeholder="9.0350" keyboardType="decimal-pad" />
+          </View>
+          <Field label="Pickup window" value={pickupWindow} onChangeText={setPickupWindow} placeholder="Today, 2-5 PM" />
+          <View style={styles.roleGrid}>
+            {loadTypeOptions.map((option) => {
+              const selected = itemType === option.key;
+
+              return (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  key={option.key}
+                  onPress={() => setItemType(option.key)}
+                  style={[styles.documentOption, selected && styles.documentOptionSelected]}
+                >
+                  <Text style={[styles.fieldLabel, selected && styles.documentOptionSelectedText]}>{option.label}</Text>
+                  <Text style={[styles.muted, selected && styles.documentOptionSelectedText]}>{option.detail}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={styles.inlineFields}>
+            <Field containerStyle={styles.inlineField} label="Weight kg" value={estimatedWeightKg} onChangeText={setEstimatedWeightKg} placeholder="800" keyboardType="numeric" />
+            <Field containerStyle={styles.inlineField} label="Volume m3" value={estimatedVolumeCubicMeters} onChangeText={setEstimatedVolumeCubicMeters} placeholder="8" keyboardType="decimal-pad" />
+          </View>
+          <Pressable
+            accessibilityRole="switch"
+            accessibilityState={{ checked: loadingAssistanceRequested }}
+            onPress={() => setLoadingAssistanceRequested((value) => !value)}
+            style={[styles.switchRow, loadingAssistanceRequested && styles.switchRowActive]}
+          >
+            <Text style={[styles.switchText, loadingAssistanceRequested && styles.switchTextActive]}>Loading help</Text>
+            <StatusPill tone={loadingAssistanceRequested ? 'ready' : 'warn'}>{loadingAssistanceRequested ? 'Yes' : 'No'}</StatusPill>
+          </Pressable>
+          <Field label="Special handling" value={specialHandlingInstructions} onChangeText={setSpecialHandlingInstructions} placeholder="Fragile wardrobe, narrow stairs" />
+          <Field label="Tip ETB" value={tip} onChangeText={setTip} placeholder="0" keyboardType="numeric" />
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          <Pressable accessibilityRole="button" disabled={pending || vehicleClasses.length === 0} onPress={submitQuote} style={[styles.primaryButton, (pending || vehicleClasses.length === 0) && styles.buttonDisabled]}>
+            <Text style={styles.primaryButtonText}>{pending ? 'Calculating...' : 'Get quote'}</Text>
+          </Pressable>
+        </ShellCard>
+
+        {quote && snapshot ? (
+          <ShellCard title="Quote result">
+            <View style={styles.cardHeader}>
+              <View style={styles.flex}>
+                <Text style={styles.cardTitle}>{snapshot.currency} {snapshot.totalEstimate.toFixed(2)}</Text>
+                <Text style={styles.muted}>{quote.route.distanceKm.toFixed(2)}km / {Math.round(quote.route.etaMinutes)} min / rule v{snapshot.pricingRuleVersion}</Text>
+              </View>
+              <StatusPill tone={quote.search.noResults ? 'warn' : 'ready'}>{quote.search.radiusKmUsed}km radius</StatusPill>
+            </View>
+            {quote.search.expanded ? <Text style={styles.noticeText}>Search expanded because the first radius did not return approved available trucks.</Text> : null}
+            <View style={styles.priceBox}>
+              <PriceLine label="Base fare" value={snapshot.baseFare} currency={snapshot.currency} />
+              <PriceLine label="Distance" value={snapshot.distanceCharge} currency={snapshot.currency} />
+              <PriceLine label="Time" value={snapshot.durationCharge} currency={snapshot.currency} />
+              <PriceLine label="Load adjustment" value={snapshot.loadAdjustment} currency={snapshot.currency} />
+              <PriceLine label="Fuel surcharge" value={snapshot.fuelSurcharge} currency={snapshot.currency} />
+              <PriceLine label="Tip" value={snapshot.tip} currency={snapshot.currency} />
+            </View>
+            {quote.candidates.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.cardTitle}>No nearby approved trucks yet.</Text>
+                <Text style={styles.muted}>Try a smaller load, another vehicle class, or a wider pickup area after more owners come online.</Text>
+              </View>
+            ) : (
+              <View style={styles.roleGrid}>
+                {quote.candidates.map((candidate) => (
+                  <CandidateCard candidate={candidate} capacityLabel={selectedCapacityLabel} key={candidate.vehicleId} />
+                ))}
+              </View>
+            )}
+          </ShellCard>
+        ) : null}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
 function FoundationScreen({ title, route, detail }: { title: string; route: string; detail: string }) {
   return (
     <SafeAreaView style={styles.screen}>
@@ -853,7 +1145,8 @@ function ClientTabs({ profile, onSignOut }: { profile: UserProfile; onSignOut: (
   return (
     <Tab.Navigator screenOptions={tabScreenOptions}>
       <Tab.Screen name="Home">{() => <HomeOverview profile={profile} onSignOut={onSignOut} />}</Tab.Screen>
-      {clientTabs.slice(1).map((tab) => (
+      <Tab.Screen name="Request" component={ClientQuoteScreen} />
+      {clientTabs.slice(2).map((tab) => (
         <Tab.Screen key={tab.key} name={tab.label}>
           {() => <FoundationScreen title={`Client ${tab.label}`} route={tab.route} detail={tab.detail} />}
         </Tab.Screen>
@@ -1209,6 +1502,94 @@ const styles = StyleSheet.create({
     fontSize: 16,
     minHeight: 48,
     paddingHorizontal: spacing.md
+  },
+  inlineFields: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  inlineField: {
+    flex: 1
+  },
+  switchRow: {
+    alignItems: 'center',
+    backgroundColor: '#fffdf7',
+    borderColor: colors.line,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    minHeight: 48,
+    paddingHorizontal: spacing.md
+  },
+  switchRowActive: {
+    borderColor: colors.primary,
+    backgroundColor: '#eef5ef'
+  },
+  switchText: {
+    color: colors.ink,
+    fontSize: 15,
+    fontWeight: '800'
+  },
+  switchTextActive: {
+    color: colors.primaryDeep
+  },
+  priceBox: {
+    backgroundColor: '#fffdf7',
+    borderColor: colors.line,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    gap: spacing.xs,
+    padding: spacing.sm
+  },
+  priceLine: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.sm
+  },
+  priceValue: {
+    color: colors.ink,
+    fontSize: 14,
+    fontWeight: '800'
+  },
+  candidateCard: {
+    backgroundColor: '#fffdf7',
+    borderColor: colors.line,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.sm
+  },
+  metricGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  metricBox: {
+    backgroundColor: '#f1eadf',
+    borderRadius: radii.sm,
+    flex: 1,
+    minHeight: 62,
+    justifyContent: 'center',
+    padding: spacing.sm
+  },
+  metricValue: {
+    color: colors.ink,
+    fontSize: 18,
+    fontWeight: '900'
+  },
+  metricLabel: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase'
+  },
+  emptyState: {
+    backgroundColor: '#fffdf7',
+    borderColor: colors.amber,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    gap: spacing.xs,
+    padding: spacing.md
   },
   pill: {
     borderRadius: radii.sm,
