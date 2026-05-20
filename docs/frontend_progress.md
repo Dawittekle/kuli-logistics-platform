@@ -11,10 +11,10 @@ Related documents:
 
 ## Current Frontend Baseline
 
-- `apps/mobile` is currently a dependency-light Node shell that documents mobile screen contracts.
-- `apps/admin` is currently a dependency-light Node shell that documents admin and assistant console contracts.
+- `apps/mobile` now has a real Expo React Native foundation with route-placeholder screens for client and truck owner workflows.
+- `apps/admin` now has a real React/Vite foundation with route-placeholder workspaces for admin and assistant workflows.
 - Backend APIs, shared enums, smoke checks, and local service setup are available for frontend integration.
-- The next frontend work should replace the shells with real Expo React Native and React admin applications in controlled slices.
+- The next frontend work should begin Frontend Phase 1 and replace the foundation placeholders with real authentication, profile sync, and role routing screens.
 
 ## Environment Readiness
 
@@ -23,14 +23,14 @@ Related documents:
 - [x] Android emulator command available.
 - [x] ADB available outside the sandbox.
 - [x] Android virtual devices detected: `Pixel_6`, `Small_Phone`.
-- [ ] Emulator attached for live mobile smoke testing.
+- [x] Emulator attached for live mobile smoke testing.
 - [x] MongoDB local service running through Docker Compose.
 - [x] Redis local service running through Docker Compose.
 - [x] API `.env` has required Supabase and local service keys present.
 - [x] Mobile `.env` has API and Supabase keys present.
 - [x] Admin `.env` has API and Supabase keys present.
-- [x] `npm run verify:startup` passes for the current scaffold.
-- [x] `npm run smoke:critical` passes for the current scaffold.
+- [x] `npm run verify:startup` passes for the real frontend foundations.
+- [x] `npm run smoke:critical` passes for the dependency-light workflow checklist.
 
 ## Frontend Implementation Phases
 
@@ -38,22 +38,30 @@ Related documents:
 
 Objective: replace dependency-light shells with runnable frontend application foundations without changing product behavior.
 
-- [ ] Install and configure Expo React Native for `apps/mobile`.
-- [ ] Install and configure React/Vite TypeScript for `apps/admin`.
-- [ ] Preserve workspace scripts for `npm run dev:mobile` and `npm run dev:admin`.
-- [ ] Add environment loading that maps current `.env` values to frontend-safe runtime variables.
-- [ ] Add shared API client, response-envelope handling, auth-token attachment, and typed error mapping.
-- [ ] Add Supabase client setup for mobile and admin.
-- [ ] Add base navigation, guarded route placeholders, loading, forbidden, offline, and error states.
-- [ ] Add KULI design tokens and component primitives aligned with `skills-lock.json` and the PDF direction.
+- [x] Install and configure Expo React Native for `apps/mobile`.
+- [x] Install and configure React/Vite TypeScript for `apps/admin`.
+- [x] Preserve workspace scripts for `npm run dev:mobile` and `npm run dev:admin`.
+- [x] Add environment loading that maps current `.env` values to frontend-safe runtime variables.
+- [x] Add shared API client, response-envelope handling, auth-token attachment, and typed error mapping.
+- [x] Add Supabase client setup for mobile and admin.
+- [x] Add base navigation, guarded route placeholders, loading, forbidden, offline, and error states.
+- [x] Add KULI design tokens and component primitives aligned with `skills-lock.json` and the PDF direction.
 
 Validation:
 
 - [ ] Mobile app starts in Android emulator.
-- [ ] Admin app starts in browser.
-- [ ] API client can call `/api/v1/health`.
-- [ ] Lint/typecheck/tests pass.
-- [ ] Startup verification updated for real frontend apps.
+- [x] Admin app builds for browser.
+- [x] API client can call `/api/v1/health`.
+- [x] Android bundle export passes.
+- [x] Lint/typecheck/tests pass.
+- [x] Startup verification updated for real frontend apps.
+
+Notes:
+
+- `Small_Phone` booted successfully and ADB detected `emulator-5554`.
+- Full Expo Go launch in the emulator was not completed because Expo Go APK download was extremely slow during validation; use the same `npm run android --workspace @kuli/mobile` command to finish that device install when the network is stable.
+- The mobile foundation uses JSC for now because Hermes bytecode generation fails on a dynamic OpenTelemetry import inside the current Supabase dependency chain.
+- Mobile `.env` should use `http://10.0.2.2:4000/api/v1` when testing from the Android emulator, because emulator `localhost` points to the emulator itself.
 
 ### Frontend Phase 1: Identity, Profiles, RBAC, and Core Layouts
 

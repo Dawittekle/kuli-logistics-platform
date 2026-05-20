@@ -37,6 +37,7 @@ export default ({ config }) => ({
   version: '0.1.0',
   orientation: 'portrait',
   userInterfaceStyle: 'light',
+  jsEngine: 'jsc',
   splash: {
     backgroundColor: '#0d3446'
   },

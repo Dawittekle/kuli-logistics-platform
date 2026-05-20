@@ -7,10 +7,10 @@ KULI is a peer-to-peer trucking and logistics marketplace designed for Addis Aba
 The repository now contains:
 
 - A full project documentation package in [`docs/`](docs).
-- A monorepo scaffold for API, mobile, admin, and shared domain contracts.
-- A Phase 1 identity/RBAC foundation with a MongoDB-backed API slice and route-shell placeholders for mobile and admin.
-
-The current code is intentionally dependency-light so it can run in this environment without downloading packages. The backend architecture is still aimed at a TypeScript modular monolith with NestJS once dependency installation is available.
+- A monorepo for API, mobile, admin, and shared domain contracts.
+- A MongoDB-backed API covering the MVP backend workflows.
+- A real Expo React Native mobile foundation for client and truck-owner workflows.
+- A real React/Vite admin foundation for admin and call-center assistant workflows.
 
 ## Monorepo Layout
 
@@ -35,6 +35,7 @@ Start with:
 - [`docs/system_architecture.md`](docs/system_architecture.md)
 - [`docs/development_phases.md`](docs/development_phases.md)
 - [`docs/progress_tracking.md`](docs/progress_tracking.md)
+- [`docs/frontend_progress.md`](docs/frontend_progress.md)
 
 ### 2. Run repository validation
 
@@ -43,6 +44,7 @@ npm run lint
 npm run typecheck
 npm test
 npm run smoke:critical
+npm run verify:startup
 ```
 
 These scripts validate the current scaffold and execute foundational policy tests.
@@ -61,7 +63,7 @@ MongoDB listens on `localhost:27018` and Redis listens on `localhost:6380` by de
 npm run verify:startup
 ```
 
-This checks the admin placeholder, mobile placeholder, and API startup against MongoDB.
+This checks the admin React/Vite foundation, mobile Expo foundation, admin production build, and API startup against MongoDB.
 
 ### 5. Run the API server
 
@@ -134,6 +136,35 @@ The server exposes:
 - `GET /api/v1/admin/audit-logs`
 - `GET /api/v1/admin/release-readiness`
 
+### 6. Run the admin web app
+
+```bash
+npm run dev:admin
+```
+
+The admin app runs on Vite's local server, usually `http://localhost:5174`.
+
+### 7. Run the mobile app
+
+```bash
+npm run dev:mobile
+```
+
+For Android emulator testing, use this API base URL in `apps/mobile/.env`:
+
+```env
+MOBILE_APP_API_BASE_URL=http://10.0.2.2:4000/api/v1
+```
+
+`10.0.2.2` is the Android emulator bridge back to the host machine. Keep `apps/admin/.env` on `http://localhost:4000/api/v1` for browser testing on the same machine.
+
+The first `npm run android --workspace @kuli/mobile` run may download Expo Go into the emulator. If that download is slow, the Android bundle can still be checked with:
+
+```bash
+cd apps/mobile
+npx expo export --platform android --output-dir /tmp/kuli-mobile-export
+```
+
 ## Development Tokens
 
 Until a real Supabase project is wired in, the API supports a development token mode.
@@ -188,8 +219,8 @@ Do not put the Supabase service-role key in frontend env files or commit it anyw
 ## Current Limitations
 
 - The API currently covers identity/profile/RBAC, vehicle verification, quote/pricing/search, request/offer acceptance, manual trip execution, request-scoped messages, in-app notification records, assisted booking tickets, ratings, reports, and cash/manual payment records.
-- No installed frontend framework yet; mobile and admin apps currently expose route and RBAC scaffolds rather than full UI builds.
-- Supabase JWKS verification is wired in the API, but it still needs your project URL and anon key for real-device/auth-client testing.
+- Frontend Phase 0 is complete, but later phases still need real auth screens, forms, tables, maps/location UX, trip workflows, and admin/assistant feature screens.
+- Supabase JWKS verification is wired in the API, and the mobile/admin apps have Supabase clients configured through local env files.
 - No file storage, telephony integration, digital payment gateway, automated commission collection, or production notification delivery flows yet.
 - Production deployment still requires real provider credentials, backups, monitoring, and a hosted environment even though release-readiness checks and smoke scripts are now scaffolded.
 
