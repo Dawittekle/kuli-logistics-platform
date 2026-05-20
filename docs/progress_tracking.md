@@ -24,6 +24,7 @@ This file is the engineering tracker for KULI. Update it as implementation progr
 - [x] `database_design.md`
 - [x] `api_architecture.md`
 - [x] `frontend_architecture.md`
+- [x] `frontend_progress.md`
 - [x] `backend_architecture.md`
 - [x] `development_phases.md`
 - [x] `progress_tracking.md`
@@ -317,3 +318,4 @@ Completion:
 - Phase 6 has hotline ticket persistence, ticket transitions, assistant assignment, client phone lookup, assisted request creation, ticket/request linking, SMS confirmation intents, pending-client cleanup, and lightweight assistant console screen contracts.
 - Phase 7 has cash/manual payment records, owner payment confirmation, client payment disputes, admin payment resolution, terminal-trip ratings with owner aggregates, reports with evidence links, admin report resolution with audit logs, visibility penalties for matching, and lightweight mobile/admin trust screen contracts.
 - Phase 8 has admin operations metrics, user detail management, audit log listing, request IDs, structured logging, security headers, in-memory rate limiting, runtime config readiness checks, demo seed data, critical workflow smoke checks, and lightweight release-readiness/admin operations screen contracts.
+- Real frontend implementation is tracked separately in [Frontend Progress](frontend_progress.md). Do not mark frontend phases complete until the placeholder mobile/admin shells are replaced with working Expo React Native and React admin interfaces, integrated with the existing API contracts, and validated against the frontend-specific checks.
