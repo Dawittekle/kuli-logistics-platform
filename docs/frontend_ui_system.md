@@ -99,3 +99,12 @@ Every phase should reuse the same concepts:
 - [x] Admin document review uses dense queue/detail layout.
 - [x] Rejection decisions require a visible reason before submit.
 - [x] Owner document fields keep metadata visible and retryable.
+
+## Phase 3 Consistency Checklist
+
+- [x] Client quote flow keeps route, load, vehicle class, and estimate in one scan path.
+- [x] Manual coordinate entry uses compact paired fields and preserves form state after errors.
+- [x] Quote totals show the active pricing rule version and line-item breakdown.
+- [x] Nearby candidates use the same ready/pending status colors and show distance, rating, capacity, and match score.
+- [x] No-result quote state suggests alternate class or wider pickup area without implying a booking was created.
+- [x] Admin pricing management uses the existing dense operations panel style and version/activation language.

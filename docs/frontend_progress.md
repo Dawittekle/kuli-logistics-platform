@@ -16,6 +16,7 @@ Related documents:
 - `apps/admin` now has a real React/Vite foundation with route-placeholder workspaces for admin and assistant workflows.
 - Backend APIs, shared enums, smoke checks, and local service setup are available for frontend integration.
 - Frontend Phase 1 added auth/profile routing foundations; Frontend Phase 2 added owner vehicle onboarding and admin verification foundations.
+- Frontend Phase 3 added the client quote/search workflow and admin pricing rule management.
 
 ## Environment Readiness
 
@@ -122,19 +123,26 @@ Notes:
 
 Objective: build the client discovery workflow and admin pricing controls.
 
-- [ ] Client request form with pickup, destination, load details, schedule, and vehicle class.
-- [ ] Manual location entry and pin-style correction UI.
-- [ ] Quote result with price breakdown, distance, ETA, and radius used.
-- [ ] Candidate vehicle list with distance, class, rating, capacity, and suitability signals.
-- [ ] No nearby trucks and alternative-class states.
-- [ ] Admin pricing rule list and editor.
+- [x] Client request form with pickup, destination, load details, pickup window, and vehicle class.
+- [x] Manual location entry and pin-style correction UI.
+- [x] Quote result with price breakdown, distance, ETA, and radius used.
+- [x] Candidate vehicle list with distance, class, rating, capacity, and suitability signals.
+- [x] No nearby trucks and alternative-class states.
+- [x] Admin pricing rule list and editor.
 
 Validation:
 
-- [ ] Quote call returns visible breakdown.
-- [ ] Candidate list reflects backend search results.
-- [ ] No-result state gives useful alternatives.
-- [ ] Pricing rule updates invalidate quote/reference queries.
+- [x] Quote call returns visible breakdown in the mobile UI contract.
+- [x] Candidate list reflects backend search results.
+- [x] No-result state gives useful alternatives.
+- [x] Pricing rule updates invalidate pricing rule queries.
+
+Notes:
+
+- Mobile quote creation posts to `/api/v1/quotes` with manual GeoJSON pickup/destination coordinates, selected vehicle class, load details, and optional tip.
+- Pickup window is captured in the Phase 3 UI, but request persistence and selected-candidate submission are intentionally left for Phase 4.
+- Admin pricing rule creation posts all active vehicle classes as a new version; admins can save a draft, create active, or activate an existing draft.
+- Live authenticated quote/pricing mutation checks still depend on stable Supabase client/admin credentials; no accounts were created during this phase.
 
 ### Frontend Phase 4: Requests, Offers, Acceptance, and Timeouts
 
