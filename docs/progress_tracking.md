@@ -25,6 +25,7 @@ This file is the engineering tracker for KULI. Update it as implementation progr
 - [x] `api_architecture.md`
 - [x] `frontend_architecture.md`
 - [x] `frontend_progress.md`
+- [x] `frontend_ui_system.md`
 - [x] `backend_architecture.md`
 - [x] `development_phases.md`
 - [x] `progress_tracking.md`

@@ -4,6 +4,7 @@ This file tracks the real mobile and admin frontend implementation separately fr
 
 Related documents:
 - [Frontend Architecture](frontend_architecture.md)
+- [Frontend UI System](frontend_ui_system.md)
 - [Feature Specifications](feature_specifications.md)
 - [Development Phases](development_phases.md)
 - [Progress Tracking](progress_tracking.md)
