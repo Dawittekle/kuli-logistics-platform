@@ -68,22 +68,28 @@ Notes:
 
 Objective: implement authenticated role-aware access across real mobile and admin UIs.
 
-- [ ] Mobile login/register screens for client and truck owner.
-- [ ] Supabase session handling and backend profile sync.
-- [ ] Backend `/me` profile fetch after auth before route selection.
-- [ ] Client and owner mobile home shells.
-- [ ] Admin and assistant login screen.
-- [ ] Admin and assistant route guards.
-- [ ] Account status and forbidden states.
-- [ ] Admin user table shell connected to API.
+- [x] Mobile login/register screens for client and truck owner.
+- [x] Supabase session handling and backend profile sync.
+- [x] Backend `/me` profile fetch after auth before route selection.
+- [x] Client and owner mobile home shells.
+- [x] Admin and assistant login screen.
+- [x] Admin and assistant route guards.
+- [x] Account status and forbidden states.
+- [x] Admin user table shell connected to API.
 
 Validation:
 
 - [ ] Client can register or log in and land on client home.
 - [ ] Truck owner can register or log in and land on owner home.
-- [ ] Staff cannot self-register publicly.
-- [ ] Admin/assistant routes reject wrong roles.
-- [ ] Suspended account state blocks commands in UI.
+- [x] Staff cannot self-register publicly.
+- [x] Admin/assistant routes reject wrong roles.
+- [x] Suspended account state blocks commands in UI.
+
+Notes:
+
+- Real Supabase credential/manual login checks remain open for client and truck-owner landing because no test account credentials were supplied during this phase.
+- Mobile and admin now both route by backend `/me`; locally selected/public roles only affect public mobile registration.
+- Admin-only user management is hidden for assistants and still protected by backend RBAC.
 
 ### Frontend Phase 2: Vehicle Registry and Verification
 

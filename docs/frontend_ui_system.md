@@ -85,9 +85,9 @@ Every phase should reuse the same concepts:
 
 ## Phase 1 Consistency Checklist
 
-- [ ] Mobile and admin use the same role labels.
-- [ ] Mobile and admin use the same status colors.
-- [ ] Public registration shows only client and truck owner.
-- [ ] Admin login has no public registration affordance.
-- [ ] Route decisions come from backend `/me`.
-- [ ] Account status is visible on authenticated home surfaces.
+- [x] Mobile and admin use the same role labels.
+- [x] Mobile and admin use the same status colors.
+- [x] Public registration shows only client and truck owner.
+- [x] Admin login has no public registration affordance.
+- [x] Route decisions come from backend `/me`.
+- [x] Account status is visible on authenticated home surfaces.
