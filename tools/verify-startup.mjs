@@ -89,8 +89,9 @@ const waitForOutput = (name, command, args, expectedOutput) =>
     });
   });
 
-await runToCompletion('admin placeholder', 'node', ['apps/admin/src/main.mjs']);
-await runToCompletion('mobile placeholder', 'node', ['apps/mobile/src/main.mjs']);
+await runToCompletion('admin frontend foundation', 'npm', ['run', 'verify', '--workspace', '@kuli/admin']);
+await runToCompletion('admin production build', 'npm', ['run', 'build', '--workspace', '@kuli/admin']);
+await runToCompletion('mobile Expo foundation', 'npm', ['run', 'verify', '--workspace', '@kuli/mobile']);
 await waitForOutput('api', 'node', ['apps/api/src/main.mjs'], '@kuli/api listening');
 
 console.log('verify: all Phase 0 app startup checks passed');
