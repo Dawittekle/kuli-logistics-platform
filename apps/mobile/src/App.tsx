@@ -188,6 +188,36 @@ type NotificationRecord = {
   createdAt?: string;
 };
 
+type RatingRecord = {
+  id: string;
+  requestId: string;
+  raterId: string;
+  targetOwnerId: string;
+  rating: number;
+  reviewText?: string;
+  createdAt?: string;
+};
+
+type PaymentRecord = {
+  id: string;
+  requestId: string;
+  status: 'pending' | 'confirmed_by_owner' | 'disputed' | 'resolved' | 'cancelled';
+  currency: string;
+  amountExpected: number;
+  amountConfirmed?: number;
+  disputeReason?: string;
+};
+
+type ReportRecord = {
+  id: string;
+  reportCode: string;
+  requestId?: string;
+  category: string;
+  description: string;
+  evidenceFileIds?: string[];
+  status: 'open' | 'under_review' | 'awaiting_response' | 'resolved' | 'rejected';
+};
+
 type RequestCreateResult = {
   request: KuliRequest;
   offers: TripOffer[];
@@ -231,13 +261,6 @@ type Vehicle = {
 
 type VehicleDocumentType = 'identity' | 'driver_license' | 'vehicle_registration' | 'ownership_proof' | 'insurance';
 
-type TabRoute = {
-  key: string;
-  label: string;
-  route: string;
-  detail: string;
-};
-
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -255,21 +278,6 @@ const roleLabels: Record<Role, string> = {
   assistant: 'Assistant',
   admin: 'Admin'
 };
-
-const clientTabs: TabRoute[] = [
-  { key: 'client-home', label: 'Home', route: '/client/home', detail: 'Active request card before new booking.' },
-  { key: 'client-request', label: 'Request', route: '/client/request/new', detail: 'Quote, location, load, and candidate flow.' },
-  { key: 'client-history', label: 'History', route: '/client/history', detail: 'Completed trips, ratings, reports, and receipts.' },
-  { key: 'client-notifications', label: 'Alerts', route: '/client/notifications', detail: 'In-app updates and read states.' }
-];
-
-const ownerTabs: TabRoute[] = [
-  { key: 'owner-home', label: 'Home', route: '/owner/home', detail: 'Vehicle status and availability prompt.' },
-  { key: 'owner-vehicles', label: 'Vehicles', route: '/owner/vehicles', detail: 'Registration, documents, and verification status.' },
-  { key: 'owner-offers', label: 'Offers', route: '/owner/offers', detail: 'First-accept-wins offer inbox.' },
-  { key: 'owner-notifications', label: 'Alerts', route: '/owner/notifications', detail: 'In-app updates and read states.' },
-  { key: 'owner-earnings', label: 'Earnings', route: '/owner/earnings', detail: 'Cash confirmation and rating summary.' }
-];
 
 const isBlockedStatus = (status: AccountStatus) => ['suspended', 'banned', 'deleted'].includes(status);
 
@@ -1006,6 +1014,7 @@ const createIdempotencyKey = (prefix: string) => `${prefix}-${Date.now().toStrin
 const activeRequestStatuses = ['pending', 'accepted', 'en_route_to_pickup', 'arrived_at_pickup', 'loading', 'in_transit', 'unloading'];
 const terminalRequestStatuses = ['completed', 'cancelled', 'timed_out'];
 const ownerForwardStatuses: KuliStatus[] = ['en_route_to_pickup', 'arrived_at_pickup', 'loading', 'in_transit', 'unloading', 'completed'];
+const reportCategories = ['overcharge', 'no_show', 'misconduct', 'damage', 'safety', 'platform_issue', 'other'];
 const statusLabels: Record<KuliStatus, string> = {
   pending: 'Waiting',
   accepted: 'Accepted',
@@ -1971,15 +1980,323 @@ function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
   );
 }
 
-function FoundationScreen({ title, route, detail }: { title: string; route: string; detail: string }) {
+function RatingReportPanel({ request }: { request: KuliRequest }) {
+  const queryClient = useQueryClient();
+  const [rating, setRating] = useState('5');
+  const [reviewText, setReviewText] = useState('');
+  const [category, setCategory] = useState('damage');
+  const [description, setDescription] = useState('');
+  const [evidenceFileName, setEvidenceFileName] = useState('report-photo.jpg');
+  const [evidenceMimeType, setEvidenceMimeType] = useState('image/jpeg');
+  const [evidenceSizeBytes, setEvidenceSizeBytes] = useState('250000');
+  const [pendingAction, setPendingAction] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const terminal = terminalRequestStatuses.includes(request.status);
+  const canRate = ['completed', 'cancelled'].includes(request.status) && Boolean(request.selectedOwnerId);
+  const canDisputePayment = ['completed', 'cancelled'].includes(request.status);
+
+  const submitRating = async () => {
+    const parsedRating = Number(rating);
+
+    if (!canRate) {
+      setError('Rating opens after a completed or owner-linked cancelled trip.');
+      return;
+    }
+
+    if (!Number.isInteger(parsedRating) || parsedRating < 1 || parsedRating > 5) {
+      setError('Choose a whole-number rating from 1 to 5.');
+      return;
+    }
+
+    setPendingAction('rating');
+    setError('');
+    setMessage('');
+
+    try {
+      const result = (await kuliApi.request(`/kuli-requests/${request.id}/rating`, {
+        method: 'POST',
+        body: {
+          rating: parsedRating,
+          reviewText: reviewText.trim() || undefined
+        }
+      })) as ApiEnvelope<RatingRecord>;
+
+      setMessage(`Rating saved: ${result.data.rating}/5.`);
+      await queryClient.invalidateQueries({ queryKey: ['kuli-requests', 'mine'] });
+    } catch (ratingError) {
+      setError(getErrorMessage(ratingError));
+    } finally {
+      setPendingAction('');
+    }
+  };
+
+  const disputePayment = async () => {
+    if (!canDisputePayment) {
+      setError('Payment disputes open after completion or cancellation.');
+      return;
+    }
+
+    if (!description.trim()) {
+      setError('Describe the payment issue before disputing.');
+      return;
+    }
+
+    setPendingAction('dispute');
+    setError('');
+    setMessage('');
+
+    try {
+      const result = (await kuliApi.request(`/kuli-requests/${request.id}/payment/dispute`, {
+        method: 'POST',
+        body: {
+          disputeReason: description.trim()
+        }
+      })) as ApiEnvelope<{ payment: PaymentRecord }>;
+
+      setMessage(`Payment dispute recorded: ${result.data.payment.status}.`);
+      await queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    } catch (disputeError) {
+      setError(getErrorMessage(disputeError));
+    } finally {
+      setPendingAction('');
+    }
+  };
+
+  const createReport = async () => {
+    if (!description.trim()) {
+      setError('Report description is required.');
+      return;
+    }
+
+    setPendingAction('report');
+    setError('');
+    setMessage('');
+
+    try {
+      const reportResult = (await kuliApi.request('/reports', {
+        method: 'POST',
+        body: {
+          requestId: request.id,
+          category,
+          description: description.trim()
+        }
+      })) as ApiEnvelope<ReportRecord>;
+
+      const parsedSize = Number(evidenceSizeBytes);
+      let evidenceMessage = '';
+
+      if (evidenceFileName.trim() && Number.isFinite(parsedSize) && parsedSize > 0) {
+        try {
+          const intent = (await kuliApi.request(`/reports/${reportResult.data.id}/evidence/upload-intent`, {
+            method: 'POST',
+            body: {
+              originalFileName: evidenceFileName.trim(),
+              mimeType: evidenceMimeType.trim(),
+              sizeBytes: parsedSize
+            }
+          })) as ApiEnvelope<{ file: { id: string } }>;
+
+          await kuliApi.request(`/reports/${reportResult.data.id}/evidence`, {
+            method: 'POST',
+            body: {
+              fileId: intent.data.file.id
+            }
+          });
+          evidenceMessage = ' Evidence attached.';
+        } catch (evidenceError) {
+          evidenceMessage = ` Evidence can be retried later: ${getErrorMessage(evidenceError)}`;
+        }
+      }
+
+      setMessage(`Report ${reportResult.data.reportCode} created.${evidenceMessage}`);
+      await queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    } catch (reportError) {
+      setError(getErrorMessage(reportError));
+    } finally {
+      setPendingAction('');
+    }
+  };
+
+  return (
+    <View style={styles.subsection}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.fieldLabel}>Trust and payment</Text>
+        <StatusPill tone={terminal ? 'ready' : 'warn'}>{terminal ? 'Terminal' : 'Trip active'}</StatusPill>
+      </View>
+      <Text style={styles.muted}>Ratings require a completed or owner-linked cancelled trip; cash disputes are accepted after completion or cancellation. Reports stay linked to this request.</Text>
+      <View style={styles.inlineFields}>
+        <Field containerStyle={styles.inlineField} label="Rating" value={rating} onChangeText={setRating} placeholder="1-5" keyboardType="numeric" />
+        <Field containerStyle={styles.inlineField} label="Evidence size" value={evidenceSizeBytes} onChangeText={setEvidenceSizeBytes} placeholder="250000" keyboardType="numeric" />
+      </View>
+      <Field label="Review" value={reviewText} onChangeText={setReviewText} placeholder="Short public review after completion" />
+      <View style={styles.roleGrid}>
+        {reportCategories.map((option) => (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: category === option }}
+            key={option}
+            onPress={() => setCategory(option)}
+            style={[styles.documentOption, category === option && styles.documentOptionSelected]}
+          >
+            <Text style={[styles.fieldLabel, category === option && styles.documentOptionSelectedText]}>{option.replaceAll('_', ' ')}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <Field label="Report or dispute description" value={description} onChangeText={setDescription} placeholder="What happened?" />
+      <View style={styles.inlineFields}>
+        <Field containerStyle={styles.inlineField} label="Evidence file" value={evidenceFileName} onChangeText={setEvidenceFileName} placeholder="photo.jpg" />
+        <Field containerStyle={styles.inlineField} label="MIME" value={evidenceMimeType} onChangeText={setEvidenceMimeType} placeholder="image/jpeg" />
+      </View>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {message ? <Text style={styles.noticeText}>{message}</Text> : null}
+      <View style={styles.actionRow}>
+        <Pressable accessibilityRole="button" disabled={!canRate || Boolean(pendingAction)} onPress={submitRating} style={[styles.primaryButton, styles.actionButton, (!canRate || Boolean(pendingAction)) && styles.buttonDisabled]}>
+          <Text style={styles.primaryButtonText}>{pendingAction === 'rating' ? 'Saving...' : 'Rate'}</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" disabled={!canDisputePayment || Boolean(pendingAction)} onPress={disputePayment} style={[styles.secondaryButton, styles.actionButton, (!canDisputePayment || Boolean(pendingAction)) && styles.buttonDisabled]}>
+          <Text style={styles.secondaryButtonText}>Dispute</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" disabled={Boolean(pendingAction)} onPress={createReport} style={[styles.secondaryButton, styles.actionButton, Boolean(pendingAction) && styles.buttonDisabled]}>
+          <Text style={styles.secondaryButtonText}>{pendingAction === 'report' ? 'Reporting...' : 'Report'}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function ClientHistoryScreen({ profile }: { profile: UserProfile }) {
+  const requestsQuery = useQuery({
+    queryKey: ['kuli-requests', 'mine', 'history'],
+    queryFn: async () => ((await kuliApi.request('/kuli-requests/mine')) as ApiEnvelope<KuliRequest[]>).data
+  });
+
+  const requests = requestsQuery.data ?? [];
+  const terminalRequests = requests.filter((request) => terminalRequestStatuses.includes(request.status));
+
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>{route}</Text>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.copy}>{detail}</Text>
-        <ShellCard title="Phase route contract">
-          <Text style={styles.muted}>This route is guarded by the authenticated backend role and ready for its feature body.</Text>
+        <Text style={styles.eyebrow}>/client/history</Text>
+        <Text style={styles.title}>Close the trust loop.</Text>
+        <Text style={styles.copy}>Payment disputes, ratings, and reports stay attached to terminal KULI requests.</Text>
+        <ShellCard title="Completed and cancelled requests">
+          {requestsQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(requestsQuery.error)}</Text> : null}
+          {terminalRequests.length === 0 ? <Text style={styles.muted}>No terminal trips yet. Complete or cancel an accepted trip before rating or disputing payment.</Text> : null}
+          <View style={styles.roleGrid}>
+            {terminalRequests.map((request) => (
+              <View key={request.id} style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.flex}>
+                    <Text style={styles.cardTitle}>{request.requestCode}</Text>
+                    <Text style={styles.muted}>{request.pickupLocation?.addressText} to {request.destinationLocation?.addressText}</Text>
+                  </View>
+                  <StatusPill tone={statusTone(request.status)}>{statusLabels[request.status]}</StatusPill>
+                </View>
+                <Text style={styles.muted}>{request.quoteSnapshot?.currency ?? 'ETB'} {Number(request.quoteSnapshot?.totalEstimate ?? 0).toFixed(2)} / owner {request.selectedOwnerId || 'not assigned'}</Text>
+                <RatingReportPanel request={request} />
+              </View>
+            ))}
+          </View>
+        </ShellCard>
+        <Text style={styles.muted}>Signed in as {profile.fullName || profile.email}.</Text>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
+  const queryClient = useQueryClient();
+  const [pendingRequestId, setPendingRequestId] = useState('');
+  const [amountConfirmed, setAmountConfirmed] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const requestsQuery = useQuery({
+    queryKey: ['kuli-requests', 'mine', 'owner-earnings'],
+    queryFn: async () => ((await kuliApi.request('/kuli-requests/mine')) as ApiEnvelope<KuliRequest[]>).data
+  });
+
+  const ratingsQuery = useQuery({
+    queryKey: ['owners', profile.id, 'ratings'],
+    queryFn: async () => ((await kuliApi.request(`/owners/${profile.id}/ratings`)) as ApiEnvelope<RatingRecord[]>).data
+  });
+
+  const completedRequests = (requestsQuery.data ?? []).filter((request) => request.status === 'completed');
+  const ratings = ratingsQuery.data ?? [];
+  const averageRating = ratings.length ? ratings.reduce((sum, rating) => sum + rating.rating, 0) / ratings.length : 0;
+
+  const confirmPayment = async (request: KuliRequest) => {
+    setPendingRequestId(request.id);
+    setError('');
+    setMessage('');
+
+    try {
+      const amount = Number(amountConfirmed || request.quoteSnapshot?.totalEstimate || 0);
+      const result = (await kuliApi.request(`/kuli-requests/${request.id}/payment/confirm`, {
+        method: 'POST',
+        body: {
+          amountConfirmed: Number.isFinite(amount) ? amount : undefined
+        }
+      })) as ApiEnvelope<{ payment: PaymentRecord; idempotentReplay?: boolean }>;
+
+      setMessage(`Payment ${result.data.payment.status}: ${result.data.payment.currency} ${Number(result.data.payment.amountConfirmed ?? result.data.payment.amountExpected).toFixed(2)}.`);
+      await queryClient.invalidateQueries({ queryKey: ['kuli-requests', 'mine', 'owner-earnings'] });
+    } catch (paymentError) {
+      setError(getErrorMessage(paymentError));
+    } finally {
+      setPendingRequestId('');
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.eyebrow}>/owner/earnings</Text>
+        <Text style={styles.title}>Confirm cash and watch trust.</Text>
+        <ShellCard title="Rating summary">
+          <View style={styles.metricGrid}>
+            <View style={styles.metricBox}>
+              <Text style={styles.metricValue}>{averageRating.toFixed(1)}</Text>
+              <Text style={styles.metricLabel}>average</Text>
+            </View>
+            <View style={styles.metricBox}>
+              <Text style={styles.metricValue}>{ratings.length}</Text>
+              <Text style={styles.metricLabel}>ratings</Text>
+            </View>
+          </View>
+          {ratingsQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(ratingsQuery.error)}</Text> : null}
+          {ratings.slice(0, 3).map((rating) => (
+            <View key={rating.id} style={styles.requestRow}>
+              <View style={styles.flex}>
+                <Text style={styles.fieldLabel}>{rating.rating}/5</Text>
+                <Text style={styles.muted}>{rating.reviewText || 'No written review.'}</Text>
+              </View>
+            </View>
+          ))}
+        </ShellCard>
+        <ShellCard title="Cash confirmations">
+          {requestsQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(requestsQuery.error)}</Text> : null}
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {message ? <Text style={styles.noticeText}>{message}</Text> : null}
+          <Field label="Override amount ETB" value={amountConfirmed} onChangeText={setAmountConfirmed} placeholder="Leave blank for estimate" keyboardType="numeric" />
+          {completedRequests.length === 0 ? <Text style={styles.muted}>No completed trips yet. Payment confirmation is blocked until completion.</Text> : null}
+          <View style={styles.roleGrid}>
+            {completedRequests.map((request) => (
+              <View key={request.id} style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.flex}>
+                    <Text style={styles.cardTitle}>{request.requestCode}</Text>
+                    <Text style={styles.muted}>{request.quoteSnapshot?.currency ?? 'ETB'} {Number(request.quoteSnapshot?.totalEstimate ?? 0).toFixed(2)}</Text>
+                  </View>
+                  <StatusPill tone="ready">Completed</StatusPill>
+                </View>
+                <Pressable accessibilityRole="button" disabled={pendingRequestId === request.id} onPress={() => confirmPayment(request)} style={[styles.primaryButton, pendingRequestId === request.id && styles.buttonDisabled]}>
+                  <Text style={styles.primaryButtonText}>{pendingRequestId === request.id ? 'Confirming...' : 'Confirm cash payment'}</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
         </ShellCard>
       </ScrollView>
     </SafeAreaView>
@@ -1991,12 +2308,8 @@ function ClientTabs({ profile, onSignOut }: { profile: UserProfile; onSignOut: (
     <Tab.Navigator screenOptions={tabScreenOptions}>
       <Tab.Screen name="Home">{() => <ClientHomeScreen profile={profile} onSignOut={onSignOut} />}</Tab.Screen>
       <Tab.Screen name="Request" component={ClientQuoteScreen} />
+      <Tab.Screen name="History">{() => <ClientHistoryScreen profile={profile} />}</Tab.Screen>
       <Tab.Screen name="Alerts">{() => <NotificationCenterScreen profile={profile} />}</Tab.Screen>
-      {clientTabs.slice(2, 3).map((tab) => (
-        <Tab.Screen key={tab.key} name={tab.label}>
-          {() => <FoundationScreen title={`Client ${tab.label}`} route={tab.route} detail={tab.detail} />}
-        </Tab.Screen>
-      ))}
     </Tab.Navigator>
   );
 }
@@ -2008,11 +2321,7 @@ function OwnerTabs({ profile, onSignOut }: { profile: UserProfile; onSignOut: ()
       <Tab.Screen name="Vehicles" component={OwnerVehiclesScreen} />
       <Tab.Screen name="Offers">{() => <OwnerOffersScreen profile={profile} />}</Tab.Screen>
       <Tab.Screen name="Alerts">{() => <NotificationCenterScreen profile={profile} />}</Tab.Screen>
-      {ownerTabs.slice(4).map((tab) => (
-        <Tab.Screen key={tab.key} name={tab.label}>
-          {() => <FoundationScreen title={`Owner ${tab.label}`} route={tab.route} detail={tab.detail} />}
-        </Tab.Screen>
-      ))}
+      <Tab.Screen name="Earnings">{() => <OwnerEarningsScreen profile={profile} />}</Tab.Screen>
     </Tab.Navigator>
   );
 }

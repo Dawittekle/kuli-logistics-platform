@@ -4,6 +4,8 @@ import {
   AlertTriangle,
   CheckCircle2,
   ClipboardList,
+  CreditCard,
+  FileWarning,
   Gauge,
   LockKeyhole,
   LogOut,
@@ -178,6 +180,40 @@ type AssistedBookingResult = {
   };
 };
 
+type PaymentRecord = {
+  id: string;
+  requestId: string;
+  payerClientId?: string;
+  payeeOwnerId?: string;
+  status: 'pending' | 'confirmed_by_owner' | 'disputed' | 'resolved' | 'cancelled' | 'not_required';
+  flow?: string;
+  method?: string;
+  currency?: string;
+  amountExpected?: number;
+  amountConfirmed?: number;
+  disputeReason?: string;
+  resolutionNote?: string;
+  createdAt?: string;
+};
+
+type ReportRecord = {
+  id: string;
+  reportCode: string;
+  requestId?: string;
+  reporterId: string;
+  reportedUserId?: string;
+  reportedVehicleId?: string;
+  category: string;
+  description: string;
+  evidenceFileIds?: string[];
+  status: 'open' | 'under_review' | 'awaiting_response' | 'resolved' | 'rejected';
+  resolution?: {
+    outcome?: string;
+    note?: string;
+  };
+  createdAt?: string;
+};
+
 type ApiEnvelope<T> = {
   data: T;
 };
@@ -201,6 +237,8 @@ const adminRoutes: RouteItem[] = [
   { path: '/admin/users', label: 'Users', icon: UsersRound, detail: 'Role, status, and account controls.' },
   { path: '/admin/vehicles/pending', label: 'Verification', icon: Truck, detail: 'Document review and approve/reject decisions.' },
   { path: '/admin/pricing', label: 'Pricing', icon: ClipboardList, detail: 'Versioned pricing rules and audit-backed edits.' },
+  { path: '/admin/reports', label: 'Reports', icon: FileWarning, detail: 'Trip reports, evidence links, and admin outcomes.' },
+  { path: '/admin/payments', label: 'Payments', icon: CreditCard, detail: 'Cash confirmations, disputes, and resolution notes.' },
   { path: '/admin/audit-logs', label: 'Audit', icon: ShieldCheck, detail: 'Privileged action trail and filters.' }
 ];
 
@@ -855,6 +893,36 @@ const ticketTone = (status: TicketStatus): 'ready' | 'warn' | 'blocked' | 'muted
   return status === 'open' || status === 'pending_client' ? 'warn' : 'muted';
 };
 
+const adminReportCategories = ['overcharge', 'no_show', 'misconduct', 'damage', 'safety', 'platform_issue', 'other'];
+const reportResolutionOutcomes = ['warning', 'suspension', 'rejected', 'resolved_no_action', 'refund_recommended', 'visibility_penalty'];
+const reportStatuses: Array<ReportRecord['status']> = ['open', 'under_review', 'awaiting_response', 'resolved', 'rejected'];
+
+const reportTone = (status: ReportRecord['status']): 'ready' | 'warn' | 'blocked' | 'muted' => {
+  if (status === 'resolved') {
+    return 'ready';
+  }
+
+  if (status === 'rejected') {
+    return 'blocked';
+  }
+
+  return status === 'open' ? 'warn' : 'muted';
+};
+
+const paymentTone = (status: PaymentRecord['status']): 'ready' | 'warn' | 'blocked' | 'muted' => {
+  if (status === 'resolved' || status === 'confirmed_by_owner') {
+    return 'ready';
+  }
+
+  if (status === 'disputed') {
+    return 'blocked';
+  }
+
+  return status === 'pending' ? 'warn' : 'muted';
+};
+
+const formatMoney = (currency = 'ETB', amount = 0) => `${currency} ${Number(amount).toFixed(2)}`;
+
 const nextTicketStatuses = (ticket?: HotlineTicket): TicketStatus[] => {
   if (!ticket) {
     return [];
@@ -880,6 +948,279 @@ const buildAssistantLocation = ({ address, lon, lat }: { address: string; lon: s
     coordinates: [Number(lon), Number(lat)]
   }
 });
+
+function AdminTrustFinancePanel({ enabled }: { enabled: boolean }) {
+  const queryClient = useQueryClient();
+  const [reportStatusFilter, setReportStatusFilter] = useState<ReportRecord['status'] | ''>('open');
+  const [reportCategoryFilter, setReportCategoryFilter] = useState('');
+  const [selectedReportId, setSelectedReportId] = useState('');
+  const [reportOutcome, setReportOutcome] = useState('resolved_no_action');
+  const [reportNote, setReportNote] = useState('');
+  const [selectedPaymentId, setSelectedPaymentId] = useState('');
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentNote, setPaymentNote] = useState('');
+  const [pendingAction, setPendingAction] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const reportsQuery = useQuery({
+    enabled,
+    queryKey: ['admin-reports', reportStatusFilter, reportCategoryFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+
+      if (reportStatusFilter) {
+        params.set('status', reportStatusFilter);
+      }
+
+      if (reportCategoryFilter) {
+        params.set('category', reportCategoryFilter);
+      }
+
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      return ((await kuliApi.request(`/admin/reports${suffix}`)) as ApiEnvelope<ReportRecord[]>).data;
+    }
+  });
+
+  const paymentsQuery = useQuery({
+    enabled,
+    queryKey: ['admin-payments'],
+    queryFn: async () => ((await kuliApi.request('/admin/payments')) as ApiEnvelope<PaymentRecord[]>).data
+  });
+
+  const reports = reportsQuery.data ?? [];
+  const payments = paymentsQuery.data ?? [];
+  const selectedReport = reports.find((report) => report.id === selectedReportId) ?? reports[0];
+  const selectedPayment = payments.find((payment) => payment.id === selectedPaymentId) ?? payments[0];
+
+  useEffect(() => {
+    if (!selectedReportId && reports[0]) {
+      setSelectedReportId(reports[0].id);
+    }
+  }, [reports, selectedReportId]);
+
+  useEffect(() => {
+    if (!selectedPaymentId && payments[0]) {
+      setSelectedPaymentId(payments[0].id);
+      setPaymentAmount(String(payments[0].amountConfirmed ?? payments[0].amountExpected ?? 0));
+    }
+  }, [payments, selectedPaymentId]);
+
+  if (!enabled) {
+    return null;
+  }
+
+  const resolveReport = async () => {
+    if (!selectedReport) {
+      setError('Select a report first.');
+      return;
+    }
+
+    if (!reportNote.trim()) {
+      setError('Report resolution requires an audit note.');
+      return;
+    }
+
+    setPendingAction('report');
+    setError('');
+    setMessage('');
+
+    try {
+      await kuliApi.request(`/admin/reports/${selectedReport.id}`, {
+        method: 'PATCH',
+        body: {
+          outcome: reportOutcome,
+          note: reportNote.trim()
+        }
+      });
+      setReportNote('');
+      setMessage(`Report ${selectedReport.reportCode} resolved.`);
+      await queryClient.invalidateQueries({ queryKey: ['admin-reports'] });
+    } catch (resolveError) {
+      setError(getErrorMessage(resolveError));
+    } finally {
+      setPendingAction('');
+    }
+  };
+
+  const resolvePayment = async () => {
+    if (!selectedPayment) {
+      setError('Select a payment record first.');
+      return;
+    }
+
+    if (!paymentNote.trim()) {
+      setError('Payment resolution requires an audit note.');
+      return;
+    }
+
+    const parsedAmount = Number(paymentAmount);
+
+    setPendingAction('payment');
+    setError('');
+    setMessage('');
+
+    try {
+      await kuliApi.request(`/admin/payments/${selectedPayment.id}`, {
+        method: 'PATCH',
+        body: {
+          amountConfirmed: Number.isFinite(parsedAmount) ? parsedAmount : undefined,
+          resolutionNote: paymentNote.trim()
+        }
+      });
+      setPaymentNote('');
+      setMessage(`Payment ${selectedPayment.id} resolved.`);
+      await queryClient.invalidateQueries({ queryKey: ['admin-payments'] });
+    } catch (resolveError) {
+      setError(getErrorMessage(resolveError));
+    } finally {
+      setPendingAction('');
+    }
+  };
+
+  return (
+    <section className="panel panel--wide">
+      <div className="panel__header">
+        <div>
+          <p className="eyebrow">Trust and finance</p>
+          <h2>Reports and payment disputes</h2>
+        </div>
+        <StatusBadge tone={reportsQuery.isError || paymentsQuery.isError ? 'blocked' : reports.length || payments.length ? 'warn' : 'ready'}>
+          {reportsQuery.isError || paymentsQuery.isError ? 'Needs token' : `${reports.length} reports / ${payments.length} payments`}
+        </StatusBadge>
+      </div>
+      {error ? <p className="field-error" role="alert">{error}</p> : null}
+      {message ? <p className="muted">{message}</p> : null}
+      {reportsQuery.isError ? <p className="field-error">{getErrorMessage(reportsQuery.error)}</p> : null}
+      {paymentsQuery.isError ? <p className="field-error">{getErrorMessage(paymentsQuery.error)}</p> : null}
+
+      <div className="support-layout">
+        <div className="support-column">
+          <div className="support-toolbar">
+            <label>
+              Report status
+              <select onChange={(event) => setReportStatusFilter(event.target.value as ReportRecord['status'] | '')} value={reportStatusFilter}>
+                <option value="">All</option>
+                {reportStatuses.map((status) => (
+                  <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Category
+              <select onChange={(event) => setReportCategoryFilter(event.target.value)} value={reportCategoryFilter}>
+                <option value="">All</option>
+                {adminReportCategories.map((category) => (
+                  <option key={category} value={category}>{category.replaceAll('_', ' ')}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="queue-list">
+            {reportsQuery.isLoading ? <p className="muted">Loading reports...</p> : null}
+            {reports.length === 0 && !reportsQuery.isLoading ? <p className="muted">No reports match this filter.</p> : null}
+            {reports.map((report) => (
+              <button
+                className={`queue-item ${selectedReport?.id === report.id ? 'is-selected' : ''}`}
+                key={report.id}
+                onClick={() => {
+                  setSelectedReportId(report.id);
+                  setError('');
+                  setMessage('');
+                }}
+                type="button"
+              >
+                <strong>{report.reportCode}</strong>
+                <span>{report.category.replaceAll('_', ' ')} / {report.requestId || 'platform issue'}</span>
+                <StatusBadge tone={reportTone(report.status)}>{report.status.replaceAll('_', ' ')}</StatusBadge>
+              </button>
+            ))}
+          </div>
+
+          <div className="support-card">
+            <div className="detail-heading">
+              <div>
+                <h3>{selectedReport?.reportCode ?? 'Select a report'}</h3>
+                <p className="muted">{selectedReport?.description ?? 'Evidence and outcomes appear after selecting a report.'}</p>
+              </div>
+              {selectedReport ? <StatusBadge tone={reportTone(selectedReport.status)}>{selectedReport.status.replaceAll('_', ' ')}</StatusBadge> : null}
+            </div>
+            {selectedReport ? (
+              <>
+                <p className="muted">Reporter {selectedReport.reporterId} / reported owner {selectedReport.reportedUserId || 'n/a'} / evidence {(selectedReport.evidenceFileIds ?? []).length}</p>
+                <label>
+                  Outcome
+                  <select onChange={(event) => setReportOutcome(event.target.value)} value={reportOutcome}>
+                    {reportResolutionOutcomes.map((outcome) => (
+                      <option key={outcome} value={outcome}>{outcome.replaceAll('_', ' ')}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="decision-label">
+                  Resolution note
+                  <textarea onChange={(event) => setReportNote(event.target.value)} placeholder="Required audit note for the report outcome." value={reportNote} />
+                </label>
+                <button className="icon-button" disabled={pendingAction === 'report'} onClick={resolveReport} type="button">
+                  {pendingAction === 'report' ? 'Resolving...' : 'Resolve report'}
+                </button>
+              </>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="support-column support-column--wide">
+          <div className="queue-list">
+            {paymentsQuery.isLoading ? <p className="muted">Loading payments...</p> : null}
+            {payments.length === 0 && !paymentsQuery.isLoading ? <p className="muted">No payment records yet.</p> : null}
+            {payments.map((payment) => (
+              <button
+                className={`queue-item ${selectedPayment?.id === payment.id ? 'is-selected' : ''}`}
+                key={payment.id}
+                onClick={() => {
+                  setSelectedPaymentId(payment.id);
+                  setPaymentAmount(String(payment.amountConfirmed ?? payment.amountExpected ?? 0));
+                  setError('');
+                  setMessage('');
+                }}
+                type="button"
+              >
+                <strong>{formatMoney(payment.currency, payment.amountConfirmed ?? payment.amountExpected)}</strong>
+                <span>{payment.requestId} / owner {payment.payeeOwnerId || 'n/a'}</span>
+                <StatusBadge tone={paymentTone(payment.status)}>{payment.status.replaceAll('_', ' ')}</StatusBadge>
+              </button>
+            ))}
+          </div>
+
+          <div className="support-card">
+            <div className="detail-heading">
+              <div>
+                <h3>{selectedPayment ? formatMoney(selectedPayment.currency, selectedPayment.amountConfirmed ?? selectedPayment.amountExpected) : 'Select a payment'}</h3>
+                <p className="muted">{selectedPayment?.disputeReason || selectedPayment?.resolutionNote || 'Cash confirmations and disputes stay manual in v1.'}</p>
+              </div>
+              {selectedPayment ? <StatusBadge tone={paymentTone(selectedPayment.status)}>{selectedPayment.status.replaceAll('_', ' ')}</StatusBadge> : null}
+            </div>
+            {selectedPayment ? (
+              <>
+                <p className="muted">Request {selectedPayment.requestId} / client {selectedPayment.payerClientId || 'n/a'} / method {selectedPayment.method || 'manual_cash'}</p>
+                <label>
+                  Confirmed amount
+                  <input onChange={(event) => setPaymentAmount(event.target.value)} type="number" value={paymentAmount} />
+                </label>
+                <label className="decision-label">
+                  Resolution note
+                  <textarea onChange={(event) => setPaymentNote(event.target.value)} placeholder="Required audit note for the payment decision." value={paymentNote} />
+                </label>
+                <button className="icon-button" disabled={pendingAction === 'payment'} onClick={resolvePayment} type="button">
+                  {pendingAction === 'payment' ? 'Resolving...' : 'Resolve payment'}
+                </button>
+              </>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function AssistantSupportPanel({ enabled, profile }: { enabled: boolean; profile: UserProfile }) {
   const queryClient = useQueryClient();
@@ -1435,7 +1776,7 @@ function StaffWorkspace({ profile, onSignOut }: { profile: UserProfile; onSignOu
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Frontend Phase 6</p>
+            <p className="eyebrow">Frontend Phase 7</p>
             <h2>{workspace === 'admin' ? 'Admin dashboard' : 'Assistant console'}</h2>
           </div>
           <StatusBadge tone="ready">
@@ -1450,6 +1791,7 @@ function StaffWorkspace({ profile, onSignOut }: { profile: UserProfile; onSignOu
           <AssistantSupportPanel enabled={profile.role === 'assistant'} profile={profile} />
           <AdminVerificationPanel enabled={profile.role === 'admin'} />
           <AdminPricingPanel enabled={profile.role === 'admin'} />
+          <AdminTrustFinancePanel enabled={profile.role === 'admin'} />
           <AdminUsersPanel enabled={profile.role === 'admin'} />
         </div>
       </section>
