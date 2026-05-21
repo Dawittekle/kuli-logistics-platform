@@ -277,6 +277,7 @@ Message body:
 POST /api/v1/kuli-requests/:id/rating
 GET /api/v1/owners/:id/ratings
 POST /api/v1/reports
+POST /api/v1/reports/:id/evidence/upload-intent
 POST /api/v1/reports/:id/evidence
 POST /api/v1/kuli-requests/:id/payment/confirm
 POST /api/v1/kuli-requests/:id/payment/dispute
@@ -299,6 +300,7 @@ Assisted booking must store `createdByAssistantId` and link the ticket.
 
 ```text
 GET /api/v1/admin/dashboard
+GET /api/v1/admin/release-readiness
 GET /api/v1/admin/users
 GET /api/v1/admin/users/:id
 PATCH /api/v1/admin/users/:id/status
@@ -323,6 +325,8 @@ PATCH /api/v1/admin/reports/:id
 GET /api/v1/admin/payments
 PATCH /api/v1/admin/payments/:id
 GET /api/v1/admin/audit-logs
+POST /api/v1/admin/jobs/expire-offers
+POST /api/v1/admin/jobs/expire-pending-client-tickets
 ```
 
 ## Authorization Matrix
@@ -385,4 +389,3 @@ Do not block v1 on WebSockets. Future channels:
 - `trip:<requestId>` for trip status and messages.
 - `owner:<ownerId>` for offers.
 - `admin:operations` for dashboard counters.
-

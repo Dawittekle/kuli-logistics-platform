@@ -30,7 +30,7 @@ Related documents:
 - [x] Android emulator command available.
 - [x] ADB available outside the sandbox.
 - [x] Android virtual devices detected: `Pixel_6`, `Small_Phone`.
-- [x] Emulator attached for live mobile smoke testing.
+- [ ] Emulator attached for live mobile smoke testing.
 - [x] MongoDB local service running through Docker Compose.
 - [x] Redis local service running through Docker Compose.
 - [x] API `.env` has required Supabase and local service keys present.
@@ -39,6 +39,8 @@ Related documents:
 - [x] `npm run verify:startup` passes for the real frontend foundations.
 - [x] `npm run smoke:critical` passes for the dependency-light workflow checklist.
 - [x] Mobile Android export passes from the `apps/mobile` Expo workspace.
+- [x] Mobile web export passes from the `apps/mobile` Expo workspace for low-resource browser smoke testing.
+- [x] Headless Chrome browser smoke renders admin web and mobile web entry screens.
 
 ## Frontend Implementation Phases
 
@@ -284,11 +286,14 @@ Notes:
 - Admin dashboard now fetches `/api/v1/admin/dashboard` and `/api/v1/admin/release-readiness`, with dense metric and readiness panels.
 - Admin users now support role/status/search filters, detail fetch, and server-confirmed status updates through `/api/v1/admin/users/:id/status`.
 - Admin trip oversight lists all admin-visible KULI requests via `/api/v1/kuli-requests/mine` and shows selected request participants, estimate, and status events.
+- Admin trip oversight lists all admin-visible KULI requests via `/api/v1/admin/kuli-requests` and shows selected request participants, estimate, and status events.
 - Admin audit viewer filters by actor, action, and target type, and renders selected metadata without hiding append-only context.
 - Admin layout now has responsive metric/readiness/detail grids and keyboard-focusable queue/table rows.
 - Validation passed with `npm run lint`, `npm run typecheck`, `npm test`, `npm run build --workspace @kuli/admin`, `npm run smoke:critical`, `npm run verify:startup`, and `npx expo export --platform android --output-dir /tmp/kuli-mobile-phase8-export` from `apps/mobile`.
 - No Playwright config exists in the repo, so no Playwright smoke was run.
 - `adb devices` returned no attached Android emulator, so live emulator smoke remains open for your later device run.
+- Follow-up verification on 2026-05-21 added Expo web dependencies, confirmed `npx expo export --platform web --output-dir /tmp/kuli-mobile-check-web`, and rendered the mobile web entry screen in headless Chrome at a 390x844 viewport.
+- Follow-up verification on 2026-05-21 rendered the admin production build in headless Chrome at a 1440x1000 viewport and confirmed no blank/crashed entry screen.
 
 ## Commit Discipline
 

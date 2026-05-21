@@ -61,7 +61,7 @@ Completion:
 
 ### Phase 1: Identity, Profiles, RBAC, and Core Layouts
 
-- [ ] Configure Supabase Auth clients.
+- [x] Configure Supabase Auth clients.
 - [x] Implement backend JWT verification.
 - [x] Create user schema/model.
 - [x] Implement profile sync.
@@ -85,7 +85,7 @@ Completion:
 - [x] Owner vehicle CRUD.
 - [x] File upload intent.
 - [x] Vehicle document metadata.
-- [ ] Owner registration form.
+- [x] Owner registration form.
 - [x] Admin pending queue.
 - [x] Admin document preview.
 - [x] Approve/reject workflow.
@@ -214,24 +214,24 @@ Completion:
 
 | Feature | Status | Owner | Notes |
 |---|---|---|---|
-| Authentication and RBAC | In progress | AI agents | Dev-token verifier and Supabase JWKS verifier are in place; real project env values still need to be supplied |
-| User profile management | In progress | AI agents | MongoDB-backed profile sync, `/me`, profile update, status guard, RBAC guard, and staff provisioning scaffolded |
-| Vehicle classes | In progress | AI agents | Default classes are seeded; admin CRUD API scaffolded |
-| Vehicle registration | In progress | AI agents | Owner CRUD, document metadata APIs, mobile owner form, and document metadata attachment UI are in place |
-| Vehicle verification | In progress | AI agents | Admin pending queue, detail, document signed URL, approve/reject workflow, and owner rejection display are in place |
-| Availability management | In progress | AI agents | Vehicle availability transition rules block unapproved vehicles from going online |
+| Authentication and RBAC | Implemented; live OTP E2E pending | AI agents | Supabase client env values are configured, dev-token and Supabase verification modes pass, staff self-registration is blocked, and browser login screens render |
+| User profile management | Implemented; live OTP E2E pending | AI agents | MongoDB-backed profile sync, `/me`, profile update, notification preferences, status guard, RBAC guard, and staff provisioning are in place |
+| Vehicle classes | Implemented | AI agents | Default classes are seeded; admin CRUD API and real admin management UI are in place; update/deactivate regression is covered |
+| Vehicle registration | Implemented; live OTP E2E pending | AI agents | Owner CRUD, active-vehicle selection, document upload-intent/complete/attach APIs, mobile owner form, and document metadata attachment UI are in place |
+| Vehicle verification | Implemented; live OTP E2E pending | AI agents | Admin pending queue, detail, document signed URL, approve/reject workflow, admin status actions, audit logs, and owner rejection display are in place |
+| Availability management | Implemented | AI agents | Vehicle availability transition rules block unapproved vehicles from going online; admin suspension requires a reason |
 | Quotes and pricing | In progress | AI agents | Deterministic route adapter, seeded active pricing rule, admin pricing API/UI, mobile quote form, and quote result breakdown are in place |
 | Nearby matching | In progress | AI agents | Approved/online nearby search, radius expansion, deterministic ranking, mobile candidate list, and no-result state are tested/bundled |
 | Request creation | In progress | AI agents | Idempotent KULI request endpoint creates pending requests and dispatches selected offers; mobile client dispatch/wait/cancel UI is in place |
 | Offer acceptance | In progress | AI agents | Owner inbox, viewed/decline/accept commands, timeout cleanup, first-accept-wins tests, and mobile owner offer actions are in place |
 | Trip state machine | In progress | AI agents | Manual status endpoint, transition map, immutable event log, cancellation policy, owner status controls, and client/owner active trip panels are in place |
 | Messaging | In progress | AI agents | Request-scoped message collection, idempotent send, participant access rules, mobile message thread, and retry state are in place |
-| Notifications | In progress | AI agents | In-app notification records, list/read APIs, preferences route, disabled push/SMS/email adapter placeholders, and mobile Alerts tab are in place |
+| Notifications | Implemented; external providers deferred | AI agents | In-app notification records, list/read APIs, preferences route, device push-token registration, disabled push/SMS/email adapter placeholders, and mobile Alerts tab are in place |
 | Assisted booking | In progress | AI agents | Hotline tickets, claim/status flow, client lookup, assisted quote/search, assisted request creation, ticket/request linking, SMS confirmation intents, and real assistant console UI are in place |
 | Ratings | In progress | AI agents | Terminal-trip rating API, duplicate guard, owner aggregate updates, mobile client rating UI, and owner ratings summary are in place |
 | Reports/disputes | In progress | AI agents | Report creation, evidence upload intents/linking, client report/dispute UI, admin resolution, audit logging, visibility penalties, and admin report queue are in place |
 | Payment records | In progress | AI agents | Cash/manual payment records are created on completion, with owner confirmation UI, client dispute/admin notification, admin resolution, and finance queue in place |
-| Admin dashboard | In progress | AI agents | Metrics, user detail/status actions, request oversight, audit log filters, release-readiness checks, and real admin operations UI are in place |
+| Admin dashboard | Implemented; live OTP E2E pending | AI agents | Metrics, user detail/status actions, vehicle class management, request oversight through `/admin/kuli-requests`, audit log filters, release-readiness checks, and real admin operations UI are in place |
 
 ## Infrastructure Tracking
 
@@ -240,7 +240,7 @@ Completion:
 - [x] Redis local development.
 - [ ] Redis production target selected.
 - [ ] Object storage selected.
-- [ ] Supabase project configured.
+- [x] Supabase project configured.
 - [ ] Mapping provider selected.
 - [ ] SMS provider selected.
 - [ ] Push notification setup.
@@ -319,4 +319,4 @@ Completion:
 - Phase 6 has hotline ticket persistence, ticket transitions, assistant assignment, client phone lookup, assisted request creation, ticket/request linking, SMS confirmation intents, pending-client cleanup, and lightweight assistant console screen contracts.
 - Phase 7 has cash/manual payment records, owner payment confirmation, client payment disputes, admin payment resolution, terminal-trip ratings with owner aggregates, reports with evidence links, admin report resolution with audit logs, visibility penalties for matching, and lightweight mobile/admin trust screen contracts.
 - Phase 8 has admin operations metrics, user detail management, audit log listing, request IDs, structured logging, security headers, in-memory rate limiting, runtime config readiness checks, demo seed data, critical workflow smoke checks, and lightweight release-readiness/admin operations screen contracts.
-- Real frontend implementation is tracked separately in [Frontend Progress](frontend_progress.md). Frontend Phase 0 has working Expo React Native and React/Vite foundations. Frontend Phase 1 adds Supabase auth screens, backend `/me` role routing, account status states, staff-only admin login, assistant/admin guards, and an admin users table shell. Frontend Phase 2 adds owner vehicle registration, document metadata attachment, verification status display, approval-gated availability, admin pending queue, document preview intent, and approve/reject decision UI. Frontend Phase 3 adds the mobile quote/search flow, visible price breakdown, candidate/no-result states, and admin pricing rule list/editor/activation controls. Frontend Phase 4 adds mobile request dispatch from quote results, client active request waiting/cancel state, owner viewed/decline/accept offer inbox, acceptance conflict messaging, and lightweight accepted-trip summaries. Frontend Phase 5 adds mobile owner status controls, client/owner status timeline panels, request-scoped messaging with retry, notification list/read UI, and notification preference controls. Frontend Phase 6 adds the assistant ticket queue, ticket state actions, client lookup, assisted quote/search, candidate selection, assisted booking creation, ticket/request link display, and SMS intent confirmation UI. Frontend Phase 7 adds client rating/report/payment dispute actions, owner payment confirmation and rating summary, and admin report/payment resolution queues with required audit notes. Frontend Phase 8 adds admin metrics, release readiness, user filters/status actions, request oversight, audit log filters/detail, and responsive operations layouts. Real credential and emulator smoke checks remain open because no live Supabase test accounts were created and no Android emulator was attached during the final Phase 8 validation.
+- Real frontend implementation is tracked separately in [Frontend Progress](frontend_progress.md). Frontend Phase 0 has working Expo React Native, Expo web export support, and React/Vite foundations. Frontend Phase 1 adds Supabase auth screens, backend `/me` role routing, account status states, staff-only admin login, assistant/admin guards, and an admin users table shell. Frontend Phase 2 adds owner vehicle registration, document upload-intent/complete/attach handling, verification status display, approval-gated availability, active-vehicle selection, admin pending queue, document preview intent, approve/reject decisions, and admin vehicle status controls. Frontend Phase 3 adds the mobile quote/search flow, visible price breakdown, candidate/no-result states, and admin pricing rule list/editor/activation controls. Frontend Phase 4 adds mobile request dispatch from quote results, client active request waiting/cancel state, owner viewed/decline/accept offer inbox, acceptance conflict messaging, and lightweight accepted-trip summaries. Frontend Phase 5 adds mobile owner status controls, client/owner status timeline panels, request-scoped messaging with retry, notification list/read UI, notification preference controls, and device push-token API wiring. Frontend Phase 6 adds the assistant ticket queue, ticket state actions, client lookup, assisted quote/search, candidate selection, assisted booking creation, ticket/request link display, and SMS intent confirmation UI. Frontend Phase 7 adds client rating/report/payment dispute actions, owner payment confirmation and rating summary, and admin report/payment resolution queues with required audit notes. Frontend Phase 8 adds admin metrics, release readiness, user filters/status actions, vehicle class management, request oversight, audit log filters/detail, and responsive operations layouts. Real credential E2E remains open until Supabase OTP/password login can be completed; Android emulator smoke is deferred because the emulator is too resource-heavy, with browser-based mobile web smoke used for this pass.

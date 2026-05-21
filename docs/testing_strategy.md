@@ -120,6 +120,7 @@ Mobile:
 - Use React Native Testing Library for forms and state rendering.
 - Use mocked API client for screen behavior.
 - Use device/emulator smoke tests for navigation and layout.
+- When the Android emulator is too resource-intensive, use Expo web export plus headless Chrome/mobile viewport smoke tests for layout and entry-screen validation, then keep native emulator/device checks as the final manual gate.
 
 Admin:
 
