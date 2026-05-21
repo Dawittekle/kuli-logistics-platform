@@ -17,6 +17,7 @@ Related documents:
 - Backend APIs, shared enums, smoke checks, and local service setup are available for frontend integration.
 - Frontend Phase 1 added auth/profile routing foundations; Frontend Phase 2 added owner vehicle onboarding and admin verification foundations.
 - Frontend Phase 3 added the client quote/search workflow and admin pricing rule management.
+- Frontend Phase 4 added client request dispatch, waiting/cancel state, and the owner offer inbox.
 
 ## Environment Readiness
 
@@ -148,18 +149,26 @@ Notes:
 
 Objective: turn quotes into real marketplace transactions.
 
-- [ ] Client request confirmation and selected-candidate submission.
-- [ ] Client waiting state with timeout/cancel behavior.
-- [ ] Owner offer inbox with viewed, decline, and accept actions.
-- [ ] Conflict handling for already-accepted requests.
-- [ ] Accepted trip detail route for client and owner.
+- [x] Client request confirmation and selected-candidate submission.
+- [x] Client waiting state with timeout/cancel behavior.
+- [x] Owner offer inbox with viewed, decline, and accept actions.
+- [x] Conflict handling for already-accepted requests.
+- [x] Accepted trip detail route for client and owner.
 
 Validation:
 
-- [ ] Client can send request from quote results.
-- [ ] Owner can view and accept/decline offer.
-- [ ] Losing acceptance conflict renders clearly.
-- [ ] Timeout/cancellation removes stale offers from UI.
+- [x] Client can send request from quote results in the mobile UI contract.
+- [x] Owner can view and accept/decline offer in the mobile UI contract.
+- [x] Losing acceptance conflict renders clearly.
+- [x] Timeout/cancellation removes stale offers from UI after query refresh.
+
+Notes:
+
+- Client quote results now allow selecting candidate vehicles and posting `/api/v1/kuli-requests` with an idempotency key.
+- Client Home fetches `/api/v1/kuli-requests/mine`, shows active waiting/accepted requests, and can cancel cancellable requests.
+- Owner Offers fetches `/api/v1/owner/offers` and supports viewed, decline, and accept actions with clear conflict messaging.
+- Accepted trip cards are intentionally lightweight; Phase 5 owns the full status timeline, messages, and notification center.
+- Live authenticated client/owner mutation checks still depend on stable Supabase credentials; no accounts were created during this phase.
 
 ### Frontend Phase 5: Trip Execution, Messaging, and Notifications
 

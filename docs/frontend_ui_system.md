@@ -108,3 +108,12 @@ Every phase should reuse the same concepts:
 - [x] Nearby candidates use the same ready/pending status colors and show distance, rating, capacity, and match score.
 - [x] No-result quote state suggests alternate class or wider pickup area without implying a booking was created.
 - [x] Admin pricing management uses the existing dense operations panel style and version/activation language.
+
+## Phase 4 Consistency Checklist
+
+- [x] Request dispatch is a distinct action after quote review and candidate selection.
+- [x] Waiting states use pending/amber language and never imply owner acceptance before the backend confirms it.
+- [x] Cancellation is available only for cancellable request statuses and remains server-confirmed.
+- [x] Owner offer cards prioritize distance, ETA, expiration, and first-accept-wins actions.
+- [x] Acceptance conflicts render as recoverable inbox messages, not silent failures.
+- [x] Accepted-trip summaries defer full timeline/messaging work to Phase 5 while keeping route/status visible.
