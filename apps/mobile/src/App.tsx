@@ -77,6 +77,21 @@ type QuoteCandidate = {
   rankingScore: number;
 };
 
+type QuoteInput = {
+  pickupLocation: QuoteLocation;
+  destinationLocation: QuoteLocation;
+  requestedVehicleClassId: string;
+  requestedPickupTime?: string;
+  loadDetails: {
+    itemType: string;
+    estimatedWeightKg: number;
+    estimatedVolumeCubicMeters: number;
+    loadingAssistanceRequested: boolean;
+    specialHandlingInstructions?: string;
+  };
+  tip: number;
+};
+
 type QuoteResult = {
   quoteId: string;
   route: {
@@ -106,6 +121,52 @@ type QuoteResult = {
     noResults: boolean;
   };
   candidates: QuoteCandidate[];
+};
+
+type TripOffer = {
+  id: string;
+  requestId: string;
+  ownerId: string;
+  vehicleId: string;
+  status: 'sent' | 'viewed' | 'accepted' | 'declined' | 'expired' | 'cancelled';
+  distanceKmAtOffer?: number;
+  etaMinutesAtOffer?: number;
+  expiresAt?: string;
+  declineReason?: string;
+};
+
+type KuliRequest = {
+  id: string;
+  requestCode: string;
+  clientId: string;
+  status: 'pending' | 'accepted' | 'en_route_to_pickup' | 'arrived_at_pickup' | 'loading' | 'in_transit' | 'unloading' | 'completed' | 'cancelled' | 'timed_out';
+  pickupLocation: QuoteLocation;
+  destinationLocation: QuoteLocation;
+  requestedPickupTime?: string;
+  loadDetails?: QuoteInput['loadDetails'];
+  requestedVehicleClassId?: string;
+  quoteSnapshot?: QuoteResult['quoteSnapshot'];
+  selectedOwnerId?: string;
+  selectedVehicleId?: string;
+  acceptedOfferId?: string;
+  offers?: TripOffer[];
+};
+
+type RequestCreateResult = {
+  request: KuliRequest;
+  offers: TripOffer[];
+  waitingState?: {
+    status: string;
+    offerCount: number;
+    expiresAt: string;
+  };
+  idempotentReplay?: boolean;
+};
+
+type OfferActionResult = {
+  request: KuliRequest;
+  offer: TripOffer;
+  idempotentReplay?: boolean;
 };
 
 type VehicleDocument = {
@@ -184,11 +245,11 @@ const documentTypes: Array<{ type: VehicleDocumentType; label: string; detail: s
 ];
 
 const statusTone = (status: string): 'ready' | 'warn' | 'blocked' => {
-  if (['approved', 'completed', 'online_available', 'active'].includes(status)) {
+  if (['accepted', 'approved', 'completed', 'online_available', 'active'].includes(status)) {
     return 'ready';
   }
 
-  if (['rejected', 'suspended', 'cancelled', 'banned', 'deleted'].includes(status)) {
+  if (['declined', 'expired', 'rejected', 'suspended', 'cancelled', 'timed_out', 'banned', 'deleted'].includes(status)) {
     return 'blocked';
   }
 
@@ -903,6 +964,10 @@ const parsePositiveNumber = (value: string, fallback = 0) => {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 };
 
+const createIdempotencyKey = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+const activeRequestStatuses = ['pending', 'accepted', 'en_route_to_pickup', 'arrived_at_pickup', 'loading', 'in_transit', 'unloading'];
+
 const buildManualLocation = ({ addressText, lon, lat }: { addressText: string; lon: string; lat: string }): QuoteLocation => ({
   addressText: addressText.trim(),
   source: 'manual_pin',
@@ -950,6 +1015,7 @@ function CandidateCard({ candidate, capacityLabel }: { candidate: QuoteCandidate
 }
 
 function ClientQuoteScreen() {
+  const queryClient = useQueryClient();
   const [vehicleClassId, setVehicleClassId] = useState('');
   const [pickupAddress, setPickupAddress] = useState('Bole, Addis Ababa');
   const [pickupLon, setPickupLon] = useState('38.7903');
@@ -965,7 +1031,11 @@ function ClientQuoteScreen() {
   const [specialHandlingInstructions, setSpecialHandlingInstructions] = useState('');
   const [tip, setTip] = useState('0');
   const [quote, setQuote] = useState<QuoteResult | null>(null);
+  const [quoteInput, setQuoteInput] = useState<QuoteInput | null>(null);
+  const [selectedVehicleIds, setSelectedVehicleIds] = useState<string[]>([]);
+  const [requestResult, setRequestResult] = useState<RequestCreateResult | null>(null);
   const [pending, setPending] = useState(false);
+  const [requestPending, setRequestPending] = useState(false);
   const [error, setError] = useState('');
 
   const vehicleClassesQuery = useQuery({
@@ -983,12 +1053,31 @@ function ClientQuoteScreen() {
     }
   }, [vehicleClassId, vehicleClasses]);
 
-  const submitQuote = async () => {
+  const buildQuoteInput = (): QuoteInput => {
     const pickupLocation = buildManualLocation({ addressText: pickupAddress, lon: pickupLon, lat: pickupLat });
     const destinationLocation = buildManualLocation({ addressText: destinationAddress, lon: destinationLon, lat: destinationLat });
-    const coordinates = [...pickupLocation.point.coordinates, ...destinationLocation.point.coordinates];
 
-    if (!vehicleClassId || !pickupLocation.addressText || !destinationLocation.addressText) {
+    return {
+      pickupLocation,
+      destinationLocation,
+      requestedVehicleClassId: vehicleClassId,
+      requestedPickupTime: pickupWindow.trim() || undefined,
+      loadDetails: {
+        itemType,
+        estimatedWeightKg: parsePositiveNumber(estimatedWeightKg),
+        estimatedVolumeCubicMeters: parsePositiveNumber(estimatedVolumeCubicMeters),
+        loadingAssistanceRequested,
+        specialHandlingInstructions: specialHandlingInstructions.trim() || undefined
+      },
+      tip: parsePositiveNumber(tip)
+    };
+  };
+
+  const submitQuote = async () => {
+    const nextQuoteInput = buildQuoteInput();
+    const coordinates = [...nextQuoteInput.pickupLocation.point.coordinates, ...nextQuoteInput.destinationLocation.point.coordinates];
+
+    if (!vehicleClassId || !nextQuoteInput.pickupLocation.addressText || !nextQuoteInput.destinationLocation.addressText) {
       setError('Pickup, destination, and vehicle class are required.');
       return;
     }
@@ -1000,30 +1089,53 @@ function ClientQuoteScreen() {
 
     setPending(true);
     setError('');
+    setRequestResult(null);
 
     try {
       const result = (await kuliApi.request('/quotes', {
         method: 'POST',
-        body: {
-          pickupLocation,
-          destinationLocation,
-          requestedVehicleClassId: vehicleClassId,
-          loadDetails: {
-            itemType,
-            estimatedWeightKg: parsePositiveNumber(estimatedWeightKg),
-            estimatedVolumeCubicMeters: parsePositiveNumber(estimatedVolumeCubicMeters),
-            loadingAssistanceRequested,
-            specialHandlingInstructions: specialHandlingInstructions.trim() || undefined
-          },
-          tip: parsePositiveNumber(tip)
-        }
+        body: nextQuoteInput
       })) as ApiEnvelope<QuoteResult>;
 
       setQuote(result.data);
+      setQuoteInput(nextQuoteInput);
+      setSelectedVehicleIds(result.data.candidates.slice(0, 3).map((candidate) => candidate.vehicleId));
     } catch (quoteError) {
       setError(getErrorMessage(quoteError));
     } finally {
       setPending(false);
+    }
+  };
+
+  const toggleCandidateSelection = (vehicleId: string) => {
+    setSelectedVehicleIds((current) => (current.includes(vehicleId) ? current.filter((id) => id !== vehicleId) : [...current, vehicleId]));
+  };
+
+  const createRequest = async () => {
+    if (!quoteInput || selectedVehicleIds.length === 0) {
+      setError('Select at least one available truck before sending the request.');
+      return;
+    }
+
+    setRequestPending(true);
+    setError('');
+
+    try {
+      const result = (await kuliApi.request('/kuli-requests', {
+        method: 'POST',
+        idempotencyKey: createIdempotencyKey('client-request'),
+        body: {
+          ...quoteInput,
+          selectedVehicleIds
+        }
+      })) as ApiEnvelope<RequestCreateResult>;
+
+      setRequestResult(result.data);
+      await queryClient.invalidateQueries({ queryKey: ['kuli-requests', 'mine'] });
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      setRequestPending(false);
     }
   };
 
@@ -1115,10 +1227,355 @@ function ClientQuoteScreen() {
             ) : (
               <View style={styles.roleGrid}>
                 {quote.candidates.map((candidate) => (
-                  <CandidateCard candidate={candidate} capacityLabel={selectedCapacityLabel} key={candidate.vehicleId} />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: selectedVehicleIds.includes(candidate.vehicleId) }}
+                    key={candidate.vehicleId}
+                    onPress={() => toggleCandidateSelection(candidate.vehicleId)}
+                    style={[styles.selectableSurface, selectedVehicleIds.includes(candidate.vehicleId) && styles.selectableSurfaceActive]}
+                  >
+                    <CandidateCard candidate={candidate} capacityLabel={selectedCapacityLabel} />
+                  </Pressable>
                 ))}
               </View>
             )}
+            {quote.candidates.length > 0 ? (
+              <>
+                <Text style={styles.muted}>{selectedVehicleIds.length} selected for dispatch. Owners receive first-accept-wins offers.</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={requestPending || selectedVehicleIds.length === 0}
+                  onPress={createRequest}
+                  style={[styles.primaryButton, (requestPending || selectedVehicleIds.length === 0) && styles.buttonDisabled]}
+                >
+                  <Text style={styles.primaryButtonText}>{requestPending ? 'Sending...' : 'Send KULI request'}</Text>
+                </Pressable>
+              </>
+            ) : null}
+          </ShellCard>
+        ) : null}
+
+        {requestResult ? (
+          <ShellCard title="Waiting for owner">
+            <View style={styles.cardHeader}>
+              <View style={styles.flex}>
+                <Text style={styles.cardTitle}>{requestResult.request.requestCode}</Text>
+                <Text style={styles.muted}>{requestResult.offers.length} offer{requestResult.offers.length === 1 ? '' : 's'} sent</Text>
+              </View>
+              <StatusPill tone={statusTone(requestResult.request.status)}>{requestResult.request.status}</StatusPill>
+            </View>
+            <Text style={styles.muted}>
+              Offers expire {requestResult.waitingState?.expiresAt ? new Date(requestResult.waitingState.expiresAt).toLocaleTimeString() : 'soon'} if no owner accepts.
+            </Text>
+            <Text style={styles.noticeText}>You can follow or cancel this request from Home while it is still cancellable.</Text>
+          </ShellCard>
+        ) : null}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function RequestSummaryCard({
+  request,
+  onCancel
+}: {
+  request: KuliRequest;
+  onCancel: (request: KuliRequest) => void;
+}) {
+  const isCancellable = ['pending', 'accepted', 'en_route_to_pickup'].includes(request.status);
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardHeader}>
+        <View style={styles.flex}>
+          <Text style={styles.cardTitle}>{request.requestCode}</Text>
+          <Text style={styles.muted}>{request.pickupLocation?.addressText} to {request.destinationLocation?.addressText}</Text>
+        </View>
+        <StatusPill tone={statusTone(request.status)}>{request.status}</StatusPill>
+      </View>
+      <View style={styles.metricGrid}>
+        <View style={styles.metricBox}>
+          <Text style={styles.metricValue}>{request.quoteSnapshot?.currency ?? 'ETB'} {Number(request.quoteSnapshot?.totalEstimate ?? 0).toFixed(0)}</Text>
+          <Text style={styles.metricLabel}>estimate</Text>
+        </View>
+        <View style={styles.metricBox}>
+          <Text style={styles.metricValue}>{request.offers?.length ?? 0}</Text>
+          <Text style={styles.metricLabel}>offers</Text>
+        </View>
+      </View>
+      {request.status === 'pending' ? <Text style={styles.noticeText}>Waiting for an owner to accept. Open offers can still expire or be cancelled.</Text> : null}
+      {request.status === 'accepted' ? <Text style={styles.noticeText}>A truck owner accepted. Phase 5 will add the full trip timeline and messaging.</Text> : null}
+      <Pressable
+        accessibilityRole="button"
+        disabled={!isCancellable}
+        onPress={() => onCancel(request)}
+        style={[styles.secondaryButton, !isCancellable && styles.buttonDisabled]}
+      >
+        <Text style={styles.secondaryButtonText}>{isCancellable ? 'Cancel request' : 'Terminal request'}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
+  const queryClient = useQueryClient();
+  const [actionError, setActionError] = useState('');
+  const [pendingCancelId, setPendingCancelId] = useState('');
+
+  const requestsQuery = useQuery({
+    queryKey: ['kuli-requests', 'mine'],
+    queryFn: async () => ((await kuliApi.request('/kuli-requests/mine')) as ApiEnvelope<KuliRequest[]>).data
+  });
+
+  const requests = requestsQuery.data ?? [];
+  const activeRequests = requests.filter((request) => activeRequestStatuses.includes(request.status));
+  const recentRequests = requests.filter((request) => !activeRequestStatuses.includes(request.status)).slice(0, 3);
+
+  const cancelRequest = async (request: KuliRequest) => {
+    setPendingCancelId(request.id);
+    setActionError('');
+
+    try {
+      await kuliApi.request(`/kuli-requests/${request.id}/cancel`, {
+        method: 'POST',
+        body: {
+          reason: 'client_cancelled'
+        }
+      });
+      await queryClient.invalidateQueries({ queryKey: ['kuli-requests', 'mine'] });
+    } catch (cancelError) {
+      setActionError(getErrorMessage(cancelError));
+    } finally {
+      setPendingCancelId('');
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.cardHeader}>
+          <View style={styles.flex}>
+            <Text style={styles.eyebrow}>/client/home</Text>
+            <Text style={styles.title}>Track the request after dispatch.</Text>
+          </View>
+          <StatusPill tone={profile.accountStatus === 'active' ? 'ready' : 'warn'}>{profile.accountStatus}</StatusPill>
+        </View>
+        <ShellCard title="Authenticated profile">
+          <Text style={styles.copy}>{profile.fullName || profile.email}</Text>
+          <Text style={styles.muted}>{roleLabels[profile.role]} routed from backend `/me`.</Text>
+          <Text style={styles.muted}>{profile.email}</Text>
+        </ShellCard>
+        <ShellCard title="Active requests">
+          {requestsQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(requestsQuery.error)}</Text> : null}
+          {actionError ? <Text style={styles.errorText}>{actionError}</Text> : null}
+          {requestsQuery.isLoading ? <Text style={styles.muted}>Loading your requests...</Text> : null}
+          {activeRequests.length === 0 && !requestsQuery.isLoading ? <Text style={styles.muted}>No active request yet. Use Request to price and send one.</Text> : null}
+          <View style={styles.roleGrid}>
+            {activeRequests.map((request) => (
+              <RequestSummaryCard
+                key={request.id}
+                request={request}
+                onCancel={(nextRequest) => {
+                  if (!pendingCancelId) {
+                    cancelRequest(nextRequest);
+                  }
+                }}
+              />
+            ))}
+          </View>
+        </ShellCard>
+        {recentRequests.length ? (
+          <ShellCard title="Recent outcomes">
+            <View style={styles.roleGrid}>
+              {recentRequests.map((request) => (
+                <View key={request.id} style={styles.requestRow}>
+                  <View style={styles.flex}>
+                    <Text style={styles.fieldLabel}>{request.requestCode}</Text>
+                    <Text style={styles.muted}>{request.pickupLocation?.addressText}</Text>
+                  </View>
+                  <StatusPill tone={statusTone(request.status)}>{request.status}</StatusPill>
+                </View>
+              ))}
+            </View>
+          </ShellCard>
+        ) : null}
+        <Pressable accessibilityRole="button" onPress={onSignOut} style={styles.secondaryButton}>
+          <Text style={styles.secondaryButtonText}>Sign out</Text>
+        </Pressable>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function OwnerOfferCard({
+  offer,
+  onViewed,
+  onDecline,
+  onAccept,
+  pendingOfferId
+}: {
+  offer: TripOffer;
+  onViewed: (offer: TripOffer) => void;
+  onDecline: (offer: TripOffer) => void;
+  onAccept: (offer: TripOffer) => void;
+  pendingOfferId: string;
+}) {
+  const isPending = pendingOfferId === offer.id;
+  const expiresAt = offer.expiresAt ? new Date(offer.expiresAt).toLocaleTimeString() : 'soon';
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardHeader}>
+        <View style={styles.flex}>
+          <Text style={styles.cardTitle}>Offer {offer.id.slice(-6).toUpperCase()}</Text>
+          <Text style={styles.muted}>Request {offer.requestId}</Text>
+        </View>
+        <StatusPill tone={statusTone(offer.status)}>{offer.status}</StatusPill>
+      </View>
+      <View style={styles.metricGrid}>
+        <View style={styles.metricBox}>
+          <Text style={styles.metricValue}>{Number(offer.distanceKmAtOffer ?? 0).toFixed(1)}km</Text>
+          <Text style={styles.metricLabel}>pickup distance</Text>
+        </View>
+        <View style={styles.metricBox}>
+          <Text style={styles.metricValue}>{Math.round(offer.etaMinutesAtOffer ?? 0)}</Text>
+          <Text style={styles.metricLabel}>route minutes</Text>
+        </View>
+        <View style={styles.metricBox}>
+          <Text style={styles.metricValue}>{expiresAt}</Text>
+          <Text style={styles.metricLabel}>expires</Text>
+        </View>
+      </View>
+      <View style={styles.actionRow}>
+        <Pressable accessibilityRole="button" disabled={isPending || offer.status !== 'sent'} onPress={() => onViewed(offer)} style={[styles.secondaryButton, styles.actionButton, (isPending || offer.status !== 'sent') && styles.buttonDisabled]}>
+          <Text style={styles.secondaryButtonText}>Viewed</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" disabled={isPending} onPress={() => onDecline(offer)} style={[styles.secondaryButton, styles.actionButton, isPending && styles.buttonDisabled]}>
+          <Text style={styles.secondaryButtonText}>Decline</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" disabled={isPending} onPress={() => onAccept(offer)} style={[styles.primaryButton, styles.actionButton, isPending && styles.buttonDisabled]}>
+          <Text style={styles.primaryButtonText}>{isPending ? 'Working...' : 'Accept'}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function OwnerOffersScreen() {
+  const queryClient = useQueryClient();
+  const [pendingOfferId, setPendingOfferId] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [acceptedResult, setAcceptedResult] = useState<OfferActionResult | null>(null);
+
+  const offersQuery = useQuery({
+    queryKey: ['owner-offers'],
+    queryFn: async () => ((await kuliApi.request('/owner/offers')) as ApiEnvelope<TripOffer[]>).data
+  });
+
+  const ownerRequestsQuery = useQuery({
+    queryKey: ['kuli-requests', 'mine', 'owner'],
+    queryFn: async () => ((await kuliApi.request('/kuli-requests/mine')) as ApiEnvelope<KuliRequest[]>).data
+  });
+
+  const offers = offersQuery.data ?? [];
+  const acceptedTrips = (ownerRequestsQuery.data ?? []).filter((request) => activeRequestStatuses.includes(request.status));
+
+  const runOfferAction = async (offer: TripOffer, action: 'viewed' | 'decline' | 'accept') => {
+    setPendingOfferId(offer.id);
+    setError('');
+    setMessage('');
+
+    try {
+      if (action === 'viewed') {
+        await kuliApi.request(`/offers/${offer.id}/viewed`, {
+          method: 'POST'
+        });
+        setMessage('Offer marked viewed.');
+      }
+
+      if (action === 'decline') {
+        await kuliApi.request(`/offers/${offer.id}/decline`, {
+          method: 'POST',
+          body: {
+            declineReason: 'owner_declined_from_mobile'
+          }
+        });
+        setMessage('Offer declined and removed from the active inbox.');
+      }
+
+      if (action === 'accept') {
+        const result = (await kuliApi.request(`/offers/${offer.id}/accept`, {
+          method: 'POST',
+          idempotencyKey: createIdempotencyKey('offer-accept')
+        })) as ApiEnvelope<OfferActionResult>;
+        setAcceptedResult(result.data);
+        setMessage('Offer accepted. Competing offers will expire for this request.');
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ['owner-offers'] });
+      await queryClient.invalidateQueries({ queryKey: ['kuli-requests', 'mine', 'owner'] });
+    } catch (offerError) {
+      const errorCode = (offerError as { code?: string }).code;
+      setError(errorCode === 'REQUEST_ALREADY_ACCEPTED' ? 'Another owner already accepted this request. Refreshing your inbox will remove it.' : getErrorMessage(offerError));
+    } finally {
+      setPendingOfferId('');
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.eyebrow}>/owner/offers</Text>
+        <Text style={styles.title}>Accept fast, with confidence.</Text>
+        <Text style={styles.copy}>Open offers are first-accept-wins. Accepted requests become active trips and make the vehicle busy.</Text>
+
+        <ShellCard title="Offer inbox">
+          {offersQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(offersQuery.error)}</Text> : null}
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {message ? <Text style={styles.noticeText}>{message}</Text> : null}
+          {offersQuery.isLoading ? <Text style={styles.muted}>Loading offers...</Text> : null}
+          {offers.length === 0 && !offersQuery.isLoading ? <Text style={styles.muted}>No open offers. Keep an approved vehicle online to receive requests.</Text> : null}
+          <View style={styles.roleGrid}>
+            {offers.map((offer) => (
+              <OwnerOfferCard
+                key={offer.id}
+                offer={offer}
+                pendingOfferId={pendingOfferId}
+                onAccept={(nextOffer) => runOfferAction(nextOffer, 'accept')}
+                onDecline={(nextOffer) => runOfferAction(nextOffer, 'decline')}
+                onViewed={(nextOffer) => runOfferAction(nextOffer, 'viewed')}
+              />
+            ))}
+          </View>
+        </ShellCard>
+
+        {acceptedResult ? (
+          <ShellCard title="Accepted trip">
+            <View style={styles.cardHeader}>
+              <View style={styles.flex}>
+                <Text style={styles.cardTitle}>{acceptedResult.request.requestCode}</Text>
+                <Text style={styles.muted}>{acceptedResult.request.pickupLocation?.addressText} to {acceptedResult.request.destinationLocation?.addressText}</Text>
+              </View>
+              <StatusPill tone="ready">{acceptedResult.request.status}</StatusPill>
+            </View>
+            <Text style={styles.noticeText}>Phase 5 will add status updates, messages, and the full trip timeline.</Text>
+          </ShellCard>
+        ) : null}
+
+        {acceptedTrips.length ? (
+          <ShellCard title="Active trip detail">
+            <View style={styles.roleGrid}>
+              {acceptedTrips.map((request) => (
+                <View key={request.id} style={styles.requestRow}>
+                  <View style={styles.flex}>
+                    <Text style={styles.fieldLabel}>{request.requestCode}</Text>
+                    <Text style={styles.muted}>{request.pickupLocation?.addressText}</Text>
+                  </View>
+                  <StatusPill tone={statusTone(request.status)}>{request.status}</StatusPill>
+                </View>
+              ))}
+            </View>
           </ShellCard>
         ) : null}
       </ScrollView>
@@ -1144,7 +1601,7 @@ function FoundationScreen({ title, route, detail }: { title: string; route: stri
 function ClientTabs({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
   return (
     <Tab.Navigator screenOptions={tabScreenOptions}>
-      <Tab.Screen name="Home">{() => <HomeOverview profile={profile} onSignOut={onSignOut} />}</Tab.Screen>
+      <Tab.Screen name="Home">{() => <ClientHomeScreen profile={profile} onSignOut={onSignOut} />}</Tab.Screen>
       <Tab.Screen name="Request" component={ClientQuoteScreen} />
       {clientTabs.slice(2).map((tab) => (
         <Tab.Screen key={tab.key} name={tab.label}>
@@ -1160,7 +1617,8 @@ function OwnerTabs({ profile, onSignOut }: { profile: UserProfile; onSignOut: ()
     <Tab.Navigator screenOptions={tabScreenOptions}>
       <Tab.Screen name="Home">{() => <HomeOverview profile={profile} onSignOut={onSignOut} />}</Tab.Screen>
       <Tab.Screen name="Vehicles" component={OwnerVehiclesScreen} />
-      {ownerTabs.slice(2).map((tab) => (
+      <Tab.Screen name="Offers" component={OwnerOffersScreen} />
+      {ownerTabs.slice(3).map((tab) => (
         <Tab.Screen key={tab.key} name={tab.label}>
           {() => <FoundationScreen title={`Owner ${tab.label}`} route={tab.route} detail={tab.detail} />}
         </Tab.Screen>
@@ -1510,6 +1968,15 @@ const styles = StyleSheet.create({
   inlineField: {
     flex: 1
   },
+  actionRow: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  actionButton: {
+    flex: 1,
+    minHeight: 44,
+    paddingHorizontal: spacing.xs
+  },
   switchRow: {
     alignItems: 'center',
     backgroundColor: '#fffdf7',
@@ -1558,6 +2025,26 @@ const styles = StyleSheet.create({
     borderRadius: radii.sm,
     borderWidth: 1,
     gap: spacing.sm,
+    padding: spacing.sm
+  },
+  selectableSurface: {
+    borderColor: 'transparent',
+    borderRadius: radii.sm,
+    borderWidth: 2
+  },
+  selectableSurfaceActive: {
+    borderColor: colors.primary
+  },
+  requestRow: {
+    alignItems: 'center',
+    backgroundColor: '#fffdf7',
+    borderColor: colors.line,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'space-between',
+    minHeight: 62,
     padding: spacing.sm
   },
   metricGrid: {
