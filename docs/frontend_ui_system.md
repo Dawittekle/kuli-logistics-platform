@@ -126,3 +126,12 @@ Every phase should reuse the same concepts:
 - [x] Request-scoped messages stay inside the trip context and show retry after send failure.
 - [x] Notification center uses the same read/unread status language for client and owner.
 - [x] Notification preferences make in-app transactional alerts durable while external provider channels remain configurable.
+
+## Phase 6 Consistency Checklist
+
+- [x] Assistant ticket queue stays dense and scan-friendly for live calls.
+- [x] Ticket state actions expose only backend-allowed next states.
+- [x] Call notes and follow-up context stay beside ticket actions.
+- [x] Client lookup clearly separates existing app clients from caller snapshots.
+- [x] Assisted quote/search reuses Phase 3 pricing and candidate selection language.
+- [x] Assisted booking confirmation shows request, ticket link, and SMS intent together.

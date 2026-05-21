@@ -19,6 +19,7 @@ Related documents:
 - Frontend Phase 3 added the client quote/search workflow and admin pricing rule management.
 - Frontend Phase 4 added client request dispatch, waiting/cancel state, and the owner offer inbox.
 - Frontend Phase 5 added active trip status controls, timeline, messages, and notifications.
+- Frontend Phase 6 added the assistant hotline ticket and assisted booking console.
 
 ## Environment Readiness
 
@@ -203,19 +204,28 @@ Notes:
 
 Objective: build the assistant console for live phone workflows.
 
-- [ ] Assistant ticket queue with claim action.
-- [ ] Ticket detail with state transitions and notes.
-- [ ] Client lookup by phone.
-- [ ] Assisted booking wizard.
-- [ ] Assisted quote/search result step.
-- [ ] Assisted request confirmation and ticket/request linking.
+- [x] Assistant ticket queue with claim action.
+- [x] Ticket detail with state transitions and notes.
+- [x] Client lookup by phone.
+- [x] Assisted booking wizard.
+- [x] Assisted quote/search result step.
+- [x] Assisted request confirmation and ticket/request linking.
 
 Validation:
 
-- [ ] Assistant can create/claim ticket.
-- [ ] Assistant can create request on behalf of client.
-- [ ] Closed tickets cannot be edited.
-- [ ] SMS confirmation intent appears through API response/state.
+- [x] Assistant can create/claim ticket.
+- [x] Assistant can create request on behalf of client.
+- [x] Closed tickets cannot be edited.
+- [x] SMS confirmation intent appears through API response/state.
+
+Notes:
+
+- Assistant console now lists and filters hotline tickets, creates incoming/missed/manual tickets, and drives allowed ticket state transitions.
+- Ticket detail keeps call notes and follow-up context visible beside the queue.
+- Client lookup searches by phone and can attach an existing client id or fall back to a caller contact snapshot.
+- Assisted booking wizard uses manual pickup/destination coordinates, vehicle class, load details, assisted quote/search, candidate selection, and `/api/v1/assistant/bookings`.
+- Booking result displays linked ticket/request and SMS confirmation intent state.
+- Live staff credential testing remains deferred; no Supabase accounts were created during this phase.
 
 ### Frontend Phase 7: Ratings, Reports, Disputes, and Payment Records
 
