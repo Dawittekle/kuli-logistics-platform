@@ -51,9 +51,9 @@ export default ({ config }) => ({
   },
   extra: {
     kuli: {
-      apiBaseUrl: env.MOBILE_APP_API_BASE_URL ?? process.env.MOBILE_APP_API_BASE_URL ?? 'http://localhost:4000/api/v1',
-      supabaseUrl: env.MOBILE_APP_SUPABASE_URL ?? process.env.MOBILE_APP_SUPABASE_URL ?? '',
-      supabaseAnonKey: env.MOBILE_APP_SUPABASE_ANON_KEY ?? process.env.MOBILE_APP_SUPABASE_ANON_KEY ?? ''
+      apiBaseUrl: process.env.MOBILE_APP_API_BASE_URL ?? env.MOBILE_APP_API_BASE_URL ?? 'http://localhost:4000/api/v1',
+      supabaseUrl: process.env.MOBILE_APP_SUPABASE_URL ?? env.MOBILE_APP_SUPABASE_URL ?? '',
+      supabaseAnonKey: process.env.MOBILE_APP_SUPABASE_ANON_KEY ?? env.MOBILE_APP_SUPABASE_ANON_KEY ?? ''
     }
   }
 });

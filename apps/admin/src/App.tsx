@@ -61,6 +61,11 @@ type VehicleClass = {
   id: string;
   name: string;
   slug?: string;
+  description?: string;
+  capacityKg?: number;
+  capacityCubicMeters?: number;
+  active?: boolean;
+  displayOrder?: number;
   defaultPricing?: {
     baseFare?: number;
     perKmRate?: number;
@@ -307,6 +312,7 @@ const adminRoutes: RouteItem[] = [
   { path: '/admin/dashboard', label: 'Dashboard', icon: Gauge, detail: 'Operational metrics and release readiness.' },
   { path: '/admin/users', label: 'Users', icon: UsersRound, detail: 'Role, status, and account controls.' },
   { path: '/admin/vehicles/pending', label: 'Verification', icon: Truck, detail: 'Document review and approve/reject decisions.' },
+  { path: '/admin/vehicle-classes', label: 'Vehicle Classes', icon: Truck, detail: 'Capacity bands used by onboarding, pricing, and matching.' },
   { path: '/admin/pricing', label: 'Pricing', icon: ClipboardList, detail: 'Versioned pricing rules and audit-backed edits.' },
   { path: '/admin/reports', label: 'Reports', icon: FileWarning, detail: 'Trip reports, evidence links, and admin outcomes.' },
   { path: '/admin/payments', label: 'Payments', icon: CreditCard, detail: 'Cash confirmations, disputes, and resolution notes.' },
@@ -936,6 +942,233 @@ const parseRate = (value: string, fallback = 0) => {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 };
 
+function AdminVehicleClassesPanel({ enabled }: { enabled: boolean }) {
+  const queryClient = useQueryClient();
+  const [selectedClassId, setSelectedClassId] = useState('');
+  const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [description, setDescription] = useState('');
+  const [capacityKg, setCapacityKg] = useState('1200');
+  const [capacityCubicMeters, setCapacityCubicMeters] = useState('10');
+  const [displayOrder, setDisplayOrder] = useState('100');
+  const [baseFare, setBaseFare] = useState('1200');
+  const [perKmRate, setPerKmRate] = useState('75');
+  const [minimumFare, setMinimumFare] = useState('1800');
+  const [pendingAction, setPendingAction] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const vehicleClassesQuery = useQuery({
+    enabled,
+    queryKey: ['vehicle-classes'],
+    queryFn: async () => ((await kuliApi.vehicleClasses()) as ApiEnvelope<VehicleClass[]>).data
+  });
+
+  const vehicleClasses = vehicleClassesQuery.data ?? [];
+  const selectedClass = selectedClassId ? vehicleClasses.find((vehicleClass) => vehicleClass.id === selectedClassId) : undefined;
+
+  useEffect(() => {
+    if (!selectedClass) {
+      return;
+    }
+
+    setSelectedClassId(selectedClass.id);
+    setName(selectedClass.name ?? '');
+    setSlug(selectedClass.slug ?? '');
+    setDescription(selectedClass.description ?? '');
+    setCapacityKg(String(selectedClass.capacityKg ?? 1200));
+    setCapacityCubicMeters(String(selectedClass.capacityCubicMeters ?? 10));
+    setDisplayOrder(String(selectedClass.displayOrder ?? 100));
+    setBaseFare(String(selectedClass.defaultPricing?.baseFare ?? 1200));
+    setPerKmRate(String(selectedClass.defaultPricing?.perKmRate ?? 75));
+    setMinimumFare(String(selectedClass.defaultPricing?.minimumFare ?? 1800));
+  }, [selectedClass?.id]);
+
+  if (!enabled) {
+    return null;
+  }
+
+  const payload = () => ({
+    name: name.trim(),
+    slug: slug.trim() || undefined,
+    description: description.trim() || undefined,
+    capacityKg: parseRate(capacityKg),
+    capacityCubicMeters: parseRate(capacityCubicMeters),
+    displayOrder: parseRate(displayOrder, 100),
+    defaultPricing: {
+      baseFare: parseRate(baseFare),
+      perKmRate: parseRate(perKmRate),
+      minimumFare: parseRate(minimumFare)
+    },
+    active: true
+  });
+
+  const saveClass = async () => {
+    if (!name.trim()) {
+      setError('Vehicle class name is required.');
+      return;
+    }
+
+    setPendingAction('save');
+    setError('');
+    setMessage('');
+
+    try {
+      const endpoint = selectedClass ? `/admin/vehicle-classes/${selectedClass.id}` : '/admin/vehicle-classes';
+      const method = selectedClass ? 'PATCH' : 'POST';
+      const result = (await kuliApi.request(endpoint, {
+        method,
+        body: payload()
+      })) as ApiEnvelope<VehicleClass>;
+
+      setSelectedClassId(result.data.id);
+      setMessage(selectedClass ? 'Vehicle class updated.' : 'Vehicle class created.');
+      await queryClient.invalidateQueries({ queryKey: ['vehicle-classes'] });
+    } catch (saveError) {
+      setError(getErrorMessage(saveError));
+    } finally {
+      setPendingAction('');
+    }
+  };
+
+  const deactivateClass = async () => {
+    if (!selectedClass) {
+      setError('Select a vehicle class first.');
+      return;
+    }
+
+    setPendingAction('delete');
+    setError('');
+    setMessage('');
+
+    try {
+      await kuliApi.request(`/admin/vehicle-classes/${selectedClass.id}`, {
+        method: 'DELETE'
+      });
+      setSelectedClassId('');
+      setName('');
+      setSlug('');
+      setDescription('');
+      setMessage('Vehicle class deactivated.');
+      await queryClient.invalidateQueries({ queryKey: ['vehicle-classes'] });
+    } catch (deleteError) {
+      setError(getErrorMessage(deleteError));
+    } finally {
+      setPendingAction('');
+    }
+  };
+
+  return (
+    <section className="panel panel--wide">
+      <div className="panel__header">
+        <div>
+          <p className="eyebrow">Vehicle classes</p>
+          <h2>Capacity bands</h2>
+        </div>
+        <StatusBadge tone={vehicleClassesQuery.isError ? 'blocked' : vehicleClasses.length ? 'ready' : 'warn'}>
+          {vehicleClassesQuery.isError ? 'Needs token' : `${vehicleClasses.length} active`}
+        </StatusBadge>
+      </div>
+      {vehicleClassesQuery.isError ? <p className="field-error">{getErrorMessage(vehicleClassesQuery.error)}</p> : null}
+      {error ? <p className="field-error" role="alert">{error}</p> : null}
+      {message ? <p className="muted">{message}</p> : null}
+      <div className="split-panel">
+        <div className="queue-list">
+          <button
+            className={`queue-item ${!selectedClassId ? 'is-selected' : ''}`}
+            onClick={() => {
+              setSelectedClassId('');
+              setName('');
+              setSlug('');
+              setDescription('');
+              setError('');
+              setMessage('');
+            }}
+            type="button"
+          >
+            <strong>New vehicle class</strong>
+            <span>Create a capacity band for owners and quote rules.</span>
+            <StatusBadge tone="muted">Draft</StatusBadge>
+          </button>
+          {vehicleClasses.map((vehicleClass) => (
+            <button
+              className={`queue-item ${selectedClass?.id === vehicleClass.id ? 'is-selected' : ''}`}
+              key={vehicleClass.id}
+              onClick={() => {
+                setSelectedClassId(vehicleClass.id);
+                setError('');
+                setMessage('');
+              }}
+              type="button"
+            >
+              <strong>{vehicleClass.name}</strong>
+              <span>{vehicleClass.capacityKg ?? 0}kg / {vehicleClass.capacityCubicMeters ?? 0}m3 / {vehicleClass.slug}</span>
+              <StatusBadge tone="ready">Active</StatusBadge>
+            </button>
+          ))}
+        </div>
+        <div className="decision-panel">
+          <div className="detail-heading">
+            <div>
+              <h3>{selectedClass ? selectedClass.name : 'New class'}</h3>
+              <p className="muted">Vehicle classes feed owner onboarding, load validation, matching, and pricing rules.</p>
+            </div>
+            {selectedClass ? <StatusBadge tone="ready">Active</StatusBadge> : <StatusBadge tone="muted">Draft</StatusBadge>}
+          </div>
+          <div className="support-form-grid">
+            <label>
+              Name
+              <input onChange={(event) => setName(event.target.value)} value={name} />
+            </label>
+            <label>
+              Slug
+              <input onChange={(event) => setSlug(event.target.value)} value={slug} />
+            </label>
+            <label>
+              Display order
+              <input onChange={(event) => setDisplayOrder(event.target.value)} type="number" value={displayOrder} />
+            </label>
+            <label>
+              Capacity kg
+              <input onChange={(event) => setCapacityKg(event.target.value)} type="number" value={capacityKg} />
+            </label>
+            <label>
+              Volume m3
+              <input onChange={(event) => setCapacityCubicMeters(event.target.value)} type="number" value={capacityCubicMeters} />
+            </label>
+            <label>
+              Base fare
+              <input onChange={(event) => setBaseFare(event.target.value)} type="number" value={baseFare} />
+            </label>
+            <label>
+              Per km
+              <input onChange={(event) => setPerKmRate(event.target.value)} type="number" value={perKmRate} />
+            </label>
+            <label>
+              Minimum fare
+              <input onChange={(event) => setMinimumFare(event.target.value)} type="number" value={minimumFare} />
+            </label>
+          </div>
+          <label className="decision-label">
+            Description
+            <textarea onChange={(event) => setDescription(event.target.value)} value={description} />
+          </label>
+          <div className="decision-actions">
+            <button className="icon-button" disabled={Boolean(pendingAction)} onClick={saveClass} type="button">
+              {pendingAction === 'save' ? 'Saving...' : selectedClass ? 'Update class' : 'Create class'}
+            </button>
+            {selectedClass ? (
+              <button className="danger-button" disabled={Boolean(pendingAction)} onClick={deactivateClass} type="button">
+                {pendingAction === 'delete' ? 'Deactivating...' : 'Deactivate'}
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 const createDraftFromClasses = (vehicleClasses: VehicleClass[]): PricingDraft =>
   vehicleClasses.reduce<PricingDraft>((draft, vehicleClass) => {
     const defaults = vehicleClass.defaultPricing ?? {};
@@ -1514,7 +1747,7 @@ function AdminTripOversightPanel({ enabled }: { enabled: boolean }) {
   const requestsQuery = useQuery({
     enabled,
     queryKey: ['admin-kuli-requests'],
-    queryFn: async () => ((await kuliApi.request('/kuli-requests/mine')) as ApiEnvelope<KuliRequest[]>).data
+    queryFn: async () => ((await kuliApi.request('/admin/kuli-requests')) as ApiEnvelope<KuliRequest[]>).data
   });
 
   const requests = requestsQuery.data ?? [];
@@ -2298,6 +2531,7 @@ function StaffWorkspace({ profile, onSignOut }: { profile: UserProfile; onSignOu
           <AdminDashboardPanel enabled={profile.role === 'admin'} />
           <AssistantSupportPanel enabled={profile.role === 'assistant'} profile={profile} />
           <AdminVerificationPanel enabled={profile.role === 'admin'} />
+          <AdminVehicleClassesPanel enabled={profile.role === 'admin'} />
           <AdminPricingPanel enabled={profile.role === 'admin'} />
           <AdminTrustFinancePanel enabled={profile.role === 'admin'} />
           <AdminTripOversightPanel enabled={profile.role === 'admin'} />

@@ -801,6 +801,13 @@ function DocumentUploadField({
         }
       })) as ApiEnvelope<{ file: { id: string }; upload: { url: string } }>;
 
+      await kuliApi.request(`/files/${intent.data.file.id}/complete`, {
+        method: 'POST',
+        body: {
+          uploadedSizeBytes: parsedSize
+        }
+      });
+
       await kuliApi.request(`/vehicles/${vehicleId}/documents`, {
         method: 'POST',
         body: {
@@ -809,7 +816,7 @@ function DocumentUploadField({
         }
       });
 
-      setMessage('Document metadata attached. Local-dev upload URL was reserved by the backend.');
+      setMessage('Document metadata attached and marked uploaded. Local-dev upload URL was reserved by the backend.');
       onUploaded();
     } catch (uploadError) {
       setError(getErrorMessage(uploadError));
@@ -855,6 +862,7 @@ function OwnerVehiclesScreen() {
   const [capacityCubicMeters, setCapacityCubicMeters] = useState('10');
   const [description, setDescription] = useState('');
   const [activeVehicleId, setActiveVehicleId] = useState('');
+  const [activeVehiclePendingId, setActiveVehiclePendingId] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -916,6 +924,12 @@ function OwnerVehiclesScreen() {
       })) as ApiEnvelope<Vehicle>;
 
       setActiveVehicleId(result.data.id);
+      await kuliApi.request('/owners/me/active-vehicle', {
+        method: 'PATCH',
+        body: {
+          activeVehicleId: result.data.id
+        }
+      });
       setNotice('Vehicle submitted for admin verification.');
       setLicensePlate('');
       setDescription('');
@@ -924,6 +938,27 @@ function OwnerVehiclesScreen() {
       setError(getErrorMessage(createError));
     } finally {
       setPending(false);
+    }
+  };
+
+  const selectActiveVehicle = async (vehicleId: string) => {
+    setActiveVehiclePendingId(vehicleId);
+    setError('');
+    setNotice('');
+
+    try {
+      await kuliApi.request('/owners/me/active-vehicle', {
+        method: 'PATCH',
+        body: {
+          activeVehicleId: vehicleId
+        }
+      });
+      setActiveVehicleId(vehicleId);
+      setNotice('Active vehicle updated for owner workflows.');
+    } catch (activeVehicleError) {
+      setError(getErrorMessage(activeVehicleError));
+    } finally {
+      setActiveVehiclePendingId('');
     }
   };
 
@@ -986,7 +1021,7 @@ function OwnerVehiclesScreen() {
           {vehicles.length === 0 ? <Text style={styles.muted}>No vehicles submitted yet.</Text> : null}
           <View style={styles.roleGrid}>
             {vehicles.map((vehicle) => (
-              <Pressable accessibilityRole="button" key={vehicle.id} onPress={() => setActiveVehicleId(vehicle.id)}>
+              <Pressable accessibilityRole="button" disabled={activeVehiclePendingId === vehicle.id} key={vehicle.id} onPress={() => selectActiveVehicle(vehicle.id)}>
                 <VehicleCard vehicle={vehicle} onToggleAvailability={toggleAvailability} />
               </Pressable>
             ))}
