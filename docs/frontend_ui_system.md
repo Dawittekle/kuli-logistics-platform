@@ -145,3 +145,13 @@ Every phase should reuse the same concepts:
 - [x] Owner ratings summary uses compact average/count metrics with recent review rows.
 - [x] Admin report and payment queues use the existing dense queue/detail pattern and require audit notes for resolution.
 - [x] Cash/manual payment language stays explicit; the UI does not imply a digital gateway exists in v1.
+
+## Phase 8 Consistency Checklist
+
+- [x] Admin metrics are operational queue signals, not vanity charts.
+- [x] Release readiness keeps failed and warning checks visible instead of collapsing them into a single success banner.
+- [x] User management combines filters, selected detail, and status action in one keyboard-reachable surface.
+- [x] Trip oversight exposes request participants, estimate, and immutable status events without admin-only shortcut actions.
+- [x] Audit log inspection uses compact queue/detail layout and preserves metadata in a readable monospace block.
+- [x] Responsive grids collapse from desktop density to tablet and mobile-safe single-column layouts.
+- [x] Status labels remain text plus color, so readiness, warnings, and blocked states are understandable without color alone.

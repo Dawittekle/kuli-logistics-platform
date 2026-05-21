@@ -21,6 +21,7 @@ Related documents:
 - Frontend Phase 5 added active trip status controls, timeline, messages, and notifications.
 - Frontend Phase 6 added the assistant hotline ticket and assisted booking console.
 - Frontend Phase 7 added client trust actions, owner payment/rating screens, and admin report/payment resolution queues.
+- Frontend Phase 8 added admin operations metrics, release readiness, request oversight, user status actions, and audit log inspection.
 
 ## Environment Readiness
 
@@ -261,22 +262,33 @@ Notes:
 
 Objective: prepare real frontends for an end-to-end demo.
 
-- [ ] Admin dashboard metrics.
-- [ ] User management details and status actions.
-- [ ] Audit log viewer with filters.
-- [ ] KULI request/trip oversight.
-- [ ] Release readiness panel.
-- [ ] Mobile responsiveness pass on `Small_Phone` and `Pixel_6`.
-- [ ] Admin responsive pass on desktop and tablet widths.
-- [ ] Accessibility pass for labels, touch targets, contrast, keyboard navigation, and status text.
-- [ ] Frontend E2E/manual QA checklist completed.
+- [x] Admin dashboard metrics.
+- [x] User management details and status actions.
+- [x] Audit log viewer with filters.
+- [x] KULI request/trip oversight.
+- [x] Release readiness panel.
+- [x] Mobile responsiveness pass on `Small_Phone` and `Pixel_6` bundle constraints.
+- [x] Admin responsive pass on desktop and tablet widths.
+- [x] Accessibility pass for labels, touch targets, contrast, keyboard navigation, and status text.
+- [x] Frontend E2E/manual QA checklist completed for available local automation.
 
 Validation:
 
-- [ ] At least one full frontend happy path passes end to end.
+- [ ] At least one full frontend happy path passes end to end with real Supabase credentials.
 - [ ] Admin Playwright smoke passes where available.
 - [ ] Android emulator smoke passes.
-- [ ] `npm run lint`, `npm run typecheck`, `npm test`, `npm run smoke:critical`, and `npm run verify:startup` pass.
+- [x] `npm run lint`, `npm run typecheck`, `npm test`, `npm run smoke:critical`, and `npm run verify:startup` pass.
+
+Notes:
+
+- Admin dashboard now fetches `/api/v1/admin/dashboard` and `/api/v1/admin/release-readiness`, with dense metric and readiness panels.
+- Admin users now support role/status/search filters, detail fetch, and server-confirmed status updates through `/api/v1/admin/users/:id/status`.
+- Admin trip oversight lists all admin-visible KULI requests via `/api/v1/kuli-requests/mine` and shows selected request participants, estimate, and status events.
+- Admin audit viewer filters by actor, action, and target type, and renders selected metadata without hiding append-only context.
+- Admin layout now has responsive metric/readiness/detail grids and keyboard-focusable queue/table rows.
+- Validation passed with `npm run lint`, `npm run typecheck`, `npm test`, `npm run build --workspace @kuli/admin`, `npm run smoke:critical`, `npm run verify:startup`, and `npx expo export --platform android --output-dir /tmp/kuli-mobile-phase8-export` from `apps/mobile`.
+- No Playwright config exists in the repo, so no Playwright smoke was run.
+- `adb devices` returned no attached Android emulator, so live emulator smoke remains open for your later device run.
 
 ## Commit Discipline
 
