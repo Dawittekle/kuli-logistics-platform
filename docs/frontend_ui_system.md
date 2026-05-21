@@ -117,3 +117,12 @@ Every phase should reuse the same concepts:
 - [x] Owner offer cards prioritize distance, ETA, expiration, and first-accept-wins actions.
 - [x] Acceptance conflicts render as recoverable inbox messages, not silent failures.
 - [x] Accepted-trip summaries defer full timeline/messaging work to Phase 5 while keeping route/status visible.
+
+## Phase 5 Consistency Checklist
+
+- [x] Trip timelines render immutable status events with actor/reason context.
+- [x] Owner status controls expose only the next valid manual transition plus cancellation.
+- [x] Client active trip panels remain read-oriented and do not expose owner-only commands.
+- [x] Request-scoped messages stay inside the trip context and show retry after send failure.
+- [x] Notification center uses the same read/unread status language for client and owner.
+- [x] Notification preferences make in-app transactional alerts durable while external provider channels remain configurable.

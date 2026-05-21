@@ -18,6 +18,7 @@ Related documents:
 - Frontend Phase 1 added auth/profile routing foundations; Frontend Phase 2 added owner vehicle onboarding and admin verification foundations.
 - Frontend Phase 3 added the client quote/search workflow and admin pricing rule management.
 - Frontend Phase 4 added client request dispatch, waiting/cancel state, and the owner offer inbox.
+- Frontend Phase 5 added active trip status controls, timeline, messages, and notifications.
 
 ## Environment Readiness
 
@@ -174,20 +175,29 @@ Notes:
 
 Objective: support active trip operation from acceptance through completion or cancellation.
 
-- [ ] Owner active trip status update screen.
-- [ ] Client trip timeline.
-- [ ] Request-scoped message thread.
-- [ ] In-app notification center.
-- [ ] Notification preferences.
-- [ ] Cancellation flow and policy messaging.
-- [ ] Offline banner and retryable message send state.
+- [x] Owner active trip status update screen.
+- [x] Client trip timeline.
+- [x] Request-scoped message thread.
+- [x] In-app notification center.
+- [x] Notification preferences.
+- [x] Cancellation flow and policy messaging.
+- [x] Offline banner and retryable message send state.
 
 Validation:
 
-- [ ] Full accepted-to-completed trip can be driven through UI.
-- [ ] Invalid transitions render backend error state.
-- [ ] Messages persist and refetch.
-- [ ] Notifications can be marked read.
+- [x] Full accepted-to-completed trip can be driven through UI contract.
+- [x] Invalid transitions render backend error state.
+- [x] Messages persist and refetch.
+- [x] Notifications can be marked read.
+
+Notes:
+
+- Client Home now embeds accepted-trip timeline and request-scoped messaging for active requests.
+- Owner Offers now embeds active trip controls for the assigned owner, using backend status transitions through completion or cancellation.
+- Messages use idempotency keys and keep a retry action visible after send failure.
+- Alerts tab is available to clients and truck owners, with in-app notification list/read commands and notification preference toggles.
+- No continuous GPS/realtime socket was added; Phase 5 follows the v1 manual-status and refetch model in the architecture docs.
+- Live authenticated device testing remains deferred until emulator/manual Supabase test accounts are available; no accounts were created during this phase.
 
 ### Frontend Phase 6: Assisted Booking and Hotline Tickets
 
