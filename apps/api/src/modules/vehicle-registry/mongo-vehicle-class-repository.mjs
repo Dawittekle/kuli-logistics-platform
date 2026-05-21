@@ -12,6 +12,10 @@ const normalize = (document) => {
   };
 };
 
+const notDeleted = () => ({
+  $or: [{ deletedAt: { $exists: false } }, { deletedAt: null }]
+});
+
 export class MongoVehicleClassRepository {
   constructor({ db }) {
     this.collection = db.collection(collectionName);
@@ -33,18 +37,18 @@ export class MongoVehicleClassRepository {
 
   async listActive() {
     const documents = await this.collection
-      .find({ active: true, deletedAt: { $exists: false } }, { sort: { displayOrder: 1, name: 1 } })
+      .find({ active: true, ...notDeleted() }, { sort: { displayOrder: 1, name: 1 } })
       .toArray();
 
     return documents.map(normalize);
   }
 
   async findById(id) {
-    return normalize(await this.collection.findOne({ _id: id, deletedAt: { $exists: false } }));
+    return normalize(await this.collection.findOne({ _id: id, ...notDeleted() }));
   }
 
   async findBySlug(slug) {
-    return normalize(await this.collection.findOne({ slug, deletedAt: { $exists: false } }));
+    return normalize(await this.collection.findOne({ slug, ...notDeleted() }));
   }
 
   async save(vehicleClass) {

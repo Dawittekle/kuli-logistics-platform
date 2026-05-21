@@ -34,6 +34,29 @@ export class MongoFileRepository {
     return normalize(await this.collection.findOne({ _id: id, deletedAt: { $exists: false } }));
   }
 
+  async complete({ fileId, update = {} }) {
+    const now = new Date().toISOString();
+    const result = await this.collection.findOneAndUpdate(
+      {
+        _id: fileId,
+        deletedAt: { $exists: false }
+      },
+      {
+        $set: {
+          ...update,
+          status: 'uploaded',
+          completedAt: now,
+          updatedAt: now
+        }
+      },
+      {
+        returnDocument: 'after'
+      }
+    );
+
+    return normalize(result);
+  }
+
   async save(fileRecord) {
     const now = new Date().toISOString();
     const record = {

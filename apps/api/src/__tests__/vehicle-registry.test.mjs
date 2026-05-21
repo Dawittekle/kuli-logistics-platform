@@ -24,6 +24,25 @@ class MemoryRepository {
     this.records.set(saved.id, saved);
     return saved;
   }
+
+  async complete({ fileId, update = {} }) {
+    const record = this.records.get(fileId);
+
+    if (!record) {
+      return null;
+    }
+
+    const completed = {
+      ...record,
+      ...update,
+      status: 'uploaded',
+      completedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    this.records.set(fileId, completed);
+    return completed;
+  }
 }
 
 class MemoryVehicleClassRepository extends MemoryRepository {
@@ -35,6 +54,32 @@ class MemoryVehicleClassRepository extends MemoryRepository {
     return Array.from(this.records.values())
       .filter((record) => record.active && !record.deletedAt)
       .sort((left, right) => left.displayOrder - right.displayOrder);
+  }
+}
+
+class MongoLikeVehicleClassRepository extends MemoryVehicleClassRepository {
+  async findById(id) {
+    const record = this.records.get(id);
+
+    if (!record || Object.prototype.hasOwnProperty.call(record, 'deletedAt')) {
+      return null;
+    }
+
+    return record;
+  }
+
+  async save(record) {
+    const now = new Date().toISOString();
+    const serialized = Object.fromEntries(
+      Object.entries({
+        ...record,
+        createdAt: record.createdAt ?? now,
+        updatedAt: now
+      }).map(([key, value]) => [key, value === undefined ? null : value])
+    );
+
+    this.records.set(serialized.id, serialized);
+    return serialized;
   }
 }
 
@@ -65,10 +110,10 @@ class MemoryAuditLogRepository {
   }
 }
 
-const createService = () => {
+const createService = ({ vehicleClassRepository = new MemoryVehicleClassRepository() } = {}) => {
   const auditLogRepository = new MemoryAuditLogRepository();
   const service = new VehicleRegistryService({
-    vehicleClassRepository: new MemoryVehicleClassRepository(),
+    vehicleClassRepository,
     vehicleRepository: new MemoryVehicleRepository(),
     vehicleDocumentRepository: new MemoryVehicleDocumentRepository(),
     fileRepository: new MemoryRepository(),
@@ -185,6 +230,50 @@ test('admin rejection requires a reason and keeps vehicle offline', async () => 
   assert.equal(rejected.rejectionReason, 'Registration certificate is unreadable.');
 });
 
+test('vehicle class update remains editable before explicit deactivation', async () => {
+  const { service } = createService({
+    vehicleClassRepository: new MongoLikeVehicleClassRepository()
+  });
+
+  const vehicleClass = await service.createVehicleClass({
+    actor: admin,
+    input: {
+      slug: 'compact-van-test',
+      name: 'Compact Van Test',
+      active: true
+    }
+  });
+
+  const updated = await service.updateVehicleClass({
+    actor: admin,
+    vehicleClassId: vehicleClass.id,
+    input: {
+      description: 'Updated without deactivation.'
+    }
+  });
+
+  assert.equal(updated.description, 'Updated without deactivation.');
+
+  const deactivated = await service.deactivateVehicleClass({
+    actor: admin,
+    vehicleClassId: vehicleClass.id
+  });
+
+  assert.equal(deactivated.active, false);
+
+  await assert.rejects(
+    () =>
+      service.updateVehicleClass({
+        actor: admin,
+        vehicleClassId: vehicleClass.id,
+        input: {
+          description: 'Should stay hidden after deactivation.'
+        }
+      }),
+    (error) => error instanceof AppError && error.code === 'VEHICLE_CLASS_NOT_FOUND'
+  );
+});
+
 test('vehicle document upload intent validates type and size', async () => {
   const { service } = createService();
 
@@ -238,4 +327,66 @@ test('admin file preview creates signed url and audit log', async () => {
   assert.equal(signedUrl.fileId, intent.file.id);
   assert.match(signedUrl.url, /^local-dev:\/\/signed-read\//);
   assert.equal(auditLogRepository.entries[0].action, 'file.signed_url.created');
+});
+
+test('file upload completion marks file metadata uploaded', async () => {
+  const { service } = createService();
+  const intent = await service.createUploadIntent({
+    actor: truckOwner,
+    input: {
+      vehicleId: 'veh_001',
+      type: 'insurance',
+      mimeType: 'application/pdf',
+      sizeBytes: 4096,
+      originalFileName: 'insurance.pdf'
+    }
+  });
+
+  const completed = await service.completeFileUpload({
+    actor: truckOwner,
+    fileId: intent.file.id,
+    input: {
+      checksum: 'sha256-local-test',
+      uploadedSizeBytes: 4096
+    }
+  });
+
+  assert.equal(completed.status, 'uploaded');
+  assert.equal(completed.checksum, 'sha256-local-test');
+});
+
+test('admin vehicle status update requires reason for suspension and audits', async () => {
+  const { service, auditLogRepository } = createService();
+  const [vehicleClass] = await service.seedDefaultVehicleClasses();
+  const vehicle = await service.createVehicle({
+    actor: truckOwner,
+    input: {
+      vehicleClassId: vehicleClass.id,
+      licensePlate: 'AA-77889'
+    }
+  });
+
+  await assert.rejects(
+    () =>
+      service.updateAdminVehicleStatus({
+        actor: admin,
+        vehicleId: vehicle.id,
+        input: {
+          availabilityStatus: vehicleAvailabilityStatuses.suspended
+        }
+      }),
+    (error) => error instanceof AppError && error.code === 'VEHICLE_STATUS_REASON_REQUIRED'
+  );
+
+  const suspended = await service.updateAdminVehicleStatus({
+    actor: admin,
+    vehicleId: vehicle.id,
+    input: {
+      availabilityStatus: vehicleAvailabilityStatuses.suspended,
+      reason: 'Document review escalated.'
+    }
+  });
+
+  assert.equal(suspended.availabilityStatus, vehicleAvailabilityStatuses.suspended);
+  assert.equal(auditLogRepository.entries[0].action, 'vehicle.status.updated');
 });

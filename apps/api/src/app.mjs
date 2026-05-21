@@ -31,6 +31,7 @@ import { MongoTripOfferRepository } from './modules/logistics/mongo-trip-offer-r
 import { QuoteService } from './modules/logistics/quote-service.mjs';
 import { MarketplaceService } from './modules/logistics/marketplace-service.mjs';
 import { MongoNotificationRepository } from './modules/notifications/mongo-notification-repository.mjs';
+import { MongoDeviceTokenRepository } from './modules/notifications/mongo-device-token-repository.mjs';
 import { MongoNotificationIntentRepository } from './modules/notifications/mongo-notification-intent-repository.mjs';
 import { createExternalNotificationAdapters } from './modules/notifications/notification-adapters.mjs';
 import { OperationsService } from './modules/operations/operations-service.mjs';
@@ -87,6 +88,21 @@ const createRouteRequest = (context) => async (request) => {
     });
   }
 
+  if (method === 'GET' && path === '/api/v1/config/public') {
+    return success({
+      apiVersion: 'v1',
+      environment: context.env.nodeEnv,
+      authMode: context.env.supabaseJwtMode,
+      features: {
+        digitalPayments: false,
+        realtimeTracking: false,
+        manualTripStatus: true,
+        assistedBooking: true,
+        cashPaymentRecords: true
+      }
+    });
+  }
+
   if (method === 'GET' && path === '/api/v1/vehicle-classes') {
     return success(await context.vehicleRegistryService.listActiveVehicleClasses());
   }
@@ -124,6 +140,18 @@ const createRouteRequest = (context) => async (request) => {
     const { currentUser } = await resolveAuth();
     assertActiveAccount(currentUser);
     assertRole(currentUser, [roles.client, roles.truckOwner, roles.assistant, roles.admin]);
+
+    return success(
+      await context.marketplaceService.listMine({
+        actor: currentUser
+      })
+    );
+  }
+
+  if (method === 'GET' && path === '/api/v1/admin/kuli-requests') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
 
     return success(
       await context.marketplaceService.listMine({
@@ -317,6 +345,45 @@ const createRouteRequest = (context) => async (request) => {
         notificationPreferences: await parseJsonBody(request)
       })
     );
+  }
+
+  if (method === 'POST' && path === '/api/v1/devices/push-token') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+
+    const body = await parseJsonBody(request);
+
+    if (!body.token) {
+      throw new AppError(400, 'PUSH_TOKEN_REQUIRED', 'Push token is required.');
+    }
+
+    return success(
+      await context.deviceTokenRepository.save({
+        id: body.id ?? `dtok_${Math.random().toString(36).slice(2, 10)}`,
+        userId: currentUser.id,
+        token: body.token,
+        platform: body.platform,
+        deviceId: body.deviceId
+      }),
+      201
+    );
+  }
+
+  if (method === 'DELETE' && path.startsWith('/api/v1/devices/push-token/')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+
+    const tokenId = path.split('/')[5];
+    const deleted = await context.deviceTokenRepository.deleteForUser({
+      id: tokenId,
+      userId: currentUser.id
+    });
+
+    if (!deleted) {
+      throw new AppError(404, 'PUSH_TOKEN_NOT_FOUND', 'Push token was not found.');
+    }
+
+    return success(deleted);
   }
 
   if (method === 'GET' && path === '/api/v1/notifications') {
@@ -788,7 +855,7 @@ const createRouteRequest = (context) => async (request) => {
     assertActiveAccount(currentUser);
     assertRole(currentUser, [roles.truckOwner]);
 
-    const vehicleId = path.split('/')[5];
+    const vehicleId = path.split('/')[4];
 
     return success(
       await context.vehicleRegistryService.getOwnerVehicle({
@@ -830,6 +897,28 @@ const createRouteRequest = (context) => async (request) => {
     );
   }
 
+  if (method === 'PATCH' && path === '/api/v1/owners/me/active-vehicle') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.truckOwner]);
+
+    const body = await parseJsonBody(request);
+
+    if (body.activeVehicleId) {
+      await context.vehicleRegistryService.getOwnerVehicle({
+        actor: currentUser,
+        vehicleId: body.activeVehicleId
+      });
+    }
+
+    return success(
+      await context.accountService.setOwnerActiveVehicle({
+        actor: currentUser,
+        activeVehicleId: body.activeVehicleId
+      })
+    );
+  }
+
   if (method === 'POST' && path === '/api/v1/files/upload-intent') {
     const { currentUser } = await resolveAuth();
     assertActiveAccount(currentUser);
@@ -855,6 +944,22 @@ const createRouteRequest = (context) => async (request) => {
       await context.vehicleRegistryService.createSignedFileUrl({
         actor: currentUser,
         fileId
+      })
+    );
+  }
+
+  if (method === 'POST' && path.startsWith('/api/v1/files/') && path.endsWith('/complete')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.truckOwner, roles.admin]);
+
+    const fileId = path.split('/')[4];
+
+    return success(
+      await context.vehicleRegistryService.completeFileUpload({
+        actor: currentUser,
+        fileId,
+        input: await parseJsonBody(request)
       })
     );
   }
@@ -962,12 +1067,28 @@ const createRouteRequest = (context) => async (request) => {
     );
   }
 
+  if (method === 'PATCH' && path.startsWith('/api/v1/admin/vehicles/') && path.endsWith('/status')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    const vehicleId = path.split('/')[5];
+
+    return success(
+      await context.vehicleRegistryService.updateAdminVehicleStatus({
+        actor: currentUser,
+        vehicleId,
+        input: await parseJsonBody(request)
+      })
+    );
+  }
+
   if (method === 'PATCH' && path.startsWith('/api/v1/admin/vehicles/') && path.endsWith('/verification')) {
     const { currentUser } = await resolveAuth();
     assertActiveAccount(currentUser);
     assertRole(currentUser, [roles.admin]);
 
-    const vehicleId = path.split('/')[4];
+    const vehicleId = path.split('/')[5];
 
     return success(
       await context.vehicleRegistryService.decideVerification({
@@ -1008,6 +1129,7 @@ export const createAppContext = async (config = env) => {
   const messageRepository = new MongoMessageRepository({ db });
   const tripOfferRepository = new MongoTripOfferRepository({ db });
   const notificationRepository = new MongoNotificationRepository({ db });
+  const deviceTokenRepository = new MongoDeviceTokenRepository({ db });
   const notificationIntentRepository = new MongoNotificationIntentRepository({ db });
   const hotlineTicketRepository = new MongoHotlineTicketRepository({ db });
   const notificationAdapters = createExternalNotificationAdapters();
@@ -1031,6 +1153,7 @@ export const createAppContext = async (config = env) => {
   await messageRepository.ensureIndexes();
   await tripOfferRepository.ensureIndexes();
   await notificationRepository.ensureIndexes();
+  await deviceTokenRepository.ensureIndexes();
   await notificationIntentRepository.ensureIndexes();
   await hotlineTicketRepository.ensureIndexes();
 
@@ -1110,6 +1233,7 @@ export const createAppContext = async (config = env) => {
     engagementService,
     operationsService,
     notificationRepository,
+    deviceTokenRepository,
     notificationIntentRepository,
     notificationAdapters,
     tokenVerifier,

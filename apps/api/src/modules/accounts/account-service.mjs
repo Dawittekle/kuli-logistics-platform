@@ -111,6 +111,17 @@ export class AccountService {
     });
   }
 
+  async setOwnerActiveVehicle({ actor, activeVehicleId }) {
+    if (actor.role !== roles.truckOwner) {
+      throw new AppError(403, 'TRUCK_OWNER_REQUIRED', 'Only truck owners can set an active vehicle.');
+    }
+
+    return this.userRepository.save({
+      ...actor,
+      activeVehicleId: activeVehicleId || undefined
+    });
+  }
+
   async provisionStaffUser({ actor, supabaseUserId, role, fullName, email, phone }) {
     if (![roles.admin, roles.assistant].includes(role)) {
       throw new AppError(422, 'INVALID_STAFF_ROLE', 'Only admin or assistant roles can be provisioned through staff flow.');

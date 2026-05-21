@@ -137,7 +137,7 @@ export class VehicleRegistryService {
       throw new AppError(404, 'VEHICLE_CLASS_NOT_FOUND', 'Vehicle class was not found.');
     }
 
-    return this.vehicleClassRepository.save({
+    const update = {
       ...vehicleClass,
       name: input.name ?? vehicleClass.name,
       description: input.description ?? vehicleClass.description,
@@ -146,9 +146,14 @@ export class VehicleRegistryService {
       dimensions: input.dimensions ?? vehicleClass.dimensions,
       defaultPricing: input.defaultPricing ?? vehicleClass.defaultPricing,
       active: input.active ?? vehicleClass.active,
-      displayOrder: input.displayOrder ?? vehicleClass.displayOrder,
-      deletedAt: input.deletedAt ?? vehicleClass.deletedAt
-    });
+      displayOrder: input.displayOrder ?? vehicleClass.displayOrder
+    };
+
+    if (input.deletedAt !== undefined || vehicleClass.deletedAt) {
+      update.deletedAt = input.deletedAt ?? vehicleClass.deletedAt;
+    }
+
+    return this.vehicleClassRepository.save(update);
   }
 
   async deactivateVehicleClass({ actor, vehicleClassId }) {
@@ -333,6 +338,30 @@ export class VehicleRegistryService {
     };
   }
 
+  async completeFileUpload({ actor, fileId, input = {} }) {
+    const file = await this.fileRepository.findById(fileId);
+
+    if (!file) {
+      throw new AppError(404, 'FILE_NOT_FOUND', 'File metadata was not found.');
+    }
+
+    if (actor.role !== roles.admin && file.ownerId !== actor.id) {
+      throw new AppError(404, 'FILE_NOT_FOUND', 'File metadata was not found.');
+    }
+
+    if (![roles.truckOwner, roles.admin].includes(actor.role)) {
+      throw new AppError(403, 'FILE_ACCESS_FORBIDDEN', 'You do not have access to this file.');
+    }
+
+    return this.fileRepository.complete({
+      fileId,
+      update: {
+        checksum: input.checksum,
+        uploadedSizeBytes: input.uploadedSizeBytes
+      }
+    });
+  }
+
   async attachVehicleDocument({ actor, vehicleId, input }) {
     assertTruckOwner(actor);
     const vehicle = await this.vehicleRepository.findById(vehicleId);
@@ -420,6 +449,48 @@ export class VehicleRegistryService {
       metadata: {
         reason: input.reason,
         priorVerificationStatus: vehicle.verificationStatus
+      }
+    });
+
+    return updatedVehicle;
+  }
+
+  async updateAdminVehicleStatus({ actor, vehicleId, input }) {
+    assertAdmin(actor);
+
+    const vehicle = await this.vehicleRepository.findById(vehicleId);
+
+    if (!vehicle) {
+      throw new AppError(404, 'VEHICLE_NOT_FOUND', 'Vehicle was not found.');
+    }
+
+    if (!Object.values(vehicleAvailabilityStatuses).includes(input.availabilityStatus)) {
+      throw new AppError(422, 'INVALID_AVAILABILITY_STATUS', 'Unknown vehicle availability status.');
+    }
+
+    if (input.availabilityStatus === vehicleAvailabilityStatuses.suspended && !input.reason) {
+      throw new AppError(422, 'VEHICLE_STATUS_REASON_REQUIRED', 'Suspending a vehicle requires a reason.');
+    }
+
+    const updatedVehicle = await this.vehicleRepository.save({
+      ...vehicle,
+      availabilityStatus: input.availabilityStatus,
+      adminStatusReason: input.reason,
+      adminStatusUpdatedAt: new Date().toISOString(),
+      adminStatusUpdatedById: actor.id
+    });
+
+    await this.auditLogRepository.write({
+      id: createId('audit'),
+      actorUserId: actor.id,
+      actorRole: actor.role,
+      action: 'vehicle.status.updated',
+      targetType: 'vehicle',
+      targetId: vehicle.id,
+      metadata: {
+        priorAvailabilityStatus: vehicle.availabilityStatus,
+        nextAvailabilityStatus: input.availabilityStatus,
+        reason: input.reason
       }
     });
 
