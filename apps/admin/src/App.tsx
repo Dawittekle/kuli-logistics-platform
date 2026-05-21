@@ -214,6 +214,74 @@ type ReportRecord = {
   createdAt?: string;
 };
 
+type DashboardMetrics = {
+  usersTotal: number;
+  activeRequests: number;
+  pendingVehicles: number;
+  openReports: number;
+  disputedPayments: number;
+  openTickets: number;
+  unreadNotifications: number;
+};
+
+type ReadinessCheck = {
+  id: string;
+  ok: boolean;
+  severity: 'error' | 'warning';
+  message: string;
+};
+
+type ReleaseReadiness = {
+  runtime: {
+    ok: boolean;
+    checks: ReadinessCheck[];
+  };
+  checks: Record<string, boolean>;
+};
+
+type AuditLogRecord = {
+  id: string;
+  actorUserId?: string;
+  actorRole?: Role | 'system';
+  action: string;
+  targetType?: string;
+  targetId?: string;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+};
+
+type KuliRequest = {
+  id: string;
+  requestCode: string;
+  clientId: string;
+  status: 'pending' | 'accepted' | 'en_route_to_pickup' | 'arrived_at_pickup' | 'loading' | 'in_transit' | 'unloading' | 'completed' | 'cancelled' | 'timed_out';
+  pickupLocation?: {
+    addressText?: string;
+  };
+  destinationLocation?: {
+    addressText?: string;
+  };
+  selectedOwnerId?: string;
+  selectedVehicleId?: string;
+  quoteSnapshot?: {
+    currency?: string;
+    totalEstimate?: number;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type StatusEvent = {
+  id: string;
+  requestId: string;
+  fromStatus?: KuliRequest['status'];
+  toStatus: KuliRequest['status'];
+  actorUserId?: string;
+  actorRole?: Role | 'system';
+  reason?: string;
+  createdAt?: string;
+};
+
 type ApiEnvelope<T> = {
   data: T;
 };
@@ -231,6 +299,9 @@ const roleLabels: Record<Role, string> = {
   assistant: 'Assistant',
   admin: 'Admin'
 };
+
+const accountStatusOptions: AccountStatus[] = ['active', 'pending_verification', 'suspended', 'banned', 'deleted'];
+const requestStatusOptions: KuliRequest['status'][] = ['pending', 'accepted', 'en_route_to_pickup', 'arrived_at_pickup', 'loading', 'in_transit', 'unloading', 'completed', 'cancelled', 'timed_out'];
 
 const adminRoutes: RouteItem[] = [
   { path: '/admin/dashboard', label: 'Dashboard', icon: Gauge, detail: 'Operational metrics and release readiness.' },
@@ -426,7 +497,112 @@ function RouteTable({ title, routes }: { title: string; routes: RouteItem[] }) {
   );
 }
 
+function AdminDashboardPanel({ enabled }: { enabled: boolean }) {
+  const metricsQuery = useQuery({
+    enabled,
+    queryKey: ['admin-dashboard'],
+    queryFn: async () => ((await kuliApi.request('/admin/dashboard')) as ApiEnvelope<DashboardMetrics>).data
+  });
+
+  const readinessQuery = useQuery({
+    enabled,
+    queryKey: ['admin-release-readiness'],
+    queryFn: async () => ((await kuliApi.request('/admin/release-readiness')) as ApiEnvelope<ReleaseReadiness>).data
+  });
+
+  if (!enabled) {
+    return null;
+  }
+
+  const metrics = metricsQuery.data;
+  const metricRows = [
+    { label: 'Users', value: metrics?.usersTotal ?? 0, tone: 'ready' as const },
+    { label: 'Active trips', value: metrics?.activeRequests ?? 0, tone: metrics?.activeRequests ? 'warn' as const : 'ready' as const },
+    { label: 'Pending vehicles', value: metrics?.pendingVehicles ?? 0, tone: metrics?.pendingVehicles ? 'warn' as const : 'ready' as const },
+    { label: 'Open reports', value: metrics?.openReports ?? 0, tone: metrics?.openReports ? 'blocked' as const : 'ready' as const },
+    { label: 'Disputed payments', value: metrics?.disputedPayments ?? 0, tone: metrics?.disputedPayments ? 'blocked' as const : 'ready' as const },
+    { label: 'Open tickets', value: metrics?.openTickets ?? 0, tone: metrics?.openTickets ? 'warn' as const : 'ready' as const },
+    { label: 'Unread alerts', value: metrics?.unreadNotifications ?? 0, tone: metrics?.unreadNotifications ? 'warn' as const : 'ready' as const }
+  ];
+  const readiness = readinessQuery.data;
+  const hardeningChecks = readiness ? Object.entries(readiness.checks) : [];
+
+  return (
+    <section className="panel panel--wide">
+      <div className="panel__header">
+        <div>
+          <p className="eyebrow">Operations dashboard</p>
+          <h2>Release signals and live queues</h2>
+        </div>
+        <button className="icon-button" type="button" onClick={() => {
+          metricsQuery.refetch();
+          readinessQuery.refetch();
+        }}>
+          <RefreshCw aria-hidden="true" size={18} />
+          Refresh
+        </button>
+      </div>
+      {metricsQuery.isError ? <p className="field-error">{getErrorMessage(metricsQuery.error)}</p> : null}
+      {readinessQuery.isError ? <p className="field-error">{getErrorMessage(readinessQuery.error)}</p> : null}
+      <div className="metric-board" aria-label="Admin dashboard metrics">
+        {metricRows.map((metric) => (
+          <div className="metric-card" key={metric.label}>
+            <span>{metric.label}</span>
+            <strong>{metric.value}</strong>
+            <StatusBadge tone={metric.tone}>{metric.tone === 'ready' ? 'Clear' : metric.tone === 'blocked' ? 'Review' : 'Watch'}</StatusBadge>
+          </div>
+        ))}
+      </div>
+      <div className="readiness-grid">
+        <div className="support-card">
+          <div className="detail-heading">
+            <div>
+              <h3>Runtime config</h3>
+              <p className="muted">Production-blocking checks stay visible beside warning-only setup gaps.</p>
+            </div>
+            <StatusBadge tone={readiness?.runtime.ok ? 'ready' : 'blocked'}>{readiness?.runtime.ok ? 'Ready' : 'Review'}</StatusBadge>
+          </div>
+          <div className="runtime-list">
+            {(readiness?.runtime.checks ?? []).map((check) => (
+              <div className="runtime-row" key={check.id}>
+                <span>{check.message}</span>
+                <StatusBadge tone={check.ok ? 'ready' : check.severity === 'error' ? 'blocked' : 'warn'}>{check.ok ? 'Pass' : check.severity}</StatusBadge>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="support-card">
+          <div className="detail-heading">
+            <div>
+              <h3>Hardening</h3>
+              <p className="muted">These map to the backend release-readiness contract and smoke checklist.</p>
+            </div>
+          </div>
+          <div className="runtime-list">
+            {hardeningChecks.map(([key, ok]) => (
+              <div className="runtime-row" key={key}>
+                <span>{key.replaceAll(/([A-Z])/g, ' $1').toLowerCase()}</span>
+                <StatusBadge tone={ok ? 'ready' : 'blocked'}>{ok ? 'Pass' : 'Fail'}</StatusBadge>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function AdminUsersPanel({ enabled }: { enabled: boolean }) {
+  const queryClient = useQueryClient();
+  const [roleFilter, setRoleFilter] = useState<Role | ''>('');
+  const [statusFilter, setStatusFilter] = useState<AccountStatus | ''>('');
+  const [search, setSearch] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [nextStatus, setNextStatus] = useState<AccountStatus>('active');
+  const [pendingStatus, setPendingStatus] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
   const usersQuery = useQuery({
     enabled,
     queryKey: ['admin-users'],
@@ -435,6 +611,25 @@ function AdminUsersPanel({ enabled }: { enabled: boolean }) {
       return result.data;
     }
   });
+
+  const users = usersQuery.data ?? [];
+  const selectedUser = users.find((user) => user.id === selectedUserId) ?? users[0];
+  const detailQuery = useQuery({
+    enabled: enabled && Boolean(selectedUser?.id),
+    queryKey: ['admin-users', selectedUser?.id],
+    queryFn: async () => ((await kuliApi.request(`/admin/users/${selectedUser?.id}`)) as ApiEnvelope<UserProfile>).data
+  });
+  const filteredUsers = users.filter((user) => {
+    const haystack = `${user.fullName ?? ''} ${user.email ?? ''} ${user.phone ?? ''} ${user.id}`.toLowerCase();
+    return (!roleFilter || user.role === roleFilter) && (!statusFilter || user.accountStatus === statusFilter) && (!search.trim() || haystack.includes(search.trim().toLowerCase()));
+  });
+
+  useEffect(() => {
+    if (!selectedUserId && users[0]) {
+      setSelectedUserId(users[0].id);
+      setNextStatus(users[0].accountStatus);
+    }
+  }, [selectedUserId, users]);
 
   if (!enabled) {
     return (
@@ -451,6 +646,33 @@ function AdminUsersPanel({ enabled }: { enabled: boolean }) {
     );
   }
 
+  const updateStatus = async () => {
+    if (!selectedUser) {
+      setError('Select a user first.');
+      return;
+    }
+
+    setPendingStatus(true);
+    setError('');
+    setMessage('');
+
+    try {
+      const result = (await kuliApi.request(`/admin/users/${selectedUser.id}/status`, {
+        method: 'PATCH',
+        body: {
+          accountStatus: nextStatus
+        }
+      })) as ApiEnvelope<UserProfile>;
+
+      setMessage(`${result.data.fullName || result.data.email || result.data.id} moved to ${result.data.accountStatus}.`);
+      await queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    } catch (statusError) {
+      setError(getErrorMessage(statusError));
+    } finally {
+      setPendingStatus(false);
+    }
+  };
+
   return (
     <section className="panel panel--wide">
       <div className="panel__header">
@@ -463,6 +685,32 @@ function AdminUsersPanel({ enabled }: { enabled: boolean }) {
         </StatusBadge>
       </div>
       {usersQuery.isError ? <p className="field-error">{getErrorMessage(usersQuery.error)}</p> : null}
+      {error ? <p className="field-error" role="alert">{error}</p> : null}
+      {message ? <p className="muted">{message}</p> : null}
+      <div className="support-toolbar support-toolbar--triple">
+        <label>
+          Role
+          <select onChange={(event) => setRoleFilter(event.target.value as Role | '')} value={roleFilter}>
+            <option value="">All</option>
+            {Object.entries(roleLabels).map(([role, label]) => (
+              <option key={role} value={role}>{label}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Status
+          <select onChange={(event) => setStatusFilter(event.target.value as AccountStatus | '')} value={statusFilter}>
+            <option value="">All</option>
+            {accountStatusOptions.map((status) => (
+              <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Search
+          <input onChange={(event) => setSearch(event.target.value)} placeholder="Name, email, phone, id" value={search} />
+        </label>
+      </div>
       <div className="data-table" role="table" aria-label="Admin users">
         <div className="data-row data-row--head" role="row">
           <span>Name</span>
@@ -470,14 +718,50 @@ function AdminUsersPanel({ enabled }: { enabled: boolean }) {
           <span>Status</span>
           <span>Contact</span>
         </div>
-        {(usersQuery.data ?? []).map((user) => (
-          <div className="data-row" key={user.id} role="row">
+        {filteredUsers.map((user) => (
+          <button
+            className={`data-row data-row--button ${selectedUser?.id === user.id ? 'is-selected' : ''}`}
+            key={user.id}
+            onClick={() => {
+              setSelectedUserId(user.id);
+              setNextStatus(user.accountStatus);
+              setError('');
+              setMessage('');
+            }}
+            role="row"
+            type="button"
+          >
             <strong>{user.fullName || 'Unnamed profile'}</strong>
             <span>{roleLabels[user.role]}</span>
             <StatusBadge tone={user.accountStatus === 'active' ? 'ready' : isBlockedStatus(user.accountStatus) ? 'blocked' : 'warn'}>{user.accountStatus}</StatusBadge>
             <span>{user.email || user.phone || 'No contact'}</span>
-          </div>
+          </button>
         ))}
+      </div>
+      <div className="decision-panel">
+        <div className="detail-heading">
+          <div>
+            <h3>{detailQuery.data?.fullName || selectedUser?.fullName || 'Select a user'}</h3>
+            <p className="muted">{detailQuery.data?.email || detailQuery.data?.phone || selectedUser?.id || 'Open a row to inspect account state.'}</p>
+          </div>
+          {selectedUser ? <StatusBadge tone={selectedUser.accountStatus === 'active' ? 'ready' : isBlockedStatus(selectedUser.accountStatus) ? 'blocked' : 'warn'}>{selectedUser.accountStatus}</StatusBadge> : null}
+        </div>
+        {detailQuery.isError ? <p className="field-error">{getErrorMessage(detailQuery.error)}</p> : null}
+        {selectedUser ? (
+          <div className="support-toolbar">
+            <label>
+              Account status
+              <select onChange={(event) => setNextStatus(event.target.value as AccountStatus)} value={nextStatus}>
+                {accountStatusOptions.map((status) => (
+                  <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>
+                ))}
+              </select>
+            </label>
+            <button className="icon-button" disabled={pendingStatus || selectedUser.accountStatus === nextStatus} onClick={updateStatus} type="button">
+              {pendingStatus ? 'Updating...' : 'Update status'}
+            </button>
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -1222,6 +1506,229 @@ function AdminTrustFinancePanel({ enabled }: { enabled: boolean }) {
   );
 }
 
+function AdminTripOversightPanel({ enabled }: { enabled: boolean }) {
+  const [statusFilter, setStatusFilter] = useState<KuliRequest['status'] | ''>('');
+  const [search, setSearch] = useState('');
+  const [selectedRequestId, setSelectedRequestId] = useState('');
+
+  const requestsQuery = useQuery({
+    enabled,
+    queryKey: ['admin-kuli-requests'],
+    queryFn: async () => ((await kuliApi.request('/kuli-requests/mine')) as ApiEnvelope<KuliRequest[]>).data
+  });
+
+  const requests = requestsQuery.data ?? [];
+  const selectedRequest = requests.find((request) => request.id === selectedRequestId) ?? requests[0];
+  const eventsQuery = useQuery({
+    enabled: enabled && Boolean(selectedRequest?.id),
+    queryKey: ['admin-kuli-requests', selectedRequest?.id, 'events'],
+    queryFn: async () => ((await kuliApi.request(`/kuli-requests/${selectedRequest?.id}/events`)) as ApiEnvelope<StatusEvent[]>).data
+  });
+  const filteredRequests = requests.filter((request) => {
+    const haystack = `${request.requestCode} ${request.id} ${request.clientId} ${request.selectedOwnerId ?? ''} ${request.pickupLocation?.addressText ?? ''} ${request.destinationLocation?.addressText ?? ''}`.toLowerCase();
+    return (!statusFilter || request.status === statusFilter) && (!search.trim() || haystack.includes(search.trim().toLowerCase()));
+  });
+
+  useEffect(() => {
+    if (!selectedRequestId && requests[0]) {
+      setSelectedRequestId(requests[0].id);
+    }
+  }, [requests, selectedRequestId]);
+
+  if (!enabled) {
+    return null;
+  }
+
+  return (
+    <section className="panel panel--wide">
+      <div className="panel__header">
+        <div>
+          <p className="eyebrow">Trip oversight</p>
+          <h2>KULI requests</h2>
+        </div>
+        <StatusBadge tone={requestsQuery.isError ? 'blocked' : filteredRequests.length ? 'warn' : 'ready'}>
+          {requestsQuery.isError ? 'Needs token' : `${filteredRequests.length} visible`}
+        </StatusBadge>
+      </div>
+      {requestsQuery.isError ? <p className="field-error">{getErrorMessage(requestsQuery.error)}</p> : null}
+      <div className="support-toolbar">
+        <label>
+          Status
+          <select onChange={(event) => setStatusFilter(event.target.value as KuliRequest['status'] | '')} value={statusFilter}>
+            <option value="">All</option>
+            {requestStatusOptions.map((status) => (
+              <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Search
+          <input onChange={(event) => setSearch(event.target.value)} placeholder="Request, client, owner, address" value={search} />
+        </label>
+      </div>
+      <div className="split-panel">
+        <div className="queue-list">
+          {filteredRequests.length === 0 ? <p className="muted">No requests match the current filters.</p> : null}
+          {filteredRequests.map((request) => (
+            <button
+              className={`queue-item ${selectedRequest?.id === request.id ? 'is-selected' : ''}`}
+              key={request.id}
+              onClick={() => setSelectedRequestId(request.id)}
+              type="button"
+            >
+              <strong>{request.requestCode}</strong>
+              <span>{request.pickupLocation?.addressText || 'Pickup'} to {request.destinationLocation?.addressText || 'Destination'}</span>
+              <StatusBadge tone={request.status === 'completed' ? 'ready' : ['cancelled', 'timed_out'].includes(request.status) ? 'blocked' : 'warn'}>{request.status.replaceAll('_', ' ')}</StatusBadge>
+            </button>
+          ))}
+        </div>
+        <div className="decision-panel">
+          {selectedRequest ? (
+            <>
+              <div className="detail-heading">
+                <div>
+                  <h3>{selectedRequest.requestCode}</h3>
+                  <p className="muted">{selectedRequest.id}</p>
+                </div>
+                <StatusBadge tone={selectedRequest.status === 'completed' ? 'ready' : ['cancelled', 'timed_out'].includes(selectedRequest.status) ? 'blocked' : 'warn'}>{selectedRequest.status.replaceAll('_', ' ')}</StatusBadge>
+              </div>
+              <div className="detail-grid">
+                <span>Client <strong>{selectedRequest.clientId}</strong></span>
+                <span>Owner <strong>{selectedRequest.selectedOwnerId || 'not assigned'}</strong></span>
+                <span>Vehicle <strong>{selectedRequest.selectedVehicleId || 'not assigned'}</strong></span>
+                <span>Estimate <strong>{formatMoney(selectedRequest.quoteSnapshot?.currency, selectedRequest.quoteSnapshot?.totalEstimate)}</strong></span>
+              </div>
+              <div className="document-list">
+                {eventsQuery.isError ? <p className="field-error">{getErrorMessage(eventsQuery.error)}</p> : null}
+                {(eventsQuery.data ?? []).length === 0 ? <p className="muted">No status events returned yet.</p> : null}
+                {(eventsQuery.data ?? []).map((event) => (
+                  <div className="document-row document-row--static" key={event.id}>
+                    <span>
+                      <strong>{event.fromStatus ? `${event.fromStatus} to ${event.toStatus}` : event.toStatus}</strong>
+                      <small>{event.actorRole || 'system'} / {event.actorUserId || 'no actor'}{event.reason ? ` / ${event.reason}` : ''}</small>
+                    </span>
+                    <em>{event.createdAt ? new Date(event.createdAt).toLocaleString() : 'pending time'}</em>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="muted">Select a request to inspect participants, estimate, and timeline.</p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function AdminAuditLogPanel({ enabled }: { enabled: boolean }) {
+  const [actorUserId, setActorUserId] = useState('');
+  const [action, setAction] = useState('');
+  const [targetType, setTargetType] = useState('');
+  const [selectedLogId, setSelectedLogId] = useState('');
+
+  const auditQuery = useQuery({
+    enabled,
+    queryKey: ['admin-audit-logs', actorUserId, action, targetType],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+
+      if (actorUserId.trim()) {
+        params.set('actorUserId', actorUserId.trim());
+      }
+
+      if (action.trim()) {
+        params.set('action', action.trim());
+      }
+
+      if (targetType.trim()) {
+        params.set('targetType', targetType.trim());
+      }
+
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      return ((await kuliApi.request(`/admin/audit-logs${suffix}`)) as ApiEnvelope<AuditLogRecord[]>).data;
+    }
+  });
+
+  const logs = auditQuery.data ?? [];
+  const selectedLog = logs.find((log) => log.id === selectedLogId) ?? logs[0];
+
+  useEffect(() => {
+    if (!selectedLogId && logs[0]) {
+      setSelectedLogId(logs[0].id);
+    }
+  }, [logs, selectedLogId]);
+
+  if (!enabled) {
+    return null;
+  }
+
+  return (
+    <section className="panel panel--wide">
+      <div className="panel__header">
+        <div>
+          <p className="eyebrow">Audit viewer</p>
+          <h2>Append-only admin trail</h2>
+        </div>
+        <StatusBadge tone={auditQuery.isError ? 'blocked' : 'ready'}>{auditQuery.isError ? 'Needs token' : `${logs.length} logs`}</StatusBadge>
+      </div>
+      {auditQuery.isError ? <p className="field-error">{getErrorMessage(auditQuery.error)}</p> : null}
+      <div className="support-toolbar support-toolbar--triple">
+        <label>
+          Actor user id
+          <input onChange={(event) => setActorUserId(event.target.value)} placeholder="usr_..." value={actorUserId} />
+        </label>
+        <label>
+          Action
+          <input onChange={(event) => setAction(event.target.value)} placeholder="vehicle.verification" value={action} />
+        </label>
+        <label>
+          Target type
+          <input onChange={(event) => setTargetType(event.target.value)} placeholder="vehicle, report, payment" value={targetType} />
+        </label>
+      </div>
+      <div className="split-panel">
+        <div className="queue-list">
+          {logs.length === 0 ? <p className="muted">No audit logs match the filters.</p> : null}
+          {logs.map((log) => (
+            <button
+              className={`queue-item ${selectedLog?.id === log.id ? 'is-selected' : ''}`}
+              key={log.id}
+              onClick={() => setSelectedLogId(log.id)}
+              type="button"
+            >
+              <strong>{log.action}</strong>
+              <span>{log.targetType || 'target'} / {log.targetId || 'no target id'}</span>
+              <StatusBadge tone={log.actorRole === 'admin' ? 'warn' : 'muted'}>{log.actorRole || 'system'}</StatusBadge>
+            </button>
+          ))}
+        </div>
+        <div className="decision-panel">
+          {selectedLog ? (
+            <>
+              <div className="detail-heading">
+                <div>
+                  <h3>{selectedLog.action}</h3>
+                  <p className="muted">{selectedLog.createdAt ? new Date(selectedLog.createdAt).toLocaleString() : 'No timestamp'}</p>
+                </div>
+                <StatusBadge tone="muted">{selectedLog.targetType || 'target'}</StatusBadge>
+              </div>
+              <div className="detail-grid">
+                <span>Actor <strong>{selectedLog.actorUserId || 'system'}</strong></span>
+                <span>Role <strong>{selectedLog.actorRole || 'system'}</strong></span>
+                <span>Target <strong>{selectedLog.targetId || 'none'}</strong></span>
+              </div>
+              <pre className="metadata-block">{JSON.stringify(selectedLog.metadata ?? {}, null, 2)}</pre>
+            </>
+          ) : (
+            <p className="muted">Select a log to inspect metadata.</p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function AssistantSupportPanel({ enabled, profile }: { enabled: boolean; profile: UserProfile }) {
   const queryClient = useQueryClient();
   const [ticketFilter, setTicketFilter] = useState<TicketStatus | ''>('');
@@ -1788,11 +2295,14 @@ function StaffWorkspace({ profile, onSignOut }: { profile: UserProfile; onSignOu
           <ApiHealthPanel />
           <RuntimePanel />
           <RouteTable title={workspace === 'admin' ? 'Admin routes' : 'Assistant routes'} routes={routes} />
+          <AdminDashboardPanel enabled={profile.role === 'admin'} />
           <AssistantSupportPanel enabled={profile.role === 'assistant'} profile={profile} />
           <AdminVerificationPanel enabled={profile.role === 'admin'} />
           <AdminPricingPanel enabled={profile.role === 'admin'} />
           <AdminTrustFinancePanel enabled={profile.role === 'admin'} />
+          <AdminTripOversightPanel enabled={profile.role === 'admin'} />
           <AdminUsersPanel enabled={profile.role === 'admin'} />
+          <AdminAuditLogPanel enabled={profile.role === 'admin'} />
         </div>
       </section>
     </main>
