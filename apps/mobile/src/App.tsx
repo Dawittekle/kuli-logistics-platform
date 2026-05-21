@@ -152,6 +152,42 @@ type KuliRequest = {
   offers?: TripOffer[];
 };
 
+type KuliStatus = KuliRequest['status'];
+
+type StatusEvent = {
+  id: string;
+  requestId: string;
+  fromStatus?: KuliStatus;
+  toStatus: KuliStatus;
+  actorUserId?: string;
+  actorRole?: Role | 'system';
+  reason?: string;
+  createdAt?: string;
+};
+
+type TripMessage = {
+  id: string;
+  requestId: string;
+  senderId: string;
+  senderRole: Role;
+  body: string;
+  clientGeneratedId?: string;
+  createdAt?: string;
+};
+
+type NotificationRecord = {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  deliveryStatus: 'pending' | 'sent' | 'read' | 'failed';
+  data?: {
+    requestId?: string;
+    [key: string]: unknown;
+  };
+  createdAt?: string;
+};
+
 type RequestCreateResult = {
   request: KuliRequest;
   offers: TripOffer[];
@@ -231,6 +267,7 @@ const ownerTabs: TabRoute[] = [
   { key: 'owner-home', label: 'Home', route: '/owner/home', detail: 'Vehicle status and availability prompt.' },
   { key: 'owner-vehicles', label: 'Vehicles', route: '/owner/vehicles', detail: 'Registration, documents, and verification status.' },
   { key: 'owner-offers', label: 'Offers', route: '/owner/offers', detail: 'First-accept-wins offer inbox.' },
+  { key: 'owner-notifications', label: 'Alerts', route: '/owner/notifications', detail: 'In-app updates and read states.' },
   { key: 'owner-earnings', label: 'Earnings', route: '/owner/earnings', detail: 'Cash confirmation and rating summary.' }
 ];
 
@@ -967,6 +1004,20 @@ const parsePositiveNumber = (value: string, fallback = 0) => {
 const createIdempotencyKey = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 const activeRequestStatuses = ['pending', 'accepted', 'en_route_to_pickup', 'arrived_at_pickup', 'loading', 'in_transit', 'unloading'];
+const terminalRequestStatuses = ['completed', 'cancelled', 'timed_out'];
+const ownerForwardStatuses: KuliStatus[] = ['en_route_to_pickup', 'arrived_at_pickup', 'loading', 'in_transit', 'unloading', 'completed'];
+const statusLabels: Record<KuliStatus, string> = {
+  pending: 'Waiting',
+  accepted: 'Accepted',
+  en_route_to_pickup: 'En route',
+  arrived_at_pickup: 'Arrived',
+  loading: 'Loading',
+  in_transit: 'In transit',
+  unloading: 'Unloading',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+  timed_out: 'Timed out'
+};
 
 const buildManualLocation = ({ addressText, lon, lat }: { addressText: string; lon: string; lat: string }): QuoteLocation => ({
   addressText: addressText.trim(),
@@ -1277,10 +1328,12 @@ function ClientQuoteScreen() {
 
 function RequestSummaryCard({
   request,
-  onCancel
+  onCancel,
+  children
 }: {
   request: KuliRequest;
   onCancel: (request: KuliRequest) => void;
+  children?: ReactNode;
 }) {
   const isCancellable = ['pending', 'accepted', 'en_route_to_pickup'].includes(request.status);
 
@@ -1291,7 +1344,7 @@ function RequestSummaryCard({
           <Text style={styles.cardTitle}>{request.requestCode}</Text>
           <Text style={styles.muted}>{request.pickupLocation?.addressText} to {request.destinationLocation?.addressText}</Text>
         </View>
-        <StatusPill tone={statusTone(request.status)}>{request.status}</StatusPill>
+        <StatusPill tone={statusTone(request.status)}>{statusLabels[request.status]}</StatusPill>
       </View>
       <View style={styles.metricGrid}>
         <View style={styles.metricBox}>
@@ -1304,7 +1357,8 @@ function RequestSummaryCard({
         </View>
       </View>
       {request.status === 'pending' ? <Text style={styles.noticeText}>Waiting for an owner to accept. Open offers can still expire or be cancelled.</Text> : null}
-      {request.status === 'accepted' ? <Text style={styles.noticeText}>A truck owner accepted. Phase 5 will add the full trip timeline and messaging.</Text> : null}
+      {request.status === 'accepted' ? <Text style={styles.noticeText}>A truck owner accepted. Watch the manual timeline and send request-scoped messages here.</Text> : null}
+      {children}
       <Pressable
         accessibilityRole="button"
         disabled={!isCancellable}
@@ -1313,6 +1367,208 @@ function RequestSummaryCard({
       >
         <Text style={styles.secondaryButtonText}>{isCancellable ? 'Cancel request' : 'Terminal request'}</Text>
       </Pressable>
+    </View>
+  );
+}
+
+function TimelineEventRow({ event }: { event: StatusEvent }) {
+  const label = statusLabels[event.toStatus] ?? event.toStatus;
+
+  return (
+    <View style={styles.timelineRow}>
+      <StatusPill tone={statusTone(event.toStatus)}>{label}</StatusPill>
+      <View style={styles.flex}>
+        <Text style={styles.fieldLabel}>{event.fromStatus ? `${statusLabels[event.fromStatus]} to ${label}` : label}</Text>
+        <Text style={styles.muted}>{event.reason || 'Status event recorded'} / {event.actorRole || 'system'}</Text>
+        {event.createdAt ? <Text style={styles.muted}>{new Date(event.createdAt).toLocaleString()}</Text> : null}
+      </View>
+    </View>
+  );
+}
+
+function TripTimeline({ requestId }: { requestId: string }) {
+  const eventsQuery = useQuery({
+    queryKey: ['kuli-requests', requestId, 'events'],
+    queryFn: async () => ((await kuliApi.request(`/kuli-requests/${requestId}/events`)) as ApiEnvelope<StatusEvent[]>).data
+  });
+
+  const events = eventsQuery.data ?? [];
+
+  return (
+    <View style={styles.subsection}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.fieldLabel}>Trip timeline</Text>
+        <Pressable accessibilityRole="button" onPress={() => eventsQuery.refetch()} style={styles.compactButton}>
+          <Text style={styles.compactButtonText}>Refresh</Text>
+        </Pressable>
+      </View>
+      {eventsQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(eventsQuery.error)}</Text> : null}
+      {events.length === 0 ? <Text style={styles.muted}>No status events yet. The acceptance event appears after the owner accepts.</Text> : null}
+      <View style={styles.roleGrid}>
+        {events.map((event) => (
+          <TimelineEventRow event={event} key={event.id} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function MessageThread({ requestId, currentUserId }: { requestId: string; currentUserId: string }) {
+  const queryClient = useQueryClient();
+  const [body, setBody] = useState('');
+  const [retryBody, setRetryBody] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+
+  const messagesQuery = useQuery({
+    queryKey: ['kuli-requests', requestId, 'messages'],
+    queryFn: async () => ((await kuliApi.request(`/kuli-requests/${requestId}/messages`)) as ApiEnvelope<TripMessage[]>).data
+  });
+
+  const sendMessage = async (nextBody = body) => {
+    const trimmed = nextBody.trim();
+
+    if (!trimmed || pending) {
+      return;
+    }
+
+    setPending(true);
+    setError('');
+
+    try {
+      await kuliApi.request(`/kuli-requests/${requestId}/messages`, {
+        method: 'POST',
+        idempotencyKey: createIdempotencyKey('msg'),
+        body: {
+          body: trimmed,
+          clientGeneratedId: createIdempotencyKey('message')
+        }
+      });
+      setBody('');
+      setRetryBody('');
+      await queryClient.invalidateQueries({ queryKey: ['kuli-requests', requestId, 'messages'] });
+      await queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    } catch (sendError) {
+      setRetryBody(trimmed);
+      setError(getErrorMessage(sendError));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const messages = messagesQuery.data ?? [];
+
+  return (
+    <View style={styles.subsection}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.fieldLabel}>Messages</Text>
+        <StatusPill tone={messagesQuery.isError ? 'blocked' : 'ready'}>{messages.length}</StatusPill>
+      </View>
+      {messagesQuery.isError ? <Text style={styles.errorText}>Connection issue loading messages. Pull this panel by refreshing after the network returns.</Text> : null}
+      <View style={styles.messageList}>
+        {messages.length === 0 ? <Text style={styles.muted}>No messages yet. Keep coordination inside the request for accountability.</Text> : null}
+        {messages.map((message) => {
+          const mine = message.senderId === currentUserId;
+
+          return (
+            <View key={message.id} style={[styles.messageBubble, mine && styles.messageBubbleMine]}>
+              <Text style={[styles.messageBody, mine && styles.messageBodyMine]}>{message.body}</Text>
+              <Text style={[styles.messageMeta, mine && styles.messageBodyMine]}>{mine ? 'You' : roleLabels[message.senderRole]} {message.createdAt ? `/ ${new Date(message.createdAt).toLocaleTimeString()}` : ''}</Text>
+            </View>
+          );
+        })}
+      </View>
+      {error ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.errorText}>{error}</Text>
+          {retryBody ? (
+            <Pressable accessibilityRole="button" disabled={pending} onPress={() => sendMessage(retryBody)} style={[styles.secondaryButton, pending && styles.buttonDisabled]}>
+              <Text style={styles.secondaryButtonText}>{pending ? 'Retrying...' : 'Retry message'}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+      <Field label="Message" value={body} onChangeText={setBody} placeholder="Share arrival detail or loading instruction" />
+      <Pressable accessibilityRole="button" disabled={!body.trim() || pending} onPress={() => sendMessage()} style={[styles.primaryButton, (!body.trim() || pending) && styles.buttonDisabled]}>
+        <Text style={styles.primaryButtonText}>{pending ? 'Sending...' : 'Send message'}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function OwnerStatusControls({ request }: { request: KuliRequest }) {
+  const queryClient = useQueryClient();
+  const [pendingStatus, setPendingStatus] = useState<KuliStatus | ''>('');
+  const [error, setError] = useState('');
+  const nextStatus = request.status === 'accepted' ? 'en_route_to_pickup' : ownerForwardStatuses[ownerForwardStatuses.indexOf(request.status) + 1];
+  const canAdvance = Boolean(nextStatus) && !terminalRequestStatuses.includes(request.status);
+
+  const updateStatus = async (status: KuliStatus, reason = `owner_${status}`) => {
+    setPendingStatus(status);
+    setError('');
+
+    try {
+      await kuliApi.request(`/kuli-requests/${request.id}/status`, {
+        method: 'PATCH',
+        body: {
+          status,
+          reason
+        }
+      });
+      await queryClient.invalidateQueries({ queryKey: ['kuli-requests', 'mine', 'owner'] });
+      await queryClient.invalidateQueries({ queryKey: ['kuli-requests', request.id, 'events'] });
+      await queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    } catch (statusError) {
+      setError(getErrorMessage(statusError));
+    } finally {
+      setPendingStatus('');
+    }
+  };
+
+  return (
+    <View style={styles.subsection}>
+      <Text style={styles.fieldLabel}>Owner trip controls</Text>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      <View style={styles.actionRow}>
+        <Pressable
+          accessibilityRole="button"
+          disabled={!canAdvance || Boolean(pendingStatus)}
+          onPress={() => {
+            if (nextStatus) {
+              updateStatus(nextStatus);
+            }
+          }}
+          style={[styles.primaryButton, styles.actionButton, (!canAdvance || Boolean(pendingStatus)) && styles.buttonDisabled]}
+        >
+          <Text style={styles.primaryButtonText}>{pendingStatus ? 'Updating...' : nextStatus ? statusLabels[nextStatus] : 'No next step'}</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          disabled={terminalRequestStatuses.includes(request.status) || Boolean(pendingStatus)}
+          onPress={() => updateStatus('cancelled', 'owner_cancelled')}
+          style={[styles.secondaryButton, styles.actionButton, (terminalRequestStatuses.includes(request.status) || Boolean(pendingStatus)) && styles.buttonDisabled]}
+        >
+          <Text style={styles.secondaryButtonText}>Cancel trip</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function ActiveTripWorkspace({
+  request,
+  profile,
+  ownerControls = false
+}: {
+  request: KuliRequest;
+  profile: UserProfile;
+  ownerControls?: boolean;
+}) {
+  return (
+    <View style={styles.tripWorkspace}>
+      {ownerControls ? <OwnerStatusControls request={request} /> : null}
+      <TripTimeline requestId={request.id} />
+      <MessageThread requestId={request.id} currentUserId={profile.id} />
     </View>
   );
 }
@@ -1380,7 +1636,9 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
                     cancelRequest(nextRequest);
                   }
                 }}
-              />
+              >
+                {request.status !== 'pending' ? <ActiveTripWorkspace request={request} profile={profile} /> : null}
+              </RequestSummaryCard>
             ))}
           </View>
         </ShellCard>
@@ -1461,7 +1719,7 @@ function OwnerOfferCard({
   );
 }
 
-function OwnerOffersScreen() {
+function OwnerOffersScreen({ profile }: { profile: UserProfile }) {
   const queryClient = useQueryClient();
   const [pendingOfferId, setPendingOfferId] = useState('');
   const [message, setMessage] = useState('');
@@ -1559,7 +1817,7 @@ function OwnerOffersScreen() {
               </View>
               <StatusPill tone="ready">{acceptedResult.request.status}</StatusPill>
             </View>
-            <Text style={styles.noticeText}>Phase 5 will add status updates, messages, and the full trip timeline.</Text>
+            <ActiveTripWorkspace request={acceptedResult.request} profile={profile} ownerControls />
           </ShellCard>
         ) : null}
 
@@ -1567,17 +1825,147 @@ function OwnerOffersScreen() {
           <ShellCard title="Active trip detail">
             <View style={styles.roleGrid}>
               {acceptedTrips.map((request) => (
-                <View key={request.id} style={styles.requestRow}>
-                  <View style={styles.flex}>
-                    <Text style={styles.fieldLabel}>{request.requestCode}</Text>
-                    <Text style={styles.muted}>{request.pickupLocation?.addressText}</Text>
+                <View key={request.id} style={styles.card}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.flex}>
+                      <Text style={styles.cardTitle}>{request.requestCode}</Text>
+                      <Text style={styles.muted}>{request.pickupLocation?.addressText} to {request.destinationLocation?.addressText}</Text>
+                    </View>
+                    <StatusPill tone={statusTone(request.status)}>{statusLabels[request.status]}</StatusPill>
                   </View>
-                  <StatusPill tone={statusTone(request.status)}>{request.status}</StatusPill>
+                  <ActiveTripWorkspace request={request} profile={profile} ownerControls />
                 </View>
               ))}
             </View>
           </ShellCard>
         ) : null}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
+  const queryClient = useQueryClient();
+  const [pushEnabled, setPushEnabled] = useState(true);
+  const [smsEnabled, setSmsEnabled] = useState(false);
+  const [emailEnabled, setEmailEnabled] = useState(true);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [pendingId, setPendingId] = useState('');
+  const [preferencesPending, setPreferencesPending] = useState(false);
+
+  const notificationsQuery = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => ((await kuliApi.request('/notifications')) as ApiEnvelope<NotificationRecord[]>).data
+  });
+
+  const notifications = notificationsQuery.data ?? [];
+  const unreadCount = notifications.filter((notification) => notification.deliveryStatus !== 'read').length;
+
+  const markRead = async (notification: NotificationRecord) => {
+    setPendingId(notification.id);
+    setError('');
+    setMessage('');
+
+    try {
+      await kuliApi.request(`/notifications/${notification.id}/read`, {
+        method: 'PATCH'
+      });
+      await queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      setMessage('Notification marked read.');
+    } catch (readError) {
+      setError(getErrorMessage(readError));
+    } finally {
+      setPendingId('');
+    }
+  };
+
+  const savePreferences = async () => {
+    setPreferencesPending(true);
+    setError('');
+    setMessage('');
+
+    try {
+      await kuliApi.request('/me/notification-preferences', {
+        method: 'PATCH',
+        body: {
+          pushEnabled,
+          smsEnabled,
+          emailEnabled,
+          inAppEnabled: true,
+          transactionalRequired: true
+        }
+      });
+      setMessage('Notification preferences saved.');
+    } catch (preferencesError) {
+      setError(getErrorMessage(preferencesError));
+    } finally {
+      setPreferencesPending(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.cardHeader}>
+          <View style={styles.flex}>
+            <Text style={styles.eyebrow}>{profile.role === 'client' ? '/client/notifications' : '/owner/notifications'}</Text>
+            <Text style={styles.title}>Updates stay inside KULI.</Text>
+          </View>
+          <StatusPill tone={unreadCount ? 'warn' : 'ready'}>{unreadCount} unread</StatusPill>
+        </View>
+
+        <ShellCard title="Delivery preferences">
+          <Text style={styles.muted}>In-app transactional alerts stay on. External channels can be toggled once providers are configured.</Text>
+          {[
+            { label: 'Push', value: pushEnabled, onPress: () => setPushEnabled((value) => !value) },
+            { label: 'SMS', value: smsEnabled, onPress: () => setSmsEnabled((value) => !value) },
+            { label: 'Email', value: emailEnabled, onPress: () => setEmailEnabled((value) => !value) }
+          ].map((option) => (
+            <Pressable
+              accessibilityRole="switch"
+              accessibilityState={{ checked: option.value }}
+              key={option.label}
+              onPress={option.onPress}
+              style={[styles.switchRow, option.value && styles.switchRowActive]}
+            >
+              <Text style={[styles.switchText, option.value && styles.switchTextActive]}>{option.label}</Text>
+              <StatusPill tone={option.value ? 'ready' : 'warn'}>{option.value ? 'On' : 'Off'}</StatusPill>
+            </Pressable>
+          ))}
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {message ? <Text style={styles.noticeText}>{message}</Text> : null}
+          <Pressable accessibilityRole="button" disabled={preferencesPending} onPress={savePreferences} style={[styles.primaryButton, preferencesPending && styles.buttonDisabled]}>
+            <Text style={styles.primaryButtonText}>{preferencesPending ? 'Saving...' : 'Save preferences'}</Text>
+          </Pressable>
+        </ShellCard>
+
+        <ShellCard title="Notification center">
+          {notificationsQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(notificationsQuery.error)}</Text> : null}
+          <Pressable accessibilityRole="button" onPress={() => notificationsQuery.refetch()} style={styles.secondaryButton}>
+            <Text style={styles.secondaryButtonText}>Refresh notifications</Text>
+          </Pressable>
+          {notifications.length === 0 ? <Text style={styles.muted}>No notifications yet. Offer, message, and status updates will appear here.</Text> : null}
+          <View style={styles.roleGrid}>
+            {notifications.map((notification) => (
+              <View key={notification.id} style={styles.notificationRow}>
+                <View style={styles.flex}>
+                  <Text style={styles.cardTitle}>{notification.title}</Text>
+                  <Text style={styles.muted}>{notification.body}</Text>
+                  <Text style={styles.muted}>{notification.type}{notification.createdAt ? ` / ${new Date(notification.createdAt).toLocaleString()}` : ''}</Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={notification.deliveryStatus === 'read' || pendingId === notification.id}
+                  onPress={() => markRead(notification)}
+                  style={[styles.compactButton, (notification.deliveryStatus === 'read' || pendingId === notification.id) && styles.buttonDisabled]}
+                >
+                  <Text style={styles.compactButtonText}>{notification.deliveryStatus === 'read' ? 'Read' : 'Mark read'}</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        </ShellCard>
       </ScrollView>
     </SafeAreaView>
   );
@@ -1603,7 +1991,8 @@ function ClientTabs({ profile, onSignOut }: { profile: UserProfile; onSignOut: (
     <Tab.Navigator screenOptions={tabScreenOptions}>
       <Tab.Screen name="Home">{() => <ClientHomeScreen profile={profile} onSignOut={onSignOut} />}</Tab.Screen>
       <Tab.Screen name="Request" component={ClientQuoteScreen} />
-      {clientTabs.slice(2).map((tab) => (
+      <Tab.Screen name="Alerts">{() => <NotificationCenterScreen profile={profile} />}</Tab.Screen>
+      {clientTabs.slice(2, 3).map((tab) => (
         <Tab.Screen key={tab.key} name={tab.label}>
           {() => <FoundationScreen title={`Client ${tab.label}`} route={tab.route} detail={tab.detail} />}
         </Tab.Screen>
@@ -1617,8 +2006,9 @@ function OwnerTabs({ profile, onSignOut }: { profile: UserProfile; onSignOut: ()
     <Tab.Navigator screenOptions={tabScreenOptions}>
       <Tab.Screen name="Home">{() => <HomeOverview profile={profile} onSignOut={onSignOut} />}</Tab.Screen>
       <Tab.Screen name="Vehicles" component={OwnerVehiclesScreen} />
-      <Tab.Screen name="Offers" component={OwnerOffersScreen} />
-      {ownerTabs.slice(3).map((tab) => (
+      <Tab.Screen name="Offers">{() => <OwnerOffersScreen profile={profile} />}</Tab.Screen>
+      <Tab.Screen name="Alerts">{() => <NotificationCenterScreen profile={profile} />}</Tab.Screen>
+      {ownerTabs.slice(4).map((tab) => (
         <Tab.Screen key={tab.key} name={tab.label}>
           {() => <FoundationScreen title={`Owner ${tab.label}`} route={tab.route} detail={tab.detail} />}
         </Tab.Screen>
@@ -2045,6 +2435,79 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     justifyContent: 'space-between',
     minHeight: 62,
+    padding: spacing.sm
+  },
+  subsection: {
+    backgroundColor: '#fffdf7',
+    borderColor: colors.line,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.sm
+  },
+  tripWorkspace: {
+    gap: spacing.sm
+  },
+  timelineRow: {
+    alignItems: 'flex-start',
+    backgroundColor: '#f1eadf',
+    borderRadius: radii.sm,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    padding: spacing.sm
+  },
+  compactButton: {
+    alignItems: 'center',
+    borderColor: colors.primary,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 34,
+    paddingHorizontal: spacing.sm
+  },
+  compactButtonText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '800'
+  },
+  messageList: {
+    gap: spacing.xs
+  },
+  messageBubble: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#f1eadf',
+    borderRadius: radii.sm,
+    maxWidth: '92%',
+    padding: spacing.sm
+  },
+  messageBubbleMine: {
+    alignSelf: 'flex-end',
+    backgroundColor: colors.primaryDeep
+  },
+  messageBody: {
+    color: colors.ink,
+    fontSize: 14,
+    lineHeight: 20
+  },
+  messageBodyMine: {
+    color: '#fffaf0'
+  },
+  messageMeta: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '800',
+    marginTop: 4
+  },
+  notificationRow: {
+    alignItems: 'center',
+    backgroundColor: '#fffdf7',
+    borderColor: colors.line,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'space-between',
+    minHeight: 76,
     padding: spacing.sm
   },
   metricGrid: {
