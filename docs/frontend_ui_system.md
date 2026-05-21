@@ -135,3 +135,13 @@ Every phase should reuse the same concepts:
 - [x] Client lookup clearly separates existing app clients from caller snapshots.
 - [x] Assisted quote/search reuses Phase 3 pricing and candidate selection language.
 - [x] Assisted booking confirmation shows request, ticket link, and SMS intent together.
+
+## Phase 7 Consistency Checklist
+
+- [x] Client trust actions stay attached to terminal request history instead of becoming a detached review screen.
+- [x] Rating, dispute, and report actions expose backend eligibility rules before submit.
+- [x] Report evidence metadata is optional and recoverable when upload intent or evidence linking fails.
+- [x] Owner payment confirmation is restricted to completed trips and keeps the estimate visible beside the command.
+- [x] Owner ratings summary uses compact average/count metrics with recent review rows.
+- [x] Admin report and payment queues use the existing dense queue/detail pattern and require audit notes for resolution.
+- [x] Cash/manual payment language stays explicit; the UI does not imply a digital gateway exists in v1.

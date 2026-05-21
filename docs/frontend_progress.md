@@ -20,6 +20,7 @@ Related documents:
 - Frontend Phase 4 added client request dispatch, waiting/cancel state, and the owner offer inbox.
 - Frontend Phase 5 added active trip status controls, timeline, messages, and notifications.
 - Frontend Phase 6 added the assistant hotline ticket and assisted booking console.
+- Frontend Phase 7 added client trust actions, owner payment/rating screens, and admin report/payment resolution queues.
 
 ## Environment Readiness
 
@@ -36,6 +37,7 @@ Related documents:
 - [x] Admin `.env` has API and Supabase keys present.
 - [x] `npm run verify:startup` passes for the real frontend foundations.
 - [x] `npm run smoke:critical` passes for the dependency-light workflow checklist.
+- [x] Mobile Android export passes from the `apps/mobile` Expo workspace.
 
 ## Frontend Implementation Phases
 
@@ -231,20 +233,29 @@ Notes:
 
 Objective: add trust, accountability, and cash/manual payment UX.
 
-- [ ] Owner payment confirmation UI.
-- [ ] Client payment dispute UI.
-- [ ] Client rating form after terminal trip.
-- [ ] Client report form with evidence upload.
-- [ ] Owner ratings summary.
-- [ ] Admin reports queue and resolution panel.
-- [ ] Admin payments queue and resolution panel.
+- [x] Owner payment confirmation UI.
+- [x] Client payment dispute UI.
+- [x] Client rating form after terminal trip.
+- [x] Client report form with evidence upload.
+- [x] Owner ratings summary.
+- [x] Admin reports queue and resolution panel.
+- [x] Admin payments queue and resolution panel.
 
 Validation:
 
-- [ ] Rating is blocked before terminal trip.
-- [ ] Payment confirmation is blocked before completion.
-- [ ] Report evidence upload errors are recoverable.
-- [ ] Admin resolution requires reason and updates audit-backed state.
+- [x] Rating is blocked before terminal trip.
+- [x] Payment confirmation is blocked before completion.
+- [x] Report evidence upload errors are recoverable.
+- [x] Admin resolution requires reason and updates audit-backed state.
+
+Notes:
+
+- Client History now fetches `/api/v1/kuli-requests/mine`, filters terminal requests, and posts rating, dispute, report, upload-intent, and evidence-link commands.
+- Rating stays disabled until a completed or owner-linked cancelled trip; timed-out requests can still be reported but not rated.
+- Owner Earnings fetches completed trips for `/payment/confirm` and fetches `/owners/:id/ratings` for rating average and recent reviews.
+- Admin dashboard now exposes report filters, report outcome/note resolution, payment queues, confirmed amount adjustment, and required payment resolution notes.
+- Validation passed with `npm run lint`, `npm run typecheck`, `npm test`, `npm run build --workspace @kuli/admin`, `npm run smoke:critical`, `npm run verify:startup`, and `npx expo export --platform android --output-dir /tmp/kuli-mobile-phase7-export` from `apps/mobile`.
+- No Supabase test accounts were created during this phase.
 
 ### Frontend Phase 8: Admin Operations, Responsiveness, Accessibility, and QA
 
