@@ -99,6 +99,85 @@ type PricingDraft = Record<string, {
   perExtraMinuteRate: string;
 }>;
 
+type TicketStatus = 'open' | 'assigned' | 'in_progress' | 'pending_client' | 'closed' | 'cancelled';
+type TicketSource = 'incoming_call' | 'missed_call' | 'manual';
+
+type HotlineTicket = {
+  id: string;
+  ticketCode: string;
+  status: TicketStatus;
+  callerPhone?: string;
+  clientId?: string;
+  source: TicketSource;
+  callSummary?: string;
+  followUpAt?: string;
+  assignedAssistantId?: string;
+  requestId?: string;
+  cancellationReason?: string;
+  createdAt?: string;
+};
+
+type GeoLocationInput = {
+  addressText: string;
+  source: 'assistant_entry';
+  point: {
+    type: 'Point';
+    coordinates: [number, number];
+  };
+};
+
+type QuoteCandidate = {
+  vehicleId: string;
+  ownerId: string;
+  vehicleClassSnapshot?: {
+    name: string;
+    slug: string;
+  };
+  licensePlate: string;
+  distanceKm: number;
+  rating: number;
+  rankingScore: number;
+};
+
+type AssistedQuoteResult = {
+  quoteId: string;
+  route: {
+    distanceKm: number;
+    etaMinutes: number;
+  };
+  quoteSnapshot: {
+    currency: string;
+    totalEstimate: number;
+    pricingRuleVersion: number;
+  };
+  search: {
+    radiusKmUsed: number;
+    expanded: boolean;
+    noResults: boolean;
+  };
+  candidates: QuoteCandidate[];
+};
+
+type AssistedBookingResult = {
+  request: {
+    id: string;
+    requestCode: string;
+    status: string;
+    createdByAssistantId?: string;
+  };
+  offers: Array<{
+    id: string;
+    requestId: string;
+  }>;
+  ticket: HotlineTicket;
+  confirmationIntent: {
+    id: string;
+    channel: string;
+    targetPhone?: string;
+    status?: string;
+  };
+};
+
 type ApiEnvelope<T> = {
   data: T;
 };
@@ -132,6 +211,8 @@ const assistantRoutes: RouteItem[] = [
 ];
 
 const isBlockedStatus = (status: AccountStatus) => ['suspended', 'banned', 'deleted'].includes(status);
+
+const createIdempotencyKey = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 const getErrorMessage = (error: unknown) => {
   if (error instanceof Error) {
@@ -745,6 +826,554 @@ function AdminPricingPanel({ enabled }: { enabled: boolean }) {
   );
 }
 
+const ticketStatusLabels: Record<TicketStatus, string> = {
+  open: 'Open',
+  assigned: 'Assigned',
+  in_progress: 'In progress',
+  pending_client: 'Pending client',
+  closed: 'Closed',
+  cancelled: 'Cancelled'
+};
+
+const ticketSources: Array<{ value: TicketSource; label: string }> = [
+  { value: 'incoming_call', label: 'Incoming' },
+  { value: 'missed_call', label: 'Missed' },
+  { value: 'manual', label: 'Manual' }
+];
+
+const loadTypeOptions = ['household_move', 'furniture', 'appliance', 'business_delivery'];
+
+const ticketTone = (status: TicketStatus): 'ready' | 'warn' | 'blocked' | 'muted' => {
+  if (status === 'closed') {
+    return 'ready';
+  }
+
+  if (status === 'cancelled') {
+    return 'blocked';
+  }
+
+  return status === 'open' || status === 'pending_client' ? 'warn' : 'muted';
+};
+
+const nextTicketStatuses = (ticket?: HotlineTicket): TicketStatus[] => {
+  if (!ticket) {
+    return [];
+  }
+
+  const transitions: Record<TicketStatus, TicketStatus[]> = {
+    open: ['assigned', 'cancelled'],
+    assigned: ['in_progress', 'cancelled'],
+    in_progress: ['pending_client', 'closed', 'cancelled'],
+    pending_client: ['in_progress', 'closed', 'cancelled'],
+    closed: [],
+    cancelled: []
+  };
+
+  return transitions[ticket.status] ?? [];
+};
+
+const buildAssistantLocation = ({ address, lon, lat }: { address: string; lon: string; lat: string }): GeoLocationInput => ({
+  addressText: address.trim(),
+  source: 'assistant_entry',
+  point: {
+    type: 'Point',
+    coordinates: [Number(lon), Number(lat)]
+  }
+});
+
+function AssistantSupportPanel({ enabled, profile }: { enabled: boolean; profile: UserProfile }) {
+  const queryClient = useQueryClient();
+  const [ticketFilter, setTicketFilter] = useState<TicketStatus | ''>('');
+  const [callerFilter, setCallerFilter] = useState('');
+  const [selectedTicketId, setSelectedTicketId] = useState('');
+  const [source, setSource] = useState<TicketSource>('incoming_call');
+  const [callerPhone, setCallerPhone] = useState('+251911111111');
+  const [callSummary, setCallSummary] = useState('');
+  const [followUpAt, setFollowUpAt] = useState('');
+  const [pendingTicketAction, setPendingTicketAction] = useState('');
+  const [ticketMessage, setTicketMessage] = useState('');
+  const [ticketError, setTicketError] = useState('');
+  const [clientSearchPhone, setClientSearchPhone] = useState('+251911111111');
+  const [clientResults, setClientResults] = useState<UserProfile[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const [clientLookupPending, setClientLookupPending] = useState(false);
+  const [vehicleClassId, setVehicleClassId] = useState('');
+  const [pickupAddress, setPickupAddress] = useState('Bole, Addis Ababa');
+  const [pickupLon, setPickupLon] = useState('38.7903');
+  const [pickupLat, setPickupLat] = useState('8.9806');
+  const [destinationAddress, setDestinationAddress] = useState('Piassa, Addis Ababa');
+  const [destinationLon, setDestinationLon] = useState('38.7578');
+  const [destinationLat, setDestinationLat] = useState('9.0350');
+  const [pickupTime, setPickupTime] = useState('Today, flexible');
+  const [itemType, setItemType] = useState('household_move');
+  const [estimatedWeightKg, setEstimatedWeightKg] = useState('800');
+  const [estimatedVolumeCubicMeters, setEstimatedVolumeCubicMeters] = useState('8');
+  const [selectedVehicleIds, setSelectedVehicleIds] = useState<string[]>([]);
+  const [quote, setQuote] = useState<AssistedQuoteResult | null>(null);
+  const [quotePending, setQuotePending] = useState(false);
+  const [bookingPending, setBookingPending] = useState(false);
+  const [bookingResult, setBookingResult] = useState<AssistedBookingResult | null>(null);
+
+  const ticketsQuery = useQuery({
+    enabled,
+    queryKey: ['assistant-tickets', ticketFilter, callerFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+
+      if (ticketFilter) {
+        params.set('status', ticketFilter);
+      }
+
+      if (callerFilter.trim()) {
+        params.set('callerPhone', callerFilter.trim());
+      }
+
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      return ((await kuliApi.request(`/assistant/tickets${suffix}`)) as ApiEnvelope<HotlineTicket[]>).data;
+    }
+  });
+
+  const vehicleClassesQuery = useQuery({
+    enabled,
+    queryKey: ['vehicle-classes'],
+    queryFn: async () => ((await kuliApi.vehicleClasses()) as ApiEnvelope<VehicleClass[]>).data
+  });
+
+  const tickets = ticketsQuery.data ?? [];
+  const selectedTicket = tickets.find((ticket) => ticket.id === selectedTicketId) ?? tickets[0];
+  const vehicleClasses = vehicleClassesQuery.data ?? [];
+  const canEditTicket = selectedTicket && !['closed', 'cancelled'].includes(selectedTicket.status);
+  const canBook = selectedTicket && ['assigned', 'in_progress', 'pending_client'].includes(selectedTicket.status);
+
+  useEffect(() => {
+    if (!selectedTicketId && tickets[0]) {
+      setSelectedTicketId(tickets[0].id);
+      setCallSummary(tickets[0].callSummary ?? '');
+      setFollowUpAt(tickets[0].followUpAt ?? '');
+      setClientSearchPhone(tickets[0].callerPhone ?? clientSearchPhone);
+    }
+  }, [clientSearchPhone, selectedTicketId, tickets]);
+
+  useEffect(() => {
+    if (!vehicleClassId && vehicleClasses[0]) {
+      setVehicleClassId(vehicleClasses[0].id);
+    }
+  }, [vehicleClassId, vehicleClasses]);
+
+  if (!enabled) {
+    return null;
+  }
+
+  const createTicket = async () => {
+    if (!callerPhone.trim()) {
+      setTicketError('Caller phone is required.');
+      return;
+    }
+
+    setPendingTicketAction('create');
+    setTicketError('');
+    setTicketMessage('');
+
+    try {
+      const result = (await kuliApi.request('/assistant/tickets', {
+        method: 'POST',
+        body: {
+          source,
+          callerPhone: callerPhone.trim(),
+          callSummary: callSummary.trim() || undefined,
+          followUpAt: followUpAt.trim() || undefined
+        }
+      })) as ApiEnvelope<HotlineTicket>;
+
+      setSelectedTicketId(result.data.id);
+      setClientSearchPhone(result.data.callerPhone ?? callerPhone);
+      setTicketMessage('Ticket created.');
+      await queryClient.invalidateQueries({ queryKey: ['assistant-tickets'] });
+    } catch (error) {
+      setTicketError(getErrorMessage(error));
+    } finally {
+      setPendingTicketAction('');
+    }
+  };
+
+  const transitionTicket = async (status: TicketStatus) => {
+    if (!selectedTicket || !canEditTicket) {
+      return;
+    }
+
+    setPendingTicketAction(status);
+    setTicketError('');
+    setTicketMessage('');
+
+    try {
+      const result = (await kuliApi.request(`/assistant/tickets/${selectedTicket.id}/status`, {
+        method: 'PATCH',
+        body: {
+          status,
+          callSummary: callSummary.trim() || undefined,
+          followUpAt: followUpAt.trim() || undefined,
+          cancellationReason: status === 'cancelled' ? 'cancelled_by_staff' : undefined
+        }
+      })) as ApiEnvelope<HotlineTicket>;
+
+      setSelectedTicketId(result.data.id);
+      setTicketMessage(`Ticket moved to ${ticketStatusLabels[status]}.`);
+      await queryClient.invalidateQueries({ queryKey: ['assistant-tickets'] });
+    } catch (error) {
+      setTicketError(getErrorMessage(error));
+    } finally {
+      setPendingTicketAction('');
+    }
+  };
+
+  const searchClients = async () => {
+    setClientLookupPending(true);
+    setTicketError('');
+
+    try {
+      const result = (await kuliApi.request(`/assistant/clients/search?phone=${encodeURIComponent(clientSearchPhone.trim())}`)) as ApiEnvelope<UserProfile[]>;
+      setClientResults(result.data);
+      setSelectedClientId(result.data[0]?.id ?? '');
+    } catch (error) {
+      setTicketError(getErrorMessage(error));
+    } finally {
+      setClientLookupPending(false);
+    }
+  };
+
+  const quoteInput = () => ({
+    pickupLocation: buildAssistantLocation({ address: pickupAddress, lon: pickupLon, lat: pickupLat }),
+    destinationLocation: buildAssistantLocation({ address: destinationAddress, lon: destinationLon, lat: destinationLat }),
+    requestedVehicleClassId: vehicleClassId,
+    requestedPickupTime: pickupTime.trim() || undefined,
+    loadDetails: {
+      itemType,
+      estimatedWeightKg: parseRate(estimatedWeightKg),
+      estimatedVolumeCubicMeters: parseRate(estimatedVolumeCubicMeters),
+      loadingAssistanceRequested: true,
+      specialHandlingInstructions: callSummary.trim() || undefined
+    }
+  });
+
+  const createQuote = async () => {
+    const input = quoteInput();
+    const coordinates = [...input.pickupLocation.point.coordinates, ...input.destinationLocation.point.coordinates];
+
+    if (!vehicleClassId || !input.pickupLocation.addressText || !input.destinationLocation.addressText) {
+      setTicketError('Vehicle class, pickup, and destination are required before quoting.');
+      return;
+    }
+
+    if (coordinates.some((coordinate) => !Number.isFinite(coordinate))) {
+      setTicketError('Pickup and destination coordinates must be valid numbers.');
+      return;
+    }
+
+    setQuotePending(true);
+    setTicketError('');
+    setBookingResult(null);
+
+    try {
+      const result = (await kuliApi.request('/quotes', {
+        method: 'POST',
+        body: input
+      })) as ApiEnvelope<AssistedQuoteResult>;
+
+      setQuote(result.data);
+      setSelectedVehicleIds(result.data.candidates.slice(0, 3).map((candidate) => candidate.vehicleId));
+    } catch (error) {
+      setTicketError(getErrorMessage(error));
+    } finally {
+      setQuotePending(false);
+    }
+  };
+
+  const createBooking = async () => {
+    if (!selectedTicket || !canBook) {
+      setTicketError('Assign or start the ticket before creating a booking.');
+      return;
+    }
+
+    if (selectedVehicleIds.length === 0) {
+      setTicketError('Select at least one candidate vehicle before creating the assisted booking.');
+      return;
+    }
+
+    setBookingPending(true);
+    setTicketError('');
+    setTicketMessage('');
+
+    try {
+      const result = (await kuliApi.request('/assistant/bookings', {
+        method: 'POST',
+        idempotencyKey: createIdempotencyKey('assisted-booking'),
+        body: {
+          ...quoteInput(),
+          ticketId: selectedTicket.id,
+          clientId: selectedClientId || undefined,
+          clientContactSnapshot: {
+            phone: clientSearchPhone.trim() || selectedTicket.callerPhone
+          },
+          selectedVehicleIds
+        }
+      })) as ApiEnvelope<AssistedBookingResult>;
+
+      setBookingResult(result.data);
+      setTicketMessage('Assisted booking created and SMS confirmation intent recorded.');
+      await queryClient.invalidateQueries({ queryKey: ['assistant-tickets'] });
+    } catch (error) {
+      setTicketError(getErrorMessage(error));
+    } finally {
+      setBookingPending(false);
+    }
+  };
+
+  const toggleCandidate = (vehicleId: string) => {
+    setSelectedVehicleIds((current) => (current.includes(vehicleId) ? current.filter((id) => id !== vehicleId) : [...current, vehicleId]));
+  };
+
+  return (
+    <section className="panel panel--wide">
+      <div className="panel__header">
+        <div>
+          <p className="eyebrow">Hotline console</p>
+          <h2>Assisted booking workflow</h2>
+        </div>
+        <StatusBadge tone={ticketsQuery.isError ? 'blocked' : 'ready'}>{tickets.length} tickets</StatusBadge>
+      </div>
+      {ticketError ? <p className="field-error" role="alert">{ticketError}</p> : null}
+      {ticketMessage ? <p className="muted">{ticketMessage}</p> : null}
+      <div className="support-layout">
+        <div className="support-column">
+          <div className="support-toolbar">
+            <label>
+              Status
+              <select onChange={(event) => setTicketFilter(event.target.value as TicketStatus | '')} value={ticketFilter}>
+                <option value="">All</option>
+                {Object.entries(ticketStatusLabels).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Caller
+              <input onChange={(event) => setCallerFilter(event.target.value)} placeholder="+251..." value={callerFilter} />
+            </label>
+          </div>
+          <div className="queue-list">
+            {ticketsQuery.isLoading ? <p className="muted">Loading tickets...</p> : null}
+            {tickets.length === 0 && !ticketsQuery.isLoading ? <p className="muted">No hotline tickets match the filter.</p> : null}
+            {tickets.map((ticket) => (
+              <button
+                className={`queue-item ${selectedTicket?.id === ticket.id ? 'is-selected' : ''}`}
+                key={ticket.id}
+                onClick={() => {
+                  setSelectedTicketId(ticket.id);
+                  setCallSummary(ticket.callSummary ?? '');
+                  setFollowUpAt(ticket.followUpAt ?? '');
+                  setClientSearchPhone(ticket.callerPhone ?? '');
+                  setBookingResult(null);
+                  setQuote(null);
+                  setSelectedVehicleIds([]);
+                }}
+                type="button"
+              >
+                <strong>{ticket.ticketCode}</strong>
+                <span>{ticket.callerPhone || 'No caller phone'}</span>
+                <StatusBadge tone={ticketTone(ticket.status)}>{ticketStatusLabels[ticket.status]}</StatusBadge>
+              </button>
+            ))}
+          </div>
+          <div className="support-card">
+            <h3>Create ticket</h3>
+            <div className="source-picker">
+              {ticketSources.map((option) => (
+                <button className={source === option.value ? 'is-active' : ''} key={option.value} onClick={() => setSource(option.value)} type="button">
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <label>
+              Caller phone
+              <input onChange={(event) => setCallerPhone(event.target.value)} value={callerPhone} />
+            </label>
+            <label>
+              Follow up
+              <input onChange={(event) => setFollowUpAt(event.target.value)} placeholder="2026-05-21T12:00:00.000Z" value={followUpAt} />
+            </label>
+            <button className="icon-button" disabled={pendingTicketAction === 'create'} onClick={createTicket} type="button">
+              {pendingTicketAction === 'create' ? 'Creating...' : 'Create ticket'}
+            </button>
+          </div>
+        </div>
+
+        <div className="support-column support-column--wide">
+          <div className="detail-heading">
+            <div>
+              <h3>{selectedTicket?.ticketCode ?? 'Select a ticket'}</h3>
+              <p className="muted">{selectedTicket?.callerPhone ?? 'Choose or create a ticket to begin assisted booking.'}</p>
+            </div>
+            {selectedTicket ? <StatusBadge tone={ticketTone(selectedTicket.status)}>{ticketStatusLabels[selectedTicket.status]}</StatusBadge> : null}
+          </div>
+          <label className="decision-label">
+            Call notes
+            <textarea disabled={!canEditTicket} onChange={(event) => setCallSummary(event.target.value)} placeholder="Caller context, building access, load notes, confirmation details." value={callSummary} />
+          </label>
+          {selectedTicket ? (
+            <div className="decision-actions">
+              {nextTicketStatuses(selectedTicket).map((status) => (
+                <button
+                  className={status === 'cancelled' ? 'danger-button' : 'icon-button'}
+                  disabled={Boolean(pendingTicketAction)}
+                  key={status}
+                  onClick={() => transitionTicket(status)}
+                  type="button"
+                >
+                  {pendingTicketAction === status ? 'Working...' : ticketStatusLabels[status]}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="support-card">
+            <div className="detail-heading">
+              <div>
+                <h3>Client lookup</h3>
+                <p className="muted">Search existing clients by phone; assisted bookings can still use a caller snapshot when no app profile exists.</p>
+              </div>
+              <button className="icon-button" disabled={clientLookupPending} onClick={searchClients} type="button">
+                {clientLookupPending ? 'Searching...' : 'Search'}
+              </button>
+            </div>
+            <label>
+              Phone
+              <input onChange={(event) => setClientSearchPhone(event.target.value)} value={clientSearchPhone} />
+            </label>
+            <div className="client-result-list">
+              {clientResults.length === 0 ? <p className="muted">No linked client selected. The request will keep caller contact snapshot.</p> : null}
+              {clientResults.map((client) => (
+                <button className={selectedClientId === client.id ? 'client-result is-selected' : 'client-result'} key={client.id} onClick={() => setSelectedClientId(client.id)} type="button">
+                  <strong>{client.fullName || client.email || client.phone}</strong>
+                  <span>{client.phone || client.email || client.id}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="support-card">
+            <div className="detail-heading">
+              <div>
+                <h3>Assisted quote</h3>
+                <p className="muted">Use manual coordinates while maps stay provider-backed on the API.</p>
+              </div>
+              <button className="icon-button" disabled={quotePending || !canBook} onClick={createQuote} type="button">
+                {quotePending ? 'Quoting...' : 'Quote'}
+              </button>
+            </div>
+            <div className="support-form-grid">
+              <label>
+                Pickup
+                <input onChange={(event) => setPickupAddress(event.target.value)} value={pickupAddress} />
+              </label>
+              <label>
+                Pickup lon
+                <input onChange={(event) => setPickupLon(event.target.value)} value={pickupLon} />
+              </label>
+              <label>
+                Pickup lat
+                <input onChange={(event) => setPickupLat(event.target.value)} value={pickupLat} />
+              </label>
+              <label>
+                Destination
+                <input onChange={(event) => setDestinationAddress(event.target.value)} value={destinationAddress} />
+              </label>
+              <label>
+                Destination lon
+                <input onChange={(event) => setDestinationLon(event.target.value)} value={destinationLon} />
+              </label>
+              <label>
+                Destination lat
+                <input onChange={(event) => setDestinationLat(event.target.value)} value={destinationLat} />
+              </label>
+              <label>
+                Pickup time
+                <input onChange={(event) => setPickupTime(event.target.value)} value={pickupTime} />
+              </label>
+              <label>
+                Vehicle class
+                <select onChange={(event) => setVehicleClassId(event.target.value)} value={vehicleClassId}>
+                  {vehicleClasses.map((vehicleClass) => (
+                    <option key={vehicleClass.id} value={vehicleClass.id}>{vehicleClass.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Load type
+                <select onChange={(event) => setItemType(event.target.value)} value={itemType}>
+                  {loadTypeOptions.map((option) => (
+                    <option key={option} value={option}>{option.replaceAll('_', ' ')}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Weight kg
+                <input onChange={(event) => setEstimatedWeightKg(event.target.value)} value={estimatedWeightKg} />
+              </label>
+              <label>
+                Volume m3
+                <input onChange={(event) => setEstimatedVolumeCubicMeters(event.target.value)} value={estimatedVolumeCubicMeters} />
+              </label>
+            </div>
+          </div>
+
+          {quote ? (
+            <div className="support-card">
+              <div className="detail-heading">
+                <div>
+                  <h3>{quote.quoteSnapshot.currency} {quote.quoteSnapshot.totalEstimate.toFixed(2)}</h3>
+                  <p className="muted">{quote.route.distanceKm.toFixed(2)}km / {Math.round(quote.route.etaMinutes)} min / radius {quote.search.radiusKmUsed}km</p>
+                </div>
+                <StatusBadge tone={quote.search.noResults ? 'warn' : 'ready'}>{quote.candidates.length} candidates</StatusBadge>
+              </div>
+              <div className="candidate-grid">
+                {quote.candidates.length === 0 ? <p className="muted">No nearby approved trucks. Move ticket to pending client or adjust class/location.</p> : null}
+                {quote.candidates.map((candidate) => (
+                  <button
+                    className={`candidate-card ${selectedVehicleIds.includes(candidate.vehicleId) ? 'is-selected' : ''}`}
+                    key={candidate.vehicleId}
+                    onClick={() => toggleCandidate(candidate.vehicleId)}
+                    type="button"
+                  >
+                    <strong>{candidate.licensePlate}</strong>
+                    <span>{candidate.vehicleClassSnapshot?.name || 'Vehicle'} / {candidate.distanceKm}km / rating {candidate.rating.toFixed(1)}</span>
+                    <em>score {candidate.rankingScore.toFixed(1)}</em>
+                  </button>
+                ))}
+              </div>
+              <button className="icon-button" disabled={bookingPending || selectedVehicleIds.length === 0 || !canBook} onClick={createBooking} type="button">
+                {bookingPending ? 'Creating...' : `Create request (${selectedVehicleIds.length} selected)`}
+              </button>
+            </div>
+          ) : null}
+
+          {bookingResult ? (
+            <div className="support-card support-card--success">
+              <div className="detail-heading">
+                <div>
+                  <h3>{bookingResult.request.requestCode}</h3>
+                  <p className="muted">{bookingResult.offers.length} offers dispatched / ticket linked to {bookingResult.ticket.ticketCode}</p>
+                </div>
+                <StatusBadge tone="ready">{bookingResult.request.status}</StatusBadge>
+              </div>
+              <p className="muted">SMS intent: {bookingResult.confirmationIntent.channel} to {bookingResult.confirmationIntent.targetPhone || 'caller'} ({bookingResult.confirmationIntent.status || 'pending'}).</p>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function BlockedAccount({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
   return (
     <main className="login-shell">
@@ -806,7 +1435,7 @@ function StaffWorkspace({ profile, onSignOut }: { profile: UserProfile; onSignOu
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Frontend Phase 3</p>
+            <p className="eyebrow">Frontend Phase 6</p>
             <h2>{workspace === 'admin' ? 'Admin dashboard' : 'Assistant console'}</h2>
           </div>
           <StatusBadge tone="ready">
@@ -818,6 +1447,7 @@ function StaffWorkspace({ profile, onSignOut }: { profile: UserProfile; onSignOu
           <ApiHealthPanel />
           <RuntimePanel />
           <RouteTable title={workspace === 'admin' ? 'Admin routes' : 'Assistant routes'} routes={routes} />
+          <AssistantSupportPanel enabled={profile.role === 'assistant'} profile={profile} />
           <AdminVerificationPanel enabled={profile.role === 'admin'} />
           <AdminPricingPanel enabled={profile.role === 'admin'} />
           <AdminUsersPanel enabled={profile.role === 'admin'} />
