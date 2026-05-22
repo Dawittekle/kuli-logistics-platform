@@ -452,7 +452,9 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
-  const canSubmit = email.trim() && password.length >= 6 && (mode === 'login' || fullName.trim());
+  const canSubmit = runtimeConfig.demoAuthEnabled
+    ? Boolean(email.trim()) && (mode === 'login' || Boolean(fullName.trim()))
+    : Boolean(email.trim()) && password.length >= 6 && (mode === 'login' || Boolean(fullName.trim()));
 
   const loadProfile = async (session: Session) => {
     const profile = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
@@ -469,15 +471,18 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
     setNotice('');
 
     try {
-      const suffix = Date.now().toString(36);
+      const normalizedEmail = email.trim().toLowerCase();
+      const suffix = normalizedEmail
+        ? normalizedEmail.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 42)
+        : Date.now().toString(36);
       const result = (await kuliApi.request('/dev/demo-profile', {
         method: 'POST',
         body: {
           role: demoRole,
           suffix,
-          fullName: demoRole === 'client' ? `Demo Client ${suffix}` : `Demo Owner ${suffix}`,
-          email: `${demoRole}-${suffix}@demo.kuli.local`,
-          phone: demoRole === 'client' ? '+251900100001' : '+251900200001'
+          fullName: fullName.trim() || (demoRole === 'client' ? `Demo Client ${suffix}` : `Demo Owner ${suffix}`),
+          email: normalizedEmail || `${demoRole}-${suffix}@demo.kuli.local`,
+          phone: phone.trim() || (demoRole === 'client' ? '+251900100001' : '+251900200001')
         }
       })) as ApiEnvelope<{ user: UserProfile; accessToken: string }>;
 
@@ -570,6 +575,11 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
 
   const submit = async () => {
     if (!canSubmit || pending) {
+      return;
+    }
+
+    if (runtimeConfig.demoAuthEnabled) {
+      await startDemoProfile(mode === 'register' ? role : 'client');
       return;
     }
 

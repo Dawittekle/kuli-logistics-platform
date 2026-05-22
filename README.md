@@ -180,7 +180,7 @@ MOBILE_APP_DEMO_AUTH_ENABLED=true
 ADMIN_APP_DEMO_AUTH_ENABLED=true
 ```
 
-When demo auth is enabled outside production, the mobile login screen shows demo client/owner buttons and the admin login screen shows demo admin/assistant buttons. These buttons create or refresh MongoDB profiles and use local development tokens, so they do not create Supabase users and do not send email OTPs.
+When demo auth is enabled outside production, the mobile login/register form and demo client/owner buttons create or refresh MongoDB profiles with local development tokens instead of calling Supabase. The admin login form and demo admin/assistant buttons do the same for staff. This lets you explore the UI without creating Supabase users or sending email OTPs.
 
 You can also seed many fake local users and vehicles:
 

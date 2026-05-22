@@ -29,6 +29,18 @@ const parseEnvFile = () => {
 
 const env = parseEnvFile();
 
+const resolveBoolean = (value, fallback = false) => {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  return ['1', 'true', 'yes', 'on'].includes(String(value).trim().toLowerCase());
+};
+
+const apiBaseUrl = process.env.MOBILE_APP_API_BASE_URL ?? env.MOBILE_APP_API_BASE_URL ?? 'http://localhost:4000/api/v1';
+const demoAuthEnv = process.env.MOBILE_APP_DEMO_AUTH_ENABLED ?? env.MOBILE_APP_DEMO_AUTH_ENABLED;
+const isLocalApi = /^(http:\/\/)?(localhost|127\.0\.0\.1|10\.0\.2\.2)(:|\/|$)/.test(apiBaseUrl);
+
 export default ({ config }) => ({
   ...config,
   name: 'KULI',
@@ -51,10 +63,10 @@ export default ({ config }) => ({
   },
   extra: {
     kuli: {
-      apiBaseUrl: process.env.MOBILE_APP_API_BASE_URL ?? env.MOBILE_APP_API_BASE_URL ?? 'http://localhost:4000/api/v1',
+      apiBaseUrl,
       supabaseUrl: process.env.MOBILE_APP_SUPABASE_URL ?? env.MOBILE_APP_SUPABASE_URL ?? '',
       supabaseAnonKey: process.env.MOBILE_APP_SUPABASE_ANON_KEY ?? env.MOBILE_APP_SUPABASE_ANON_KEY ?? '',
-      demoAuthEnabled: (process.env.MOBILE_APP_DEMO_AUTH_ENABLED ?? env.MOBILE_APP_DEMO_AUTH_ENABLED ?? 'false') === 'true'
+      demoAuthEnabled: resolveBoolean(demoAuthEnv, isLocalApi)
     }
   }
 });

@@ -377,7 +377,7 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
   const [password, setPassword] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  const canSubmit = email.trim() && password.length >= 6;
+  const canSubmit = runtimeConfig.demoAuthEnabled ? Boolean(email.trim()) : Boolean(email.trim()) && password.length >= 6;
 
   const startDemoProfile = async (role: Extract<Role, 'admin' | 'assistant'>) => {
     if (!runtimeConfig.demoAuthEnabled || pending) {
@@ -388,14 +388,17 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
     setError('');
 
     try {
-      const suffix = Date.now().toString(36);
+      const normalizedEmail = email.trim().toLowerCase();
+      const suffix = normalizedEmail
+        ? normalizedEmail.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 42)
+        : Date.now().toString(36);
       const result = (await kuliApi.request('/dev/demo-profile', {
         method: 'POST',
         body: {
           role,
           suffix,
           fullName: role === 'admin' ? `Demo Admin ${suffix}` : `Demo Assistant ${suffix}`,
-          email: `${role}-${suffix}@demo.kuli.local`,
+          email: normalizedEmail || `${role}-${suffix}@demo.kuli.local`,
           phone: role === 'admin' ? '+251900300001' : '+251900400001'
         }
       })) as ApiEnvelope<{ user: UserProfile; accessToken: string }>;
@@ -416,6 +419,11 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
     event.preventDefault();
 
     if (!canSubmit || pending) {
+      return;
+    }
+
+    if (runtimeConfig.demoAuthEnabled) {
+      await startDemoProfile('admin');
       return;
     }
 

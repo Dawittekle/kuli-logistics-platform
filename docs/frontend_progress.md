@@ -99,7 +99,7 @@ Validation:
 Notes:
 
 - Real Supabase credential/manual login checks remain open for client and truck-owner landing because no test account credentials were supplied during this phase.
-- Local demo auth now provides client/truck-owner buttons in development so frontend flows can be explored without email OTP limits or real Supabase accounts.
+- Local demo auth now provides client/truck-owner buttons and temporarily routes normal mobile login/register submissions through development profiles so frontend flows can be explored without email OTP limits or real Supabase accounts.
 - Attempted random Supabase account creation on 2026-05-20. `example.com` addresses were rejected as invalid and valid-looking Gmail-format test addresses were rejected by Supabase email rate limits, so no random test accounts were created.
 - Mobile and admin now both route by backend `/me`; locally selected/public roles only affect public mobile registration.
 - Admin-only user management is hidden for assistants and still protected by backend RBAC.
