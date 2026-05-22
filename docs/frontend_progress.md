@@ -36,6 +36,7 @@ Related documents:
 - [x] API `.env` has required Supabase and local service keys present.
 - [x] Mobile `.env` has API and Supabase keys present.
 - [x] Admin `.env` has API and Supabase keys present.
+- [x] Local demo auth flags are available for browser/mobile-web exploration without creating Supabase users.
 - [x] `npm run verify:startup` passes for the real frontend foundations.
 - [x] `npm run smoke:critical` passes for the dependency-light workflow checklist.
 - [x] Mobile Android export passes from the `apps/mobile` Expo workspace.
@@ -90,6 +91,7 @@ Validation:
 
 - [ ] Client can register or log in and land on client home.
 - [ ] Truck owner can register or log in and land on owner home.
+- [x] Local demo client and truck-owner profiles can bypass Supabase email verification in development only.
 - [x] Staff cannot self-register publicly.
 - [x] Admin/assistant routes reject wrong roles.
 - [x] Suspended account state blocks commands in UI.
@@ -97,6 +99,7 @@ Validation:
 Notes:
 
 - Real Supabase credential/manual login checks remain open for client and truck-owner landing because no test account credentials were supplied during this phase.
+- Local demo auth now provides client/truck-owner buttons in development so frontend flows can be explored without email OTP limits or real Supabase accounts.
 - Attempted random Supabase account creation on 2026-05-20. `example.com` addresses were rejected as invalid and valid-looking Gmail-format test addresses were rejected by Supabase email rate limits, so no random test accounts were created.
 - Mobile and admin now both route by backend `/me`; locally selected/public roles only affect public mobile registration.
 - Admin-only user management is hidden for assistants and still protected by backend RBAC.
@@ -285,7 +288,6 @@ Notes:
 
 - Admin dashboard now fetches `/api/v1/admin/dashboard` and `/api/v1/admin/release-readiness`, with dense metric and readiness panels.
 - Admin users now support role/status/search filters, detail fetch, and server-confirmed status updates through `/api/v1/admin/users/:id/status`.
-- Admin trip oversight lists all admin-visible KULI requests via `/api/v1/kuli-requests/mine` and shows selected request participants, estimate, and status events.
 - Admin trip oversight lists all admin-visible KULI requests via `/api/v1/admin/kuli-requests` and shows selected request participants, estimate, and status events.
 - Admin audit viewer filters by actor, action, and target type, and renders selected metadata without hiding append-only context.
 - Admin layout now has responsive metric/readiness/detail grids and keyboard-focusable queue/table rows.
@@ -294,6 +296,7 @@ Notes:
 - `adb devices` returned no attached Android emulator, so live emulator smoke remains open for your later device run.
 - Follow-up verification on 2026-05-21 added Expo web dependencies, confirmed `npx expo export --platform web --output-dir /tmp/kuli-mobile-check-web`, and rendered the mobile web entry screen in headless Chrome at a 390x844 viewport.
 - Follow-up verification on 2026-05-21 rendered the admin production build in headless Chrome at a 1440x1000 viewport and confirmed no blank/crashed entry screen.
+- Follow-up local demo pass on 2026-05-22 added development-only demo auth buttons for all roles, local fake user seeding, and production release-readiness protection against demo auth being enabled.
 
 ## Commit Discipline
 

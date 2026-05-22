@@ -17,7 +17,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { runtimeConfig, runtimeReadiness } from './config/runtime';
-import { kuliApi } from './lib/api';
+import { clearDemoAccessToken, kuliApi, setDemoAccessToken } from './lib/api';
 import { supabase } from './lib/supabase';
 
 type Role = 'client' | 'truck_owner' | 'assistant' | 'admin';
@@ -337,6 +337,23 @@ const getErrorMessage = (error: unknown) => {
   return 'Something went wrong. Please try again.';
 };
 
+const createDemoSession = ({ accessToken, email }: { accessToken: string; email?: string }) =>
+  ({
+    access_token: accessToken,
+    refresh_token: 'local-demo-refresh-token',
+    token_type: 'bearer',
+    expires_in: 3600,
+    expires_at: Math.floor(Date.now() / 1000) + 3600,
+    user: {
+      id: accessToken.replace(/^dev:/, ''),
+      app_metadata: {},
+      user_metadata: {},
+      aud: 'authenticated',
+      created_at: new Date().toISOString(),
+      email
+    }
+  }) as Session;
+
 function StatusBadge({ tone, children }: { tone: 'ready' | 'warn' | 'blocked' | 'muted'; children: ReactNode }) {
   return <span className={`status-badge status-badge--${tone}`}>{children}</span>;
 }
@@ -361,6 +378,39 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const canSubmit = email.trim() && password.length >= 6;
+
+  const startDemoProfile = async (role: Extract<Role, 'admin' | 'assistant'>) => {
+    if (!runtimeConfig.demoAuthEnabled || pending) {
+      return;
+    }
+
+    setPending(true);
+    setError('');
+
+    try {
+      const suffix = Date.now().toString(36);
+      const result = (await kuliApi.request('/dev/demo-profile', {
+        method: 'POST',
+        body: {
+          role,
+          suffix,
+          fullName: role === 'admin' ? `Demo Admin ${suffix}` : `Demo Assistant ${suffix}`,
+          email: `${role}-${suffix}@demo.kuli.local`,
+          phone: role === 'admin' ? '+251900300001' : '+251900400001'
+        }
+      })) as ApiEnvelope<{ user: UserProfile; accessToken: string }>;
+
+      setDemoAccessToken(result.data.accessToken);
+      onAuthenticated(result.data.user, createDemoSession({
+        accessToken: result.data.accessToken,
+        email: result.data.user.email
+      }));
+    } catch (demoError) {
+      setError(getErrorMessage(demoError));
+    } finally {
+      setPending(false);
+    }
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -420,6 +470,12 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
           <LockKeyhole aria-hidden="true" size={18} />
           {pending ? 'Signing in...' : 'Sign in'}
         </button>
+        {runtimeConfig.demoAuthEnabled ? (
+          <div className="button-row">
+            <button className="secondary-action" disabled={pending} onClick={() => startDemoProfile('admin')} type="button">Demo admin</button>
+            <button className="secondary-action" disabled={pending} onClick={() => startDemoProfile('assistant')} type="button">Demo assistant</button>
+          </div>
+        ) : null}
         <p className="muted">There is intentionally no staff self-registration path.</p>
       </form>
     </main>
@@ -431,7 +487,8 @@ function RuntimePanel() {
     () => [
       { label: 'API base URL', ready: runtimeReadiness.hasApiBaseUrl },
       { label: 'Supabase URL', ready: runtimeReadiness.hasSupabaseUrl },
-      { label: 'Supabase anon key', ready: runtimeReadiness.hasSupabaseAnonKey }
+      { label: 'Supabase anon key', ready: runtimeReadiness.hasSupabaseAnonKey },
+      { label: 'Local demo auth', ready: runtimeReadiness.demoAuthEnabled }
     ],
     []
   );
@@ -2627,6 +2684,7 @@ export default function App() {
   };
 
   const handleSignOut = async () => {
+    clearDemoAccessToken();
     await supabase.auth.signOut();
     queryClient.clear();
     setSession(null);

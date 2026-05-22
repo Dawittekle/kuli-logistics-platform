@@ -109,6 +109,31 @@ const createRouteRequest = (context) => async (request) => {
     return success(await context.vehicleRegistryService.listActiveVehicleClasses());
   }
 
+  if (method === 'POST' && path === '/api/v1/dev/demo-profile') {
+    if (context.env.nodeEnv === 'production' || !context.env.demoAuthEnabled) {
+      throw new AppError(404, 'ROUTE_NOT_FOUND', 'Demo auth is not enabled.');
+    }
+
+    const body = await parseJsonBody(request);
+    const role = body.role;
+    const suffix = body.suffix ?? Math.random().toString(36).slice(2, 8);
+    const supabaseUserId = body.supabaseUserId ?? `demo-${role}-${suffix}`;
+    const email = body.email ?? `${supabaseUserId}@demo.kuli.local`;
+
+    const user = await context.accountService.upsertDemoProfile({
+      supabaseUserId,
+      role,
+      fullName: body.fullName ?? `Demo ${String(role ?? 'user').replace('_', ' ')}`,
+      email,
+      phone: body.phone
+    });
+
+    return success({
+      user,
+      accessToken: `dev:${supabaseUserId}`
+    }, 201);
+  }
+
   if (method === 'POST' && path === '/api/v1/quotes') {
     const { currentUser } = await resolveAuth();
     assertActiveAccount(currentUser);
@@ -1211,7 +1236,8 @@ export const createAppContext = async (config = env) => {
     audience: config.supabaseJwtAudience,
     jwksUrl: config.supabaseJwksUrl,
     supabaseUrl: config.supabaseUrl,
-    anonKey: config.supabaseAnonKey
+    anonKey: config.supabaseAnonKey,
+    allowDevelopmentTokens: config.nodeEnv !== 'production' && config.demoAuthEnabled
   });
 
   await bootstrapAdmin({

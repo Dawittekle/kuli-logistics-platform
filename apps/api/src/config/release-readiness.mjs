@@ -27,6 +27,12 @@ export const validateRuntimeConfig = (config) => {
       message: 'Production does not use development JWT mode.'
     },
     {
+      id: 'demo_auth_disabled',
+      ok: config.nodeEnv !== 'production' || !config.demoAuthEnabled,
+      severity: 'error',
+      message: 'Production does not enable local demo authentication.'
+    },
+    {
       id: 'bootstrap_admin',
       ok: Boolean(config.bootstrapAdminSupabaseUserId || config.bootstrapAdminEmail),
       severity: 'warning',

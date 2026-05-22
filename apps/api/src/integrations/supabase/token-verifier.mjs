@@ -21,13 +21,14 @@ const parseDevelopmentToken = (token) => {
 };
 
 export class SupabaseTokenVerifier {
-  constructor({ mode, issuer, audience, jwksUrl, supabaseUrl, anonKey, fetchImpl = fetch }) {
+  constructor({ mode, issuer, audience, jwksUrl, supabaseUrl, anonKey, allowDevelopmentTokens = false, fetchImpl = fetch }) {
     this.mode = mode;
     this.issuer = issuer;
     this.audience = audience;
     this.jwksUrl = jwksUrl;
     this.supabaseUrl = supabaseUrl;
     this.anonKey = anonKey;
+    this.allowDevelopmentTokens = allowDevelopmentTokens;
     this.fetchImpl = fetchImpl;
     this.jwks = null;
   }
@@ -76,7 +77,7 @@ export class SupabaseTokenVerifier {
 
     const token = authorizationHeader.slice('Bearer '.length).trim();
 
-    if (this.mode === 'development_stub') {
+    if (this.mode === 'development_stub' || (this.allowDevelopmentTokens && token.startsWith('dev:'))) {
       return parseDevelopmentToken(token);
     }
 

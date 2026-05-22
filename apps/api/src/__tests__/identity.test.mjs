@@ -115,6 +115,17 @@ test('development token verifier resolves dev bearer tokens', async () => {
   assert.equal(authUser.sub, 'client-auth-001');
 });
 
+test('supabase verifier can allow local demo dev tokens when explicitly enabled', async () => {
+  const verifier = new SupabaseTokenVerifier({
+    mode: 'supabase',
+    allowDevelopmentTokens: true
+  });
+
+  const authUser = await verifier.verifyAuthorizationHeader('Bearer dev:demo-owner-001');
+
+  assert.equal(authUser.sub, 'demo-owner-001');
+});
+
 test('supabase verifier fails closed when project verification config is missing', async () => {
   const verifier = new SupabaseTokenVerifier({
     mode: 'supabase',

@@ -165,9 +165,32 @@ cd apps/mobile
 npx expo export --platform android --output-dir /tmp/kuli-mobile-export
 ```
 
-## Development Tokens
+## Local Demo Auth and Fake Users
 
-Until a real Supabase project is wired in, the API supports a development token mode.
+For local UI exploration, enable demo auth in your ignored `.env` files:
+
+```env
+# apps/api/.env
+DEMO_AUTH_ENABLED=true
+
+# apps/mobile/.env
+MOBILE_APP_DEMO_AUTH_ENABLED=true
+
+# apps/admin/.env
+ADMIN_APP_DEMO_AUTH_ENABLED=true
+```
+
+When demo auth is enabled outside production, the mobile login screen shows demo client/owner buttons and the admin login screen shows demo admin/assistant buttons. These buttons create or refresh MongoDB profiles and use local development tokens, so they do not create Supabase users and do not send email OTPs.
+
+You can also seed many fake local users and vehicles:
+
+```bash
+npm run seed:fake-users
+```
+
+The seed is idempotent by record id and creates demo clients, truck owners, vehicles, staff users, and hotline tickets. Override counts with `FAKE_CLIENTS` and `FAKE_OWNERS` if needed.
+
+Local development tokens use:
 
 Use:
 
@@ -181,7 +204,9 @@ Example:
 Authorization: Bearer dev:client-demo-001
 ```
 
-This exists to unblock local Phase 1 work. Set `SUPABASE_JWT_MODE=supabase` and provide the Supabase project values in `apps/api/.env` to use real Supabase JWT verification.
+Examples created by `npm run seed:fake-users` include `dev:demo-client-001`, `dev:demo-owner-001`, `dev:demo-admin-001`, and `dev:demo-assistant-001`.
+
+Keep all demo auth flags disabled in production. Production must use `SUPABASE_JWT_MODE=supabase` with real Supabase project values in `apps/api/.env`.
 
 ## Admin Bootstrap
 
@@ -219,7 +244,7 @@ Do not put the Supabase service-role key in frontend env files or commit it anyw
 ## Current Limitations
 
 - The API currently covers identity/profile/RBAC, vehicle verification, quote/pricing/search, request/offer acceptance, manual trip execution, request-scoped messages, in-app notification records, assisted booking tickets, ratings, reports, and cash/manual payment records.
-- Frontend Phase 0 is complete, but later phases still need real auth screens, forms, tables, maps/location UX, trip workflows, and admin/assistant feature screens.
+- Frontend phases are implemented for mobile web/Expo and admin web, including role-aware auth, marketplace workflows, trust/payment screens, and admin/assistant operations.
 - Supabase JWKS verification is wired in the API, and the mobile/admin apps have Supabase clients configured through local env files.
 - No file storage, telephony integration, digital payment gateway, automated commission collection, or production notification delivery flows yet.
 - Production deployment still requires real provider credentials, backups, monitoring, and a hosted environment even though release-readiness checks and smoke scripts are now scaffolded.

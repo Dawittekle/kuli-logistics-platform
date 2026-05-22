@@ -53,7 +53,8 @@ export default ({ config }) => ({
     kuli: {
       apiBaseUrl: process.env.MOBILE_APP_API_BASE_URL ?? env.MOBILE_APP_API_BASE_URL ?? 'http://localhost:4000/api/v1',
       supabaseUrl: process.env.MOBILE_APP_SUPABASE_URL ?? env.MOBILE_APP_SUPABASE_URL ?? '',
-      supabaseAnonKey: process.env.MOBILE_APP_SUPABASE_ANON_KEY ?? env.MOBILE_APP_SUPABASE_ANON_KEY ?? ''
+      supabaseAnonKey: process.env.MOBILE_APP_SUPABASE_ANON_KEY ?? env.MOBILE_APP_SUPABASE_ANON_KEY ?? '',
+      demoAuthEnabled: (process.env.MOBILE_APP_DEMO_AUTH_ENABLED ?? env.MOBILE_APP_DEMO_AUTH_ENABLED ?? 'false') === 'true'
     }
   }
 });

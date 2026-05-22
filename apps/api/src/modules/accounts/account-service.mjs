@@ -145,4 +145,35 @@ export class AccountService {
       })
     );
   }
+
+  async upsertDemoProfile({ supabaseUserId, role, fullName, email, phone }) {
+    if (!Object.values(roles).includes(role)) {
+      throw new AppError(422, 'INVALID_ROLE', 'Unknown demo role.');
+    }
+
+    const existingUser = await this.userRepository.findBySupabaseUserId(supabaseUserId);
+
+    if (existingUser) {
+      return this.userRepository.save({
+        ...existingUser,
+        role,
+        accountStatus: accountStatuses.active,
+        fullName: pickDefined(fullName, existingUser.fullName),
+        email: pickDefined(email, existingUser.email),
+        phone: pickDefined(phone, existingUser.phone)
+      });
+    }
+
+    return this.userRepository.save(
+      createUserRecord({
+        id: createId('usr_demo'),
+        supabaseUserId,
+        role,
+        fullName,
+        email,
+        phone,
+        createdByAdminId: [roles.admin, roles.assistant].includes(role) ? 'local_demo' : undefined
+      })
+    );
+  }
 }

@@ -78,3 +78,21 @@ test('production runtime config fails closed for stub auth', () => {
   assert.equal(readiness.ok, false);
   assert.throws(() => assertRuntimeConfig(config), /Production runtime configuration failed/);
 });
+
+test('production runtime config fails closed for local demo auth', () => {
+  const config = {
+    nodeEnv: 'production',
+    mongodbUri: 'mongodb://localhost:27018/kuli',
+    supabaseUrl: 'https://kuli.supabase.co',
+    supabaseAnonKey: 'anon-key',
+    supabaseJwtMode: 'supabase',
+    demoAuthEnabled: true,
+    bootstrapAdminSupabaseUserId: 'admin-001',
+    bootstrapAdminEmail: ''
+  };
+  const readiness = validateRuntimeConfig(config);
+
+  assert.equal(readiness.ok, false);
+  assert.equal(readiness.checks.find((check) => check.id === 'demo_auth_disabled')?.ok, false);
+  assert.throws(() => assertRuntimeConfig(config), /demo_auth_disabled/);
+});

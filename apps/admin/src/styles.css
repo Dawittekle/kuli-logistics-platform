@@ -308,6 +308,23 @@ button:disabled {
   width: fit-content;
 }
 
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.secondary-action {
+  background: #fffdf7;
+  border: 1px solid #0d5668;
+  border-radius: 8px;
+  color: #0d5668;
+  cursor: pointer;
+  font-weight: 900;
+  min-height: 42px;
+  padding: 9px 14px;
+}
+
 .runtime-list {
   display: grid;
   gap: 10px;

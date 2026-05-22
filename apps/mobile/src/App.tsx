@@ -18,7 +18,7 @@ import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tan
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import type { Session } from '@supabase/supabase-js';
 
-import { kuliApi } from './lib/api';
+import { clearDemoAccessToken, kuliApi, setDemoAccessToken } from './lib/api';
 import { supabase } from './lib/supabase';
 import { runtimeConfig, runtimeReadiness } from './config/runtime';
 import { colors, radii, spacing } from './theme';
@@ -318,6 +318,23 @@ const getErrorMessage = (error: unknown) => {
 const isEmailNotConfirmedError = (error: unknown) =>
   error instanceof Error && error.message.toLowerCase().includes('email not confirmed');
 
+const createDemoSession = ({ accessToken, email }: { accessToken: string; email?: string }) =>
+  ({
+    access_token: accessToken,
+    refresh_token: 'local-demo-refresh-token',
+    token_type: 'bearer',
+    expires_in: 3600,
+    expires_at: Math.floor(Date.now() / 1000) + 3600,
+    user: {
+      id: accessToken.replace(/^dev:/, ''),
+      app_metadata: {},
+      user_metadata: {},
+      aud: 'authenticated',
+      created_at: new Date().toISOString(),
+      email
+    }
+  }) as Session;
+
 function StatusPill({ tone, children }: { tone: 'ready' | 'warn' | 'blocked'; children: string }) {
   return (
     <View style={[styles.pill, tone === 'ready' && styles.pillReady, tone === 'warn' && styles.pillWarn, tone === 'blocked' && styles.pillBlocked]}>
@@ -440,6 +457,40 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
   const loadProfile = async (session: Session) => {
     const profile = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
     onAuthenticated(profile.data, session);
+  };
+
+  const startDemoProfile = async (demoRole: PublicRole) => {
+    if (!runtimeConfig.demoAuthEnabled || pending) {
+      return;
+    }
+
+    setPending(true);
+    setError('');
+    setNotice('');
+
+    try {
+      const suffix = Date.now().toString(36);
+      const result = (await kuliApi.request('/dev/demo-profile', {
+        method: 'POST',
+        body: {
+          role: demoRole,
+          suffix,
+          fullName: demoRole === 'client' ? `Demo Client ${suffix}` : `Demo Owner ${suffix}`,
+          email: `${demoRole}-${suffix}@demo.kuli.local`,
+          phone: demoRole === 'client' ? '+251900100001' : '+251900200001'
+        }
+      })) as ApiEnvelope<{ user: UserProfile; accessToken: string }>;
+
+      setDemoAccessToken(result.data.accessToken);
+      onAuthenticated(result.data.user, createDemoSession({
+        accessToken: result.data.accessToken,
+        email: result.data.user.email
+      }));
+    } catch (demoError) {
+      setError(getErrorMessage(demoError));
+    } finally {
+      setPending(false);
+    }
   };
 
   const resendConfirmation = async (targetEmail = verificationDraft?.email) => {
@@ -675,6 +726,20 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
                   style={[styles.secondaryButton, styles.actionButton, verificationPending && styles.buttonDisabled]}
                 >
                   <Text style={styles.secondaryButtonText}>Resend</Text>
+                </Pressable>
+              </View>
+            </ShellCard>
+          ) : null}
+
+          {runtimeConfig.demoAuthEnabled ? (
+            <ShellCard title="Local demo access">
+              <Text style={styles.copy}>Explore KULI without Supabase email verification. Demo profiles use local dev tokens and are only for this development environment.</Text>
+              <View style={styles.actionRow}>
+                <Pressable accessibilityRole="button" disabled={pending} onPress={() => startDemoProfile('client')} style={[styles.secondaryButton, styles.actionButton, pending && styles.buttonDisabled]}>
+                  <Text style={styles.secondaryButtonText}>Demo client</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" disabled={pending} onPress={() => startDemoProfile('truck_owner')} style={[styles.primaryButton, styles.actionButton, pending && styles.buttonDisabled]}>
+                  <Text style={styles.primaryButtonText}>Demo owner</Text>
                 </Pressable>
               </View>
             </ShellCard>
@@ -2507,7 +2572,8 @@ function RuntimeReadiness() {
     () => [
       { label: 'API base URL', ready: runtimeReadiness.hasApiBaseUrl },
       { label: 'Supabase URL', ready: runtimeReadiness.hasSupabaseUrl },
-      { label: 'Supabase anon key', ready: runtimeReadiness.hasSupabaseAnonKey }
+      { label: 'Supabase anon key', ready: runtimeReadiness.hasSupabaseAnonKey },
+      { label: 'Local demo auth', ready: runtimeReadiness.demoAuthEnabled }
     ],
     []
   );
@@ -2580,6 +2646,7 @@ function AppContent() {
   };
 
   const handleSignOut = async () => {
+    clearDemoAccessToken();
     await supabase.auth.signOut();
     query.clear();
     setSession(null);

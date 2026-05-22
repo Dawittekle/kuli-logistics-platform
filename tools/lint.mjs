@@ -70,6 +70,7 @@ const requiredPaths = [
   'tools/verify-startup.mjs',
   'tools/smoke-critical-workflows.mjs',
   'tools/seed-demo-data.mjs',
+  'tools/seed-fake-users.mjs',
   'docs/project_overview.md',
   'docs/system_architecture.md',
   'docs/feature_specifications.md',

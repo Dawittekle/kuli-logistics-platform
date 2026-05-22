@@ -13,6 +13,13 @@ const toList = (value) =>
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
+const toBoolean = (value, fallback = false) => {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  return ['1', 'true', 'yes', 'on'].includes(String(value).trim().toLowerCase());
+};
 
 const supabaseUrl = withoutTrailingSlash(process.env.SUPABASE_URL ?? 'https://example.supabase.co');
 const defaultSupabaseIssuer = `${supabaseUrl}/auth/v1`;
@@ -27,6 +34,7 @@ export const env = {
   supabaseJwtIssuer: process.env.SUPABASE_JWT_ISSUER ?? defaultSupabaseIssuer,
   supabaseJwtAudience: process.env.SUPABASE_JWT_AUDIENCE ?? 'authenticated',
   supabaseJwksUrl: process.env.SUPABASE_JWKS_URL ?? `${defaultSupabaseIssuer}/.well-known/jwks.json`,
+  demoAuthEnabled: toBoolean(process.env.DEMO_AUTH_ENABLED),
   mongodbUri: process.env.MONGODB_URI ?? 'mongodb://localhost:27018/kuli',
   mongodbServerSelectionTimeoutMs: toNumber(process.env.MONGODB_SERVER_SELECTION_TIMEOUT_MS, 5000),
   redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6380',
