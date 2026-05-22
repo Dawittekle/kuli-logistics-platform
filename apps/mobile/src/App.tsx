@@ -529,6 +529,11 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
     try {
       const normalizedEmail = email.trim().toLowerCase();
 
+      if (verificationDraft && verificationDraft.email !== normalizedEmail) {
+        setVerificationDraft(null);
+        setVerificationCode('');
+      }
+
       if (mode === 'login') {
         const { data, error: authError } = await supabase.auth.signInWithPassword({
           email: normalizedEmail,
@@ -596,8 +601,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
         });
         setVerificationCode('');
         setError('');
-        setNotice('Email not confirmed. We opened the confirmation step below; use the code or link from your email.');
-        await resendConfirmation(normalizedEmail);
+        setNotice('Email not confirmed. Use the code or link already sent to your email, or press Resend after the rate-limit window clears.');
         return;
       }
 
