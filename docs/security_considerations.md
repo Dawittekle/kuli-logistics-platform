@@ -182,6 +182,5 @@ Mitigations:
 - [ ] Message/report text sanitized.
 - [ ] Rate limits enabled.
 - [ ] Production secrets not committed.
-- [ ] CORS restricted.
+- [x] CORS restricted to configured browser origins.
 - [ ] Errors do not leak internals.
-

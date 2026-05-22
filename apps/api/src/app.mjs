@@ -5,6 +5,7 @@ import { connectToMongo } from './config/mongo.mjs';
 import { AppError } from './common/errors/app-error.mjs';
 import { InMemoryRateLimiter } from './common/http/rate-limit.mjs';
 import { parseJsonBody } from './common/http/body.mjs';
+import { createCorsHeaders, preflight } from './common/http/cors.mjs';
 import { failure, success } from './common/http/json-response.mjs';
 import { withSecurityHeaders } from './common/http/security-headers.mjs';
 import { createRequestLogger } from './common/logging/structured-logger.mjs';
@@ -44,8 +45,9 @@ import { VehicleRegistryService } from './modules/vehicle-registry/vehicle-regis
 
 const createRequestId = () => `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
-const send = (response, result, requestId = createRequestId()) => {
+const send = (response, result, requestId = createRequestId(), extraHeaders = {}) => {
   response.writeHead(result.statusCode, withSecurityHeaders({
+    ...extraHeaders,
     ...result.headers,
     'x-request-id': requestId
   }));
@@ -1262,16 +1264,25 @@ export const resetAppContextForTests = () => {
 export const handleRequest = async (request, response) => {
   const requestId = request.headers['x-request-id'] ?? createRequestId();
   const startedAt = Date.now();
+  const corsHeaders = createCorsHeaders({
+    origin: request.headers.origin,
+    allowedOrigins: env.corsOrigins
+  });
   let context;
 
   try {
+    if (request.method === 'OPTIONS') {
+      send(response, preflight(corsHeaders), requestId);
+      return;
+    }
+
     context = await getAppContext();
     context.rateLimiter.check({
       key: `${clientAddress(request)}:${request.method ?? 'GET'}:${parse(request.url ?? '/', true).pathname ?? '/'}`
     });
     const routeRequest = createRouteRequest(context);
     const result = await routeRequest(request);
-    send(response, result, requestId);
+    send(response, result, requestId, corsHeaders);
     context.requestLogger.info('request.completed', {
       requestId,
       method: request.method,
@@ -1281,7 +1292,7 @@ export const handleRequest = async (request, response) => {
     });
   } catch (error) {
     if (error instanceof AppError) {
-      send(response, failure(error), requestId);
+      send(response, failure(error), requestId, corsHeaders);
       context?.requestLogger.info('request.failed', {
         requestId,
         method: request.method,
@@ -1299,7 +1310,8 @@ export const handleRequest = async (request, response) => {
     send(
       response,
       failure(internalError),
-      requestId
+      requestId,
+      corsHeaders
     );
     context?.requestLogger.error('request.error', {
       requestId,

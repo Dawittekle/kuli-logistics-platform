@@ -40,7 +40,7 @@ EMAIL_PROVIDER=
 EMAIL_API_KEY=
 PUSH_PROVIDER=
 LOG_LEVEL=
-CORS_ORIGINS=
+CORS_ORIGINS= # comma-separated admin/mobile web origins, for example localhost/127.0.0.1 Vite and Expo web ports
 ```
 
 ## Deployment Strategy
@@ -176,7 +176,7 @@ Recovery requirements:
 - [ ] Production MongoDB configured.
 - [ ] Production object storage configured.
 - [ ] Supabase production project configured.
-- [ ] CORS allowlist configured.
+- [ ] Production CORS allowlist configured.
 - [x] Rate limiting enabled.
 - [x] Security headers enabled.
 - [x] Logging configured.

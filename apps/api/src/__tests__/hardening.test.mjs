@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { AppError } from '../common/errors/app-error.mjs';
+import { createCorsHeaders, preflight } from '../common/http/cors.mjs';
 import { InMemoryRateLimiter } from '../common/http/rate-limit.mjs';
 import { withSecurityHeaders } from '../common/http/security-headers.mjs';
 import { assertRuntimeConfig, validateRuntimeConfig } from '../config/release-readiness.mjs';
@@ -15,6 +16,34 @@ test('security headers are applied without removing response headers', () => {
   assert.equal(headers['x-request-id'], 'req_test');
   assert.equal(headers['x-frame-options'], 'DENY');
   assert.equal(headers['x-content-type-options'], 'nosniff');
+});
+
+test('cors headers are limited to configured browser origins', () => {
+  const allowed = createCorsHeaders({
+    origin: 'http://localhost:5173',
+    allowedOrigins: ['http://localhost:5173']
+  });
+
+  assert.equal(allowed['access-control-allow-origin'], 'http://localhost:5173');
+  assert.match(allowed['access-control-allow-headers'], /authorization/);
+  assert.match(allowed['access-control-allow-methods'], /OPTIONS/);
+
+  const blocked = createCorsHeaders({
+    origin: 'https://not-kuli.example',
+    allowedOrigins: ['http://localhost:5173']
+  });
+
+  assert.deepEqual(blocked, {});
+});
+
+test('cors preflight returns an empty success response', () => {
+  const result = preflight({
+    'access-control-allow-origin': 'http://localhost:5173'
+  });
+
+  assert.equal(result.statusCode, 204);
+  assert.equal(result.headers['access-control-allow-origin'], 'http://localhost:5173');
+  assert.equal(result.body, '');
 });
 
 test('rate limiter blocks requests after configured threshold', () => {
