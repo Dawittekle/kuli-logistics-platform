@@ -27,6 +27,12 @@ type Role = 'client' | 'truck_owner' | 'assistant' | 'admin';
 type AccountStatus = 'active' | 'pending_verification' | 'suspended' | 'banned' | 'deleted';
 type AuthMode = 'login' | 'register';
 type PublicRole = Extract<Role, 'client' | 'truck_owner'>;
+type VerificationDraft = {
+  email: string;
+  role: PublicRole;
+  fullName: string;
+  phone: string;
+};
 
 type UserProfile = {
   id: string;
@@ -309,6 +315,9 @@ const getErrorMessage = (error: unknown) => {
   return 'Something went wrong. Please try again.';
 };
 
+const isEmailNotConfirmedError = (error: unknown) =>
+  error instanceof Error && error.message.toLowerCase().includes('email not confirmed');
+
 function StatusPill({ tone, children }: { tone: 'ready' | 'warn' | 'blocked'; children: string }) {
   return (
     <View style={[styles.pill, tone === 'ready' && styles.pillReady, tone === 'warn' && styles.pillWarn, tone === 'blocked' && styles.pillBlocked]}>
@@ -420,6 +429,9 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [pending, setPending] = useState(false);
+  const [verificationDraft, setVerificationDraft] = useState<VerificationDraft | null>(null);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [verificationPending, setVerificationPending] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
@@ -428,6 +440,81 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
   const loadProfile = async (session: Session) => {
     const profile = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
     onAuthenticated(profile.data, session);
+  };
+
+  const resendConfirmation = async (targetEmail = verificationDraft?.email) => {
+    if (!targetEmail || verificationPending) {
+      return;
+    }
+
+    setVerificationPending(true);
+    setError('');
+    setNotice('');
+
+    try {
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email: targetEmail
+      });
+
+      if (resendError) {
+        throw resendError;
+      }
+
+      setNotice('Confirmation sent. Check your email for a code or confirmation link.');
+    } catch (resendError) {
+      setError(getErrorMessage(resendError));
+    } finally {
+      setVerificationPending(false);
+    }
+  };
+
+  const verifyEmailCode = async () => {
+    if (!verificationDraft || !verificationCode.trim() || verificationPending) {
+      return;
+    }
+
+    setVerificationPending(true);
+    setError('');
+    setNotice('');
+
+    try {
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+        email: verificationDraft.email,
+        token: verificationCode.trim(),
+        type: 'signup'
+      });
+
+      if (verifyError) {
+        throw verifyError;
+      }
+
+      if (!data.session) {
+        setNotice('Email confirmed. Sign in with your password to continue.');
+        setVerificationDraft(null);
+        setVerificationCode('');
+        setMode('login');
+        return;
+      }
+
+      if (verificationDraft.fullName) {
+        const result = (await kuliApi.syncProfile({
+          role: verificationDraft.role,
+          fullName: verificationDraft.fullName,
+          phone: verificationDraft.phone || undefined,
+          email: verificationDraft.email
+        })) as ApiEnvelope<ProfileSyncResult>;
+
+        onAuthenticated(result.data.user, data.session);
+        return;
+      }
+
+      await loadProfile(data.session);
+    } catch (verifyError) {
+      setError(getErrorMessage(verifyError));
+    } finally {
+      setVerificationPending(false);
+    }
   };
 
   const submit = async () => {
@@ -440,9 +527,11 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
     setNotice('');
 
     try {
+      const normalizedEmail = email.trim().toLowerCase();
+
       if (mode === 'login') {
         const { data, error: authError } = await supabase.auth.signInWithPassword({
-          email: email.trim().toLowerCase(),
+          email: normalizedEmail,
           password
         });
 
@@ -460,7 +549,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
       }
 
       const { data, error: authError } = await supabase.auth.signUp({
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         password,
         options: {
           data: {
@@ -476,7 +565,14 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
       }
 
       if (!data.session) {
-        setNotice('Account created. Confirm your email, then sign in to complete your KULI profile.');
+        setVerificationDraft({
+          email: normalizedEmail,
+          role,
+          fullName: fullName.trim(),
+          phone: phone.trim()
+        });
+        setVerificationCode('');
+        setNotice('Account created. Check your email for a confirmation code or link, then finish verification here.');
         setMode('login');
         return;
       }
@@ -485,11 +581,26 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
         role,
         fullName: fullName.trim(),
         phone: phone.trim() || undefined,
-        email: email.trim().toLowerCase()
+        email: normalizedEmail
       })) as ApiEnvelope<ProfileSyncResult>;
 
       onAuthenticated(result.data.user, data.session);
     } catch (submitError) {
+      if (mode === 'login' && isEmailNotConfirmedError(submitError)) {
+        const normalizedEmail = email.trim().toLowerCase();
+        setVerificationDraft({
+          email: normalizedEmail,
+          role,
+          fullName: fullName.trim(),
+          phone: phone.trim()
+        });
+        setVerificationCode('');
+        setError('');
+        setNotice('Email not confirmed. We opened the confirmation step below; use the code or link from your email.');
+        await resendConfirmation(normalizedEmail);
+        return;
+      }
+
       setError(getErrorMessage(submitError));
     } finally {
       setPending(false);
@@ -538,6 +649,32 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
               <Text style={styles.primaryButtonText}>{pending ? 'Working...' : mode === 'login' ? 'Login' : 'Create account'}</Text>
             </Pressable>
           </ShellCard>
+
+          {verificationDraft ? (
+            <ShellCard title="Confirm email">
+              <Text style={styles.muted}>{verificationDraft.email}</Text>
+              <Text style={styles.copy}>Enter the confirmation code from your email. If Supabase sent a link instead, open that link, then return and sign in.</Text>
+              <Field label="Confirmation code" value={verificationCode} onChangeText={setVerificationCode} placeholder="6-digit code" keyboardType="numeric" />
+              <View style={styles.actionRow}>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={!verificationCode.trim() || verificationPending}
+                  onPress={verifyEmailCode}
+                  style={[styles.primaryButton, styles.actionButton, (!verificationCode.trim() || verificationPending) && styles.buttonDisabled]}
+                >
+                  <Text style={styles.primaryButtonText}>{verificationPending ? 'Checking...' : 'Verify'}</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={verificationPending}
+                  onPress={() => resendConfirmation()}
+                  style={[styles.secondaryButton, styles.actionButton, verificationPending && styles.buttonDisabled]}
+                >
+                  <Text style={styles.secondaryButtonText}>Resend</Text>
+                </Pressable>
+              </View>
+            </ShellCard>
+          ) : null}
 
           <HealthCard />
           <RuntimeReadiness />
