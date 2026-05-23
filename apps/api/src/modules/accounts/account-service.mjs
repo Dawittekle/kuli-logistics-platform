@@ -174,8 +174,8 @@ export class AccountService {
     );
   }
 
-  async upsertDemoProfile({ supabaseUserId, role, fullName, email, phone }) {
-    if (!Object.values(roles).includes(role)) {
+  async upsertDemoProfile({ supabaseUserId, role, fullName, email, phone, preserveExistingRole = false }) {
+    if (role !== undefined && !Object.values(roles).includes(role)) {
       throw new AppError(422, 'INVALID_ROLE', 'Unknown demo role.');
     }
 
@@ -186,15 +186,26 @@ export class AccountService {
       (normalizedEmail && this.userRepository.findByEmail ? await this.userRepository.findByEmail(normalizedEmail) : null);
 
     if (existingUser) {
+      const nextRole = preserveExistingRole ? existingUser.role : role;
+      const nextSupabaseUserId = preserveExistingRole ? existingUser.supabaseUserId : supabaseUserId;
+
+      if (!nextRole) {
+        throw new AppError(422, 'INVALID_ROLE', 'A demo role is required for new demo profiles.');
+      }
+
       return saveUserOrConflict(this.userRepository, {
         ...existingUser,
-        supabaseUserId,
-        role,
+        supabaseUserId: nextSupabaseUserId,
+        role: nextRole,
         accountStatus: accountStatuses.active,
         fullName: pickDefined(cleanOptional(fullName), existingUser.fullName),
         email: pickDefined(normalizedEmail, existingUser.email),
         phone: pickDefined(normalizedPhone, existingUser.phone)
       });
+    }
+
+    if (!role) {
+      throw new AppError(422, 'INVALID_ROLE', 'A demo role is required for new demo profiles.');
     }
 
     return saveUserOrConflict(

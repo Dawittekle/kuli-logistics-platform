@@ -119,18 +119,20 @@ const createRouteRequest = (context) => async (request) => {
     const suffix = body.suffix ?? Math.random().toString(36).slice(2, 8);
     const supabaseUserId = body.supabaseUserId ?? `demo-${role}-${suffix}`;
     const email = body.email ?? `${supabaseUserId}@demo.kuli.local`;
+    const preserveExistingRole = Boolean(body.preserveExistingRole);
 
     const user = await context.accountService.upsertDemoProfile({
       supabaseUserId,
       role,
-      fullName: body.fullName ?? `Demo ${String(role ?? 'user').replace('_', ' ')}`,
+      fullName: body.fullName ?? (preserveExistingRole ? undefined : `Demo ${String(role ?? 'user').replace('_', ' ')}`),
       email,
-      phone: body.phone
+      phone: body.phone,
+      preserveExistingRole
     });
 
     return success({
       user,
-      accessToken: `dev:${supabaseUserId}`
+      accessToken: `dev:${user.supabaseUserId}`
     }, 201);
   }
 

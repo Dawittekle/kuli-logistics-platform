@@ -379,7 +379,7 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
   const [error, setError] = useState('');
   const canSubmit = runtimeConfig.demoAuthEnabled ? Boolean(email.trim()) : Boolean(email.trim()) && password.length >= 6;
 
-  const startDemoProfile = async (role: Extract<Role, 'admin' | 'assistant'>) => {
+  const startDemoProfile = async (role: Extract<Role, 'admin' | 'assistant'>, options: { preserveExistingRole?: boolean } = {}) => {
     if (!runtimeConfig.demoAuthEnabled || pending) {
       return;
     }
@@ -397,9 +397,10 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
         body: {
           role,
           suffix,
-          fullName: role === 'admin' ? `Demo Admin ${suffix}` : `Demo Assistant ${suffix}`,
+          fullName: options.preserveExistingRole ? undefined : role === 'admin' ? `Demo Admin ${suffix}` : `Demo Assistant ${suffix}`,
           email: normalizedEmail || `${role}-${suffix}@demo.kuli.local`,
-          phone: undefined
+          phone: undefined,
+          preserveExistingRole: Boolean(options.preserveExistingRole)
         }
       })) as ApiEnvelope<{ user: UserProfile; accessToken: string }>;
 
@@ -423,7 +424,7 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
     }
 
     if (runtimeConfig.demoAuthEnabled) {
-      await startDemoProfile('admin');
+      await startDemoProfile('admin', { preserveExistingRole: true });
       return;
     }
 

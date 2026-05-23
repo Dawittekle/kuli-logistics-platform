@@ -133,6 +133,31 @@ test('demo profile upsert reuses email and does not require phone', async () => 
   assert.equal(second.phone, undefined);
 });
 
+test('demo login preserves an existing email role', async () => {
+  const service = new AccountService({
+    userRepository: new InMemoryUserRepository()
+  });
+
+  const owner = await service.upsertDemoProfile({
+    supabaseUserId: 'demo-truck_owner-owner2-gmail-com',
+    role: roles.truckOwner,
+    fullName: 'Owner Two',
+    email: 'owner2@gmail.com'
+  });
+
+  const login = await service.upsertDemoProfile({
+    supabaseUserId: 'demo-client-owner2-gmail-com',
+    role: roles.client,
+    email: 'owner2@gmail.com',
+    preserveExistingRole: true
+  });
+
+  assert.equal(login.id, owner.id);
+  assert.equal(login.role, roles.truckOwner);
+  assert.equal(login.supabaseUserId, 'demo-truck_owner-owner2-gmail-com');
+  assert.equal(login.fullName, 'Owner Two');
+});
+
 test('development token verifier resolves dev bearer tokens', async () => {
   const verifier = new SupabaseTokenVerifier({
     mode: 'development_stub'

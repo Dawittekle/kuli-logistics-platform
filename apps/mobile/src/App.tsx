@@ -462,7 +462,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
     onAuthenticated(profile.data, session);
   };
 
-  const startDemoProfile = async (demoRole: PublicRole) => {
+  const startDemoProfile = async (demoRole: PublicRole, options: { preserveExistingRole?: boolean } = {}) => {
     if (!runtimeConfig.demoAuthEnabled || pending) {
       return;
     }
@@ -481,9 +481,10 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
         body: {
           role: demoRole,
           suffix,
-          fullName: fullName.trim() || (demoRole === 'client' ? `Demo Client ${suffix}` : `Demo Owner ${suffix}`),
+          fullName: fullName.trim() || (options.preserveExistingRole ? undefined : demoRole === 'client' ? `Demo Client ${suffix}` : `Demo Owner ${suffix}`),
           email: normalizedEmail || `${demoRole}-${suffix}@demo.kuli.local`,
-          phone: phone.trim() || undefined
+          phone: phone.trim() || undefined,
+          preserveExistingRole: Boolean(options.preserveExistingRole)
         }
       })) as ApiEnvelope<{ user: UserProfile; accessToken: string }>;
 
@@ -580,7 +581,9 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
     }
 
     if (runtimeConfig.demoAuthEnabled) {
-      await startDemoProfile(mode === 'register' ? role : 'client');
+      await startDemoProfile(mode === 'register' ? role : 'client', {
+        preserveExistingRole: mode === 'login'
+      });
       return;
     }
 
