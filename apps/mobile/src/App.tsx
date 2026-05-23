@@ -12,7 +12,7 @@ import {
   View
 } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -139,6 +139,7 @@ type TripOffer = {
   etaMinutesAtOffer?: number;
   expiresAt?: string;
   declineReason?: string;
+  request?: KuliRequest;
 };
 
 type KuliRequest = {
@@ -1762,6 +1763,7 @@ function OwnerStatusControls({ request }: { request: KuliRequest }) {
   const [error, setError] = useState('');
   const nextStatus = request.status === 'accepted' ? 'en_route_to_pickup' : ownerForwardStatuses[ownerForwardStatuses.indexOf(request.status) + 1];
   const canAdvance = Boolean(nextStatus) && !terminalRequestStatuses.includes(request.status);
+  const nextStatusActionLabel = request.status === 'accepted' ? 'Start moving' : nextStatus ? statusLabels[nextStatus] : 'No next step';
 
   const updateStatus = async (status: KuliStatus, reason = `owner_${status}`) => {
     setPendingStatus(status);
@@ -1800,7 +1802,7 @@ function OwnerStatusControls({ request }: { request: KuliRequest }) {
           }}
           style={[styles.primaryButton, styles.actionButton, (!canAdvance || Boolean(pendingStatus)) && styles.buttonDisabled]}
         >
-          <Text style={styles.primaryButtonText}>{pendingStatus ? 'Updating...' : nextStatus ? statusLabels[nextStatus] : 'No next step'}</Text>
+          <Text style={styles.primaryButtonText}>{pendingStatus ? 'Updating...' : nextStatusActionLabel}</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -1927,26 +1929,31 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
 
 function OwnerOfferCard({
   offer,
-  onViewed,
   onDecline,
   onAccept,
-  pendingOfferId
+  pendingOfferId,
+  expanded,
+  onToggleExpanded
 }: {
   offer: TripOffer;
-  onViewed: (offer: TripOffer) => void;
   onDecline: (offer: TripOffer) => void;
   onAccept: (offer: TripOffer) => void;
   pendingOfferId: string;
+  expanded: boolean;
+  onToggleExpanded: (offer: TripOffer) => void;
 }) {
   const isPending = pendingOfferId === offer.id;
   const expiresAt = offer.expiresAt ? new Date(offer.expiresAt).toLocaleTimeString() : 'soon';
+  const request = offer.request;
+  const loadDetails = request?.loadDetails;
+  const quoteSnapshot = request?.quoteSnapshot;
 
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <View style={styles.flex}>
-          <Text style={styles.cardTitle}>Offer {offer.id.slice(-6).toUpperCase()}</Text>
-          <Text style={styles.muted}>Request {offer.requestId}</Text>
+          <Text style={styles.cardTitle}>{request?.requestCode ?? `Offer ${offer.id.slice(-6).toUpperCase()}`}</Text>
+          <Text style={styles.muted}>{request ? `${request.pickupLocation?.addressText} to ${request.destinationLocation?.addressText}` : `Request ${offer.requestId}`}</Text>
         </View>
         <StatusPill tone={statusTone(offer.status)}>{offer.status}</StatusPill>
       </View>
@@ -1956,23 +1963,51 @@ function OwnerOfferCard({
           <Text style={styles.metricLabel}>pickup distance</Text>
         </View>
         <View style={styles.metricBox}>
-          <Text style={styles.metricValue}>{Math.round(offer.etaMinutesAtOffer ?? 0)}</Text>
-          <Text style={styles.metricLabel}>route minutes</Text>
+          <Text style={styles.metricValue}>{quoteSnapshot ? `${quoteSnapshot.currency} ${Number(quoteSnapshot.totalEstimate ?? 0).toFixed(0)}` : Math.round(offer.etaMinutesAtOffer ?? 0)}</Text>
+          <Text style={styles.metricLabel}>{quoteSnapshot ? 'estimate' : 'route minutes'}</Text>
         </View>
         <View style={styles.metricBox}>
           <Text style={styles.metricValue}>{expiresAt}</Text>
           <Text style={styles.metricLabel}>expires</Text>
         </View>
       </View>
+      {expanded && request ? (
+        <View style={styles.detailPanel}>
+          <View style={styles.requestRow}>
+            <View style={styles.flex}>
+              <Text style={styles.fieldLabel}>Pickup</Text>
+              <Text style={styles.muted}>{request.pickupLocation?.addressText}</Text>
+            </View>
+            <View style={styles.flex}>
+              <Text style={styles.fieldLabel}>Destination</Text>
+              <Text style={styles.muted}>{request.destinationLocation?.addressText}</Text>
+            </View>
+          </View>
+          <View style={styles.requestRow}>
+            <View style={styles.flex}>
+              <Text style={styles.fieldLabel}>Load</Text>
+              <Text style={styles.muted}>{loadDetails?.itemType ?? 'General load'}{loadDetails?.estimatedWeightKg ? ` / ${loadDetails.estimatedWeightKg}kg` : ''}{loadDetails?.estimatedVolumeCubicMeters ? ` / ${loadDetails.estimatedVolumeCubicMeters}m3` : ''}</Text>
+            </View>
+            <View style={styles.flex}>
+              <Text style={styles.fieldLabel}>Handling</Text>
+              <Text style={styles.muted}>{loadDetails?.loadingAssistanceRequested ? 'Loading help requested' : 'No loading help requested'}</Text>
+            </View>
+          </View>
+          {loadDetails?.specialHandlingInstructions ? (
+            <Text style={styles.noticeText}>{loadDetails.specialHandlingInstructions}</Text>
+          ) : null}
+          <Text style={styles.muted}>Accepting this request assigns the trip to your vehicle and makes competing offers expire.</Text>
+        </View>
+      ) : null}
       <View style={styles.actionRow}>
-        <Pressable accessibilityRole="button" disabled={isPending || offer.status !== 'sent'} onPress={() => onViewed(offer)} style={[styles.secondaryButton, styles.actionButton, (isPending || offer.status !== 'sent') && styles.buttonDisabled]}>
-          <Text style={styles.secondaryButtonText}>Viewed</Text>
+        <Pressable accessibilityRole="button" disabled={isPending} onPress={() => onToggleExpanded(offer)} style={[styles.secondaryButton, styles.actionButton, isPending && styles.buttonDisabled]}>
+          <Text style={styles.secondaryButtonText}>{expanded ? 'Hide details' : 'View details'}</Text>
         </Pressable>
         <Pressable accessibilityRole="button" disabled={isPending} onPress={() => onDecline(offer)} style={[styles.secondaryButton, styles.actionButton, isPending && styles.buttonDisabled]}>
           <Text style={styles.secondaryButtonText}>Decline</Text>
         </Pressable>
         <Pressable accessibilityRole="button" disabled={isPending} onPress={() => onAccept(offer)} style={[styles.primaryButton, styles.actionButton, isPending && styles.buttonDisabled]}>
-          <Text style={styles.primaryButtonText}>{isPending ? 'Working...' : 'Accept'}</Text>
+          <Text style={styles.primaryButtonText}>{isPending ? 'Working...' : 'Accept request'}</Text>
         </Pressable>
       </View>
     </View>
@@ -1982,6 +2017,7 @@ function OwnerOfferCard({
 function OwnerOffersScreen({ profile }: { profile: UserProfile }) {
   const queryClient = useQueryClient();
   const [pendingOfferId, setPendingOfferId] = useState('');
+  const [expandedOfferId, setExpandedOfferId] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [acceptedResult, setAcceptedResult] = useState<OfferActionResult | null>(null);
@@ -1999,6 +2035,15 @@ function OwnerOffersScreen({ profile }: { profile: UserProfile }) {
   const offers = offersQuery.data ?? [];
   const acceptedTrips = (ownerRequestsQuery.data ?? []).filter((request) => activeRequestStatuses.includes(request.status));
 
+  const toggleOfferDetails = async (offer: TripOffer) => {
+    const nextExpanded = expandedOfferId === offer.id ? '' : offer.id;
+    setExpandedOfferId(nextExpanded);
+
+    if (nextExpanded && offer.status === 'sent') {
+      await runOfferAction(offer, 'viewed');
+    }
+  };
+
   const runOfferAction = async (offer: TripOffer, action: 'viewed' | 'decline' | 'accept') => {
     setPendingOfferId(offer.id);
     setError('');
@@ -2009,7 +2054,7 @@ function OwnerOffersScreen({ profile }: { profile: UserProfile }) {
         await kuliApi.request(`/offers/${offer.id}/viewed`, {
           method: 'POST'
         });
-        setMessage('Offer marked viewed.');
+        setMessage('Offer details opened. Review the route and load before accepting.');
       }
 
       if (action === 'decline') {
@@ -2062,7 +2107,8 @@ function OwnerOffersScreen({ profile }: { profile: UserProfile }) {
                 pendingOfferId={pendingOfferId}
                 onAccept={(nextOffer) => runOfferAction(nextOffer, 'accept')}
                 onDecline={(nextOffer) => runOfferAction(nextOffer, 'decline')}
-                onViewed={(nextOffer) => runOfferAction(nextOffer, 'viewed')}
+                expanded={expandedOfferId === offer.id}
+                onToggleExpanded={toggleOfferDetails}
               />
             ))}
           </View>
@@ -2105,6 +2151,7 @@ function OwnerOffersScreen({ profile }: { profile: UserProfile }) {
 }
 
 function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
+  const navigation = useNavigation<any>();
   const queryClient = useQueryClient();
   const [pushEnabled, setPushEnabled] = useState(true);
   const [smsEnabled, setSmsEnabled] = useState(false);
@@ -2213,15 +2260,25 @@ function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
                   <Text style={styles.cardTitle}>{notification.title}</Text>
                   <Text style={styles.muted}>{notification.body}</Text>
                   <Text style={styles.muted}>{notification.type}{notification.createdAt ? ` / ${new Date(notification.createdAt).toLocaleString()}` : ''}</Text>
+                  {profile.role === 'truck_owner' && notification.type === 'offer.sent' ? (
+                    <Text style={styles.noticeText}>Open Offers to review pickup, destination, load, estimate, then accept or decline.</Text>
+                  ) : null}
                 </View>
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={notification.deliveryStatus === 'read' || pendingId === notification.id}
-                  onPress={() => markRead(notification)}
-                  style={[styles.compactButton, (notification.deliveryStatus === 'read' || pendingId === notification.id) && styles.buttonDisabled]}
-                >
-                  <Text style={styles.compactButtonText}>{notification.deliveryStatus === 'read' ? 'Read' : 'Mark read'}</Text>
-                </Pressable>
+                <View style={styles.notificationActions}>
+                  {profile.role === 'truck_owner' && notification.type === 'offer.sent' ? (
+                    <Pressable accessibilityRole="button" onPress={() => navigation.navigate('Offers')} style={styles.compactButton}>
+                      <Text style={styles.compactButtonText}>Open offer</Text>
+                    </Pressable>
+                  ) : null}
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={notification.deliveryStatus === 'read' || pendingId === notification.id}
+                    onPress={() => markRead(notification)}
+                    style={[styles.compactButton, (notification.deliveryStatus === 'read' || pendingId === notification.id) && styles.buttonDisabled]}
+                  >
+                    <Text style={styles.compactButtonText}>{notification.deliveryStatus === 'read' ? 'Read' : 'Mark read'}</Text>
+                  </Pressable>
+                </View>
               </View>
             ))}
           </View>
@@ -2867,6 +2924,14 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.md
   },
+  detailPanel: {
+    backgroundColor: '#fffdf7',
+    borderColor: colors.line,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.sm
+  },
   cardHeader: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -2922,11 +2987,13 @@ const styles = StyleSheet.create({
   },
   actionRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm
   },
   actionButton: {
     flex: 1,
     minHeight: 44,
+    minWidth: 118,
     paddingHorizontal: spacing.xs
   },
   switchRow: {
@@ -3061,7 +3128,7 @@ const styles = StyleSheet.create({
     marginTop: 4
   },
   notificationRow: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     backgroundColor: '#fffdf7',
     borderColor: colors.line,
     borderRadius: radii.sm,
@@ -3071,6 +3138,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     minHeight: 76,
     padding: spacing.sm
+  },
+  notificationActions: {
+    gap: spacing.xs,
+    minWidth: 92
   },
   metricGrid: {
     flexDirection: 'row',

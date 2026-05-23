@@ -414,7 +414,14 @@ export class MarketplaceService {
 
   async listOwnerOffers({ actor }) {
     assertTruckOwner(actor);
-    return this.tripOfferRepository.listByOwnerId(actor.id);
+    const offers = await this.tripOfferRepository.listByOwnerId(actor.id);
+
+    return Promise.all(
+      offers.map(async (offer) => ({
+        ...offer,
+        request: await this.kuliRequestRepository.findById(offer.requestId)
+      }))
+    );
   }
 
   async markOfferViewed({ actor, offerId }) {

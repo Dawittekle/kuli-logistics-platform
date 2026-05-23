@@ -176,7 +176,7 @@ Notes:
 
 - Client quote results now allow selecting candidate vehicles and posting `/api/v1/kuli-requests` with an idempotency key.
 - Client Home fetches `/api/v1/kuli-requests/mine`, shows active waiting/accepted requests, and can cancel cancellable requests.
-- Owner Offers fetches `/api/v1/owner/offers` and supports viewed, decline, and accept actions with clear conflict messaging.
+- Owner Offers fetches `/api/v1/owner/offers`, shows request pickup/destination/load/estimate details, and supports viewed, decline, and accept actions with clear conflict messaging.
 - Accepted trip cards are intentionally lightweight; Phase 5 owns the full status timeline, messages, and notification center.
 - Live authenticated client/owner mutation checks still depend on stable Supabase credentials; no accounts were created during this phase.
 
@@ -202,9 +202,9 @@ Validation:
 Notes:
 
 - Client Home now embeds accepted-trip timeline and request-scoped messaging for active requests.
-- Owner Offers now embeds active trip controls for the assigned owner, using backend status transitions through completion or cancellation.
+- Owner Offers now embeds active trip controls for the assigned owner, including a clear start-moving action after acceptance and backend status transitions through completion or cancellation.
 - Messages use idempotency keys and keep a retry action visible after send failure.
-- Alerts tab is available to clients and truck owners, with in-app notification list/read commands and notification preference toggles.
+- Alerts tab is available to clients and truck owners, with in-app notification list/read commands, offer notifications that point owners to the Offers decision panel, and notification preference toggles.
 - No continuous GPS/realtime socket was added; Phase 5 follows the v1 manual-status and refetch model in the architecture docs.
 - Live authenticated device testing remains deferred until emulator/manual Supabase test accounts are available; no accounts were created during this phase.
 

@@ -251,6 +251,8 @@ POST /api/v1/offers/:id/decline
 
 Accept must return `409 REQUEST_ALREADY_ACCEPTED` if another owner has already won.
 
+`GET /api/v1/owner/offers` returns open offers enriched with the referenced KULI request snapshot so truck owners can review pickup, destination, load details, estimate, distance, and expiry before accepting or declining.
+
 ### Messages and Notifications
 
 ```text

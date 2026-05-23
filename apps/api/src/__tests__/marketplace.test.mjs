@@ -555,6 +555,9 @@ test('owner can view and decline an offer', async () => {
     idempotencyKey: 'idem-002'
   });
   const offer = created.offers.find((entry) => entry.ownerId === ownerOne.id);
+  const inbox = await service.listOwnerOffers({
+    actor: ownerOne
+  });
 
   const viewed = await service.markOfferViewed({
     actor: ownerOne,
@@ -568,6 +571,10 @@ test('owner can view and decline an offer', async () => {
     }
   });
 
+  assert.equal(inbox.length, 1);
+  assert.equal(inbox[0].request.id, created.request.id);
+  assert.equal(inbox[0].request.pickupLocation.addressText, pickupLocation.addressText);
+  assert.equal(inbox[0].request.quoteSnapshot.totalEstimate, 2200);
   assert.equal(viewed.status, offerStatuses.viewed);
   assert.equal(declined.status, offerStatuses.declined);
 });

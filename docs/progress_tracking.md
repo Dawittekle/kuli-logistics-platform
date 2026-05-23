@@ -323,3 +323,4 @@ Completion:
 - Local demo auth is guarded by `DEMO_AUTH_ENABLED`/frontend demo flags, auto-enabled for local frontend API URLs, blocked from production readiness, and paired with `npm run seed:fake-users` for fake client/truck-owner/staff/vehicle/ticket data.
 - Demo profile creation now treats blank phone as absent, reuses profiles by email, and surfaces API failures with clearer user messages plus request ids for developer tracing.
 - Development CORS now supports local private-network browser origins such as `http://192.168.x.x:5174`, so admin/mobile web can be opened through LAN URLs while production still requires explicit hosted origins.
+- Owner offer inbox now includes request detail snapshots and a clearer accept/start-moving path, while offer notifications direct truck owners to the Offers tab for the actual decision flow.
