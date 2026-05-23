@@ -46,6 +46,33 @@ const parseJsonSafely = async (response) => {
   }
 };
 
+const buildApiErrorMessage = ({ response, error, payload }) => {
+  const requestId = payload.meta?.requestId;
+  const suffix = requestId ? ` Request id: ${requestId}.` : '';
+
+  if (error.code === 'INTERNAL_SERVER_ERROR') {
+    return `The server could not finish that request. Please try again.${suffix}`;
+  }
+
+  if (error.code === 'USER_UNIQUE_CONSTRAINT') {
+    const fields = Array.isArray(error.details?.fields) && error.details.fields.length > 0
+      ? ` (${error.details.fields.join(', ')})`
+      : '';
+
+    return `That account detail is already used${fields}. Try signing in with the same email or change the value.${suffix}`;
+  }
+
+  if (response.status === 401) {
+    return `Sign in again to continue.${suffix}`;
+  }
+
+  if (response.status === 403) {
+    return `Your account does not have permission for that action.${suffix}`;
+  }
+
+  return `${error.message ?? `KULI API request failed with ${response.status}.`}${suffix}`;
+};
+
 export const createKuliApiClient = ({ baseUrl, getAccessToken, fetchImpl = globalThis.fetch } = {}) => {
   if (typeof fetchImpl !== 'function') {
     throw new Error('A fetch implementation is required to create the KULI API client.');
@@ -64,17 +91,30 @@ export const createKuliApiClient = ({ baseUrl, getAccessToken, fetchImpl = globa
       ...(options.headers ?? {})
     };
 
-    const response = await fetchImpl(`${resolvedBaseUrl}${path.startsWith('/') ? path : `/${path}`}`, {
-      method: options.method ?? 'GET',
-      headers,
-      body
-    });
+    let response;
+
+    try {
+      response = await fetchImpl(`${resolvedBaseUrl}${path.startsWith('/') ? path : `/${path}`}`, {
+        method: options.method ?? 'GET',
+        headers,
+        body
+      });
+    } catch (error) {
+      throw new KuliApiError(`Cannot reach the KULI API at ${resolvedBaseUrl}. Check that the backend is running and the app env URL is correct.`, {
+        status: 0,
+        code: 'NETWORK_ERROR',
+        details: {
+          originalError: error instanceof Error ? error.message : String(error)
+        }
+      });
+    }
+
     const payload = await parseJsonSafely(response);
 
     if (!response.ok) {
       const error = payload.error ?? {};
 
-      throw new KuliApiError(error.message ?? `KULI API request failed with ${response.status}.`, {
+      throw new KuliApiError(buildApiErrorMessage({ response, error, payload }), {
         status: response.status,
         code: error.code,
         fieldErrors: error.fieldErrors,

@@ -399,7 +399,7 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
           suffix,
           fullName: role === 'admin' ? `Demo Admin ${suffix}` : `Demo Assistant ${suffix}`,
           email: normalizedEmail || `${role}-${suffix}@demo.kuli.local`,
-          phone: role === 'admin' ? '+251900300001' : '+251900400001'
+          phone: undefined
         }
       })) as ApiEnvelope<{ user: UserProfile; accessToken: string }>;
 

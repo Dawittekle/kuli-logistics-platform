@@ -297,6 +297,7 @@ Notes:
 - Follow-up verification on 2026-05-21 added Expo web dependencies, confirmed `npx expo export --platform web --output-dir /tmp/kuli-mobile-check-web`, and rendered the mobile web entry screen in headless Chrome at a 390x844 viewport.
 - Follow-up verification on 2026-05-21 rendered the admin production build in headless Chrome at a 1440x1000 viewport and confirmed no blank/crashed entry screen.
 - Follow-up local demo pass on 2026-05-22 added development-only demo auth buttons for all roles, local fake user seeding, and production release-readiness protection against demo auth being enabled.
+- Follow-up local demo fix on 2026-05-23 made blank phone safe for sparse unique indexes, allowed demo profile reuse by email, and improved API error messages with request ids.
 
 ## Commit Discipline
 

@@ -482,7 +482,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
           suffix,
           fullName: fullName.trim() || (demoRole === 'client' ? `Demo Client ${suffix}` : `Demo Owner ${suffix}`),
           email: normalizedEmail || `${demoRole}-${suffix}@demo.kuli.local`,
-          phone: phone.trim() || (demoRole === 'client' ? '+251900100001' : '+251900200001')
+          phone: phone.trim() || undefined
         }
       })) as ApiEnvelope<{ user: UserProfile; accessToken: string }>;
 

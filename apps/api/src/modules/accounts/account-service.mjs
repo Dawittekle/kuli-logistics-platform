@@ -5,6 +5,34 @@ import { createUserRecord } from './user-record.mjs';
 const createId = (prefix) => `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 
 const pickDefined = (value, fallback) => (value === undefined ? fallback : value);
+const cleanOptional = (value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+};
+
+const cleanEmail = (value) => cleanOptional(value)?.toLowerCase();
+
+const isDuplicateKeyError = (error) => error?.code === 11000 || error?.code === 11001;
+
+const saveUserOrConflict = async (userRepository, user) => {
+  try {
+    return await userRepository.save(user);
+  } catch (error) {
+    if (isDuplicateKeyError(error)) {
+      const fields = Object.keys(error.keyPattern ?? error.keyValue ?? {});
+
+      throw new AppError(409, 'USER_UNIQUE_CONSTRAINT', 'A user with that email, phone, or auth identity already exists.', {
+        fields
+      });
+    }
+
+    throw error;
+  }
+};
 
 export class AccountService {
   constructor({ userRepository }) {
@@ -151,27 +179,33 @@ export class AccountService {
       throw new AppError(422, 'INVALID_ROLE', 'Unknown demo role.');
     }
 
-    const existingUser = await this.userRepository.findBySupabaseUserId(supabaseUserId);
+    const normalizedEmail = cleanEmail(email);
+    const normalizedPhone = cleanOptional(phone);
+    const existingUser =
+      (await this.userRepository.findBySupabaseUserId(supabaseUserId)) ??
+      (normalizedEmail && this.userRepository.findByEmail ? await this.userRepository.findByEmail(normalizedEmail) : null);
 
     if (existingUser) {
-      return this.userRepository.save({
+      return saveUserOrConflict(this.userRepository, {
         ...existingUser,
+        supabaseUserId,
         role,
         accountStatus: accountStatuses.active,
-        fullName: pickDefined(fullName, existingUser.fullName),
-        email: pickDefined(email, existingUser.email),
-        phone: pickDefined(phone, existingUser.phone)
+        fullName: pickDefined(cleanOptional(fullName), existingUser.fullName),
+        email: pickDefined(normalizedEmail, existingUser.email),
+        phone: pickDefined(normalizedPhone, existingUser.phone)
       });
     }
 
-    return this.userRepository.save(
+    return saveUserOrConflict(
+      this.userRepository,
       createUserRecord({
         id: createId('usr_demo'),
         supabaseUserId,
         role,
-        fullName,
-        email,
-        phone,
+        fullName: cleanOptional(fullName),
+        email: normalizedEmail,
+        phone: normalizedPhone,
         createdByAdminId: [roles.admin, roles.assistant].includes(role) ? 'local_demo' : undefined
       })
     );

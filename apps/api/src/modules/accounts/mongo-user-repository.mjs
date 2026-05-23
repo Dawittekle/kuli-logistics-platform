@@ -13,6 +13,9 @@ const normalizeMongoUser = (document) => {
   };
 };
 
+const omitUndefined = (record) =>
+  Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
+
 export class MongoUserRepository {
   constructor({ db }) {
     this.collection = db.collection(usersCollectionName);
@@ -57,6 +60,10 @@ export class MongoUserRepository {
     return normalizeMongoUser(await this.collection.findOne({ supabaseUserId }));
   }
 
+  async findByEmail(email) {
+    return normalizeMongoUser(await this.collection.findOne({ email }));
+  }
+
   async findClientsByPhone(phone) {
     const documents = await this.collection
       .find(
@@ -85,10 +92,10 @@ export class MongoUserRepository {
 
     await this.collection.replaceOne(
       { _id: id },
-      {
+      omitUndefined({
         _id: id,
         ...document
-      },
+      }),
       { upsert: true }
     );
 

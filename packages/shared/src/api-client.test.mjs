@@ -44,7 +44,26 @@ describe('KULI API client', () => {
       assert.ok(error instanceof KuliApiError);
       assert.equal(error.status, 403);
       assert.equal(error.code, 'INSUFFICIENT_ROLE');
+      assert.match(error.message, /permission/);
+      assert.match(error.message, /req_2/);
       assert.deepEqual(error.fieldErrors, { role: ['Admin required.'] });
+      return true;
+    });
+  });
+
+  it('adds clear network error messages', async () => {
+    const client = createKuliApiClient({
+      baseUrl: 'http://api.test/api/v1',
+      fetchImpl: async () => {
+        throw new Error('connection refused');
+      }
+    });
+
+    await assert.rejects(client.health(), (error) => {
+      assert.ok(error instanceof KuliApiError);
+      assert.equal(error.status, 0);
+      assert.equal(error.code, 'NETWORK_ERROR');
+      assert.match(error.message, /Cannot reach the KULI API/);
       return true;
     });
   });

@@ -17,6 +17,10 @@ export class InMemoryUserRepository {
     return id ? this.findById(id) : null;
   }
 
+  async findByEmail(email) {
+    return Array.from(this.usersById.values()).find((user) => user.email === email) ?? null;
+  }
+
   async save(user) {
     const record = {
       ...user,
@@ -29,4 +33,3 @@ export class InMemoryUserRepository {
     return record;
   }
 }
-

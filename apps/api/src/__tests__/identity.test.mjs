@@ -105,6 +105,34 @@ test('staff accounts are provisioned by admin flow, not public self-registration
   assert.throws(() => assertPublicRegistrationRole(roles.assistant), AppError);
 });
 
+test('demo profile upsert reuses email and does not require phone', async () => {
+  const service = new AccountService({
+    userRepository: new InMemoryUserRepository()
+  });
+
+  const first = await service.upsertDemoProfile({
+    supabaseUserId: 'demo-client-client1-gmail-com',
+    role: roles.client,
+    fullName: 'Demo Client',
+    email: 'CLIENT1@GMAIL.COM',
+    phone: ''
+  });
+
+  const second = await service.upsertDemoProfile({
+    supabaseUserId: 'demo-owner-client1-gmail-com',
+    role: roles.truckOwner,
+    fullName: 'Demo Owner',
+    email: 'client1@gmail.com',
+    phone: ''
+  });
+
+  assert.equal(second.id, first.id);
+  assert.equal(second.supabaseUserId, 'demo-owner-client1-gmail-com');
+  assert.equal(second.role, roles.truckOwner);
+  assert.equal(second.email, 'client1@gmail.com');
+  assert.equal(second.phone, undefined);
+});
+
 test('development token verifier resolves dev bearer tokens', async () => {
   const verifier = new SupabaseTokenVerifier({
     mode: 'development_stub'

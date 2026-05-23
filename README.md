@@ -190,6 +190,15 @@ npm run seed:fake-users
 
 The seed is idempotent by record id and creates demo clients, truck owners, vehicles, staff users, and hotline tickets. Override counts with `FAKE_CLIENTS` and `FAKE_OWNERS` if needed.
 
+Demo mobile web flow:
+
+1. Start Docker services with `docker compose up -d`.
+2. Start the API with `npm run dev:api`.
+3. Start mobile web from `apps/mobile` with `npx expo start --web --clear`.
+4. Confirm the login screen shows `Local demo auth` as set.
+5. Register as `Client` or `Truck owner` with any email and any short password. Blank phone is allowed in demo mode.
+6. Sign out and log in again with the same email to return to the same local demo profile.
+
 Local development tokens use:
 
 Use:

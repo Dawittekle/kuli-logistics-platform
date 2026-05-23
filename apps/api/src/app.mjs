@@ -1318,7 +1318,7 @@ export const handleRequest = async (request, response) => {
     });
   } catch (error) {
     if (error instanceof AppError) {
-      send(response, failure(error), requestId, corsHeaders);
+      send(response, failure(error, { requestId }), requestId, corsHeaders);
       context?.requestLogger.info('request.failed', {
         requestId,
         method: request.method,
@@ -1335,7 +1335,7 @@ export const handleRequest = async (request, response) => {
     });
     send(
       response,
-      failure(internalError),
+      failure(internalError, { requestId }),
       requestId,
       corsHeaders
     );
