@@ -100,7 +100,7 @@ export const createKuliApiClient = ({ baseUrl, getAccessToken, fetchImpl = globa
         body
       });
     } catch (error) {
-      throw new KuliApiError(`Cannot reach the KULI API at ${resolvedBaseUrl}. Check that the backend is running and the app env URL is correct.`, {
+      throw new KuliApiError(`Cannot reach the KULI API at ${resolvedBaseUrl}. Check that the backend is running, the app env URL is correct, and the API CORS settings allow this browser origin.`, {
         status: 0,
         code: 'NETWORK_ERROR',
         details: {

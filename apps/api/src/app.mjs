@@ -1292,7 +1292,8 @@ export const handleRequest = async (request, response) => {
   const startedAt = Date.now();
   const corsHeaders = createCorsHeaders({
     origin: request.headers.origin,
-    allowedOrigins: env.corsOrigins
+    allowedOrigins: env.corsOrigins,
+    allowPrivateNetwork: env.corsAllowPrivateNetwork
   });
   let context;
 

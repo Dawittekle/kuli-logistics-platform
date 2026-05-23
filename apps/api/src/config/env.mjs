@@ -39,6 +39,7 @@ export const env = {
   mongodbServerSelectionTimeoutMs: toNumber(process.env.MONGODB_SERVER_SELECTION_TIMEOUT_MS, 5000),
   redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6380',
   corsOrigins: toList(process.env.CORS_ORIGINS),
+  corsAllowPrivateNetwork: toBoolean(process.env.CORS_ALLOW_PRIVATE_NETWORK, (process.env.NODE_ENV ?? 'development') !== 'production'),
   bootstrapAdminSupabaseUserId: process.env.BOOTSTRAP_ADMIN_SUPABASE_USER_ID ?? '',
   bootstrapAdminEmail: process.env.BOOTSTRAP_ADMIN_EMAIL ?? '',
   bootstrapAdminFullName: process.env.BOOTSTRAP_ADMIN_FULL_NAME ?? 'Seed Admin'

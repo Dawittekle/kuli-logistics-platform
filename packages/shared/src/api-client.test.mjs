@@ -64,6 +64,7 @@ describe('KULI API client', () => {
       assert.equal(error.status, 0);
       assert.equal(error.code, 'NETWORK_ERROR');
       assert.match(error.message, /Cannot reach the KULI API/);
+      assert.match(error.message, /CORS/);
       return true;
     });
   });

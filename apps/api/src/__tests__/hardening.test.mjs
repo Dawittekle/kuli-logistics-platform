@@ -46,6 +46,34 @@ test('cors preflight returns an empty success response', () => {
   assert.equal(result.body, '');
 });
 
+test('development cors can allow local private network browser origins', () => {
+  const allowed = createCorsHeaders({
+    origin: 'http://192.168.8.6:5174',
+    allowedOrigins: ['http://localhost:5174'],
+    allowPrivateNetwork: true
+  });
+
+  assert.equal(allowed['access-control-allow-origin'], 'http://192.168.8.6:5174');
+
+  const blocked = createCorsHeaders({
+    origin: 'https://public.example',
+    allowedOrigins: ['http://localhost:5174'],
+    allowPrivateNetwork: true
+  });
+
+  assert.deepEqual(blocked, {});
+});
+
+test('private network cors remains disabled unless explicitly allowed', () => {
+  const blocked = createCorsHeaders({
+    origin: 'http://192.168.8.6:5174',
+    allowedOrigins: ['http://localhost:5174'],
+    allowPrivateNetwork: false
+  });
+
+  assert.deepEqual(blocked, {});
+});
+
 test('rate limiter blocks requests after configured threshold', () => {
   const limiter = new InMemoryRateLimiter({
     windowMs: 1000,

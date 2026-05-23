@@ -199,6 +199,8 @@ Demo mobile web flow:
 5. Register as `Client` or `Truck owner` with any email and any short password. Blank phone is allowed in demo mode.
 6. Sign out and log in again with the same email to return to the same local demo profile.
 
+If you open admin or mobile web through your machine's LAN address, for example `http://192.168.x.x:5174`, keep `CORS_ALLOW_PRIVATE_NETWORK=true` in `apps/api/.env` during development. Production should leave private-network CORS disabled and use explicit hosted origins.
+
 Local development tokens use:
 
 Use:
