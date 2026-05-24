@@ -150,6 +150,8 @@ The admin app runs on Vite's local server, usually `http://localhost:5174`.
 npm run dev:mobile
 ```
 
+The preferred command above runs Expo from `apps/mobile`. If Expo is accidentally started from the repository root, the root Expo entrypoint delegates to the same mobile app so Metro does not fall back to looking for a missing root `App` file.
+
 For Android emulator testing, use this API base URL in `apps/mobile/.env`:
 
 ```env
