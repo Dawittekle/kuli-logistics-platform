@@ -302,6 +302,7 @@ Notes:
 - Follow-up monorepo Expo fix on 2026-05-24 added a repository-root Expo entrypoint/config that delegates to `apps/mobile`, preventing root `expo start` from failing with a missing `../../App` import.
 - Follow-up client mobile UX pass on 2026-05-24 replaced raw pickup/destination coordinate entry with Addis Ababa area selectors, generated coordinates, optional pin adjustment, route preview, and calendar/time-style pickup scheduling. Trip messages now display profile names when available, owner notifications avoid anonymous "client" wording, and client history is condensed behind detail actions with a post-trip rating prompt.
 - Follow-up client correction pass on 2026-05-24 added a status-aware client cancellation confirmation with reason selection, simplified the post-trip review modal into Review/Issue/Payment modes with star ratings, and added Expo image picker support for upload-or-camera evidence/document capture.
+- Follow-up marketplace/trip pass on 2026-05-24 made first-accept-wins clearer in the client and owner UI, added notification detail actions, kept completed-trip chat visible while cash/manual payment is pending or disputed, closed chat after confirmed/resolved payment, added 15-20 second active-trip/inbox/notification polling, and replaced the schematic route preview with a static-map surface that uses `MOBILE_APP_GOOGLE_MAPS_API_KEY` when configured and an OpenStreetMap tile fallback for local development.
 
 ## Commit Discipline
 

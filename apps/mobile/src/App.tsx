@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -159,6 +160,9 @@ type KuliRequest = {
   selectedVehicleId?: string;
   acceptedOfferId?: string;
   offers?: TripOffer[];
+  payment?: PaymentRecord;
+  selectedVehicleLocation?: QuoteLocation;
+  selectedVehicleLocationUpdatedAt?: string;
 };
 
 type KuliStatus = KuliRequest['status'];
@@ -1442,6 +1446,8 @@ const createIdempotencyKey = (prefix: string) => `${prefix}-${Date.now().toStrin
 
 const activeRequestStatuses = ['pending', 'accepted', 'en_route_to_pickup', 'arrived_at_pickup', 'loading', 'in_transit', 'unloading'];
 const terminalRequestStatuses = ['completed', 'cancelled', 'timed_out'];
+const paymentSettlingStatuses = ['pending', 'disputed'];
+const paymentClosedStatuses = ['confirmed_by_owner', 'resolved', 'cancelled'];
 const ownerForwardStatuses: KuliStatus[] = ['en_route_to_pickup', 'arrived_at_pickup', 'loading', 'in_transit', 'unloading', 'completed'];
 const reportCategories = ['overcharge', 'no_show', 'misconduct', 'damage', 'safety', 'platform_issue', 'other'];
 const reportCategoryLabels: Record<string, string> = {
@@ -1481,6 +1487,12 @@ const buildManualLocation = ({ addressText, lon, lat }: { addressText: string; l
     coordinates: [Number(lon), Number(lat)]
   }
 });
+
+const isPaymentSettlingRequest = (request: KuliRequest) =>
+  request.status === 'completed' && (!request.payment || paymentSettlingStatuses.includes(request.payment.status));
+
+const isPaymentClosedRequest = (request: KuliRequest) =>
+  request.status === 'completed' && Boolean(request.payment && paymentClosedStatuses.includes(request.payment.status));
 
 const normalizePickedAsset = (asset: ImagePicker.ImagePickerAsset, source: PickedFile['source']): PickedFile => {
   const extension = asset.uri?.split('.').pop()?.split('?')[0];
@@ -1678,14 +1690,80 @@ function PickupSchedulePicker({
   );
 }
 
+type MapLocationInput = AddisLocationOption | QuoteLocation;
+
+const normalizeMapLocation = (location: MapLocationInput, fallbackLabel: string) => {
+  if ('lon' in location) {
+    return {
+      label: location.label,
+      subtitle: location.area,
+      lon: Number(location.lon),
+      lat: Number(location.lat)
+    };
+  }
+
+  return {
+    label: location.addressText || fallbackLabel,
+    subtitle: location.source.replaceAll('_', ' '),
+    lon: Number(location.point.coordinates[0]),
+    lat: Number(location.point.coordinates[1])
+  };
+};
+
+const lonLatToTile = ({ lon, lat, zoom }: { lon: number; lat: number; zoom: number }) => {
+  const latRad = (lat * Math.PI) / 180;
+  const scale = 2 ** zoom;
+
+  return {
+    x: Math.floor(((lon + 180) / 360) * scale),
+    y: Math.floor(((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * scale)
+  };
+};
+
+const buildGoogleStaticMapUrl = (points: { pickup: ReturnType<typeof normalizeMapLocation>; destination: ReturnType<typeof normalizeMapLocation>; truck?: ReturnType<typeof normalizeMapLocation> }) => {
+  if (!runtimeConfig.googleMapsApiKey) {
+    return '';
+  }
+
+  const markers = [
+    `markers=color:green%7Clabel:P%7C${points.pickup.lat},${points.pickup.lon}`,
+    `markers=color:orange%7Clabel:D%7C${points.destination.lat},${points.destination.lon}`,
+    points.truck ? `markers=color:blue%7Clabel:T%7C${points.truck.lat},${points.truck.lon}` : ''
+  ].filter(Boolean);
+  const path = `path=color:0x0d5668ff%7Cweight:5%7C${points.pickup.lat},${points.pickup.lon}%7C${points.destination.lat},${points.destination.lon}`;
+
+  return `https://maps.googleapis.com/maps/api/staticmap?center=${points.pickup.lat},${points.pickup.lon}&zoom=12&size=640x320&scale=2&maptype=roadmap&${markers.join('&')}&${path}&key=${encodeURIComponent(runtimeConfig.googleMapsApiKey)}`;
+};
+
+const buildOpenStreetMapTileUrl = (pickup: ReturnType<typeof normalizeMapLocation>, destination: ReturnType<typeof normalizeMapLocation>) => {
+  const center = {
+    lon: (pickup.lon + destination.lon) / 2,
+    lat: (pickup.lat + destination.lat) / 2
+  };
+  const zoom = 12;
+  const tile = lonLatToTile({ ...center, zoom });
+
+  return `https://tile.openstreetmap.org/${zoom}/${tile.x}/${tile.y}.png`;
+};
+
 function RouteMapPreview({
   pickup,
-  destination
+  destination,
+  truck,
+  statusLabel
 }: {
-  pickup: AddisLocationOption;
-  destination: AddisLocationOption;
+  pickup: MapLocationInput;
+  destination: MapLocationInput;
+  truck?: QuoteLocation;
+  statusLabel?: string;
 }) {
-  const toPointStyle = (location: AddisLocationOption) => {
+  const pickupPoint = normalizeMapLocation(pickup, 'Pickup');
+  const destinationPoint = normalizeMapLocation(destination, 'Drop-off');
+  const truckPoint = truck ? normalizeMapLocation(truck, 'Truck') : undefined;
+  const googleMapUrl = buildGoogleStaticMapUrl({ pickup: pickupPoint, destination: destinationPoint, truck: truckPoint });
+  const fallbackTileUrl = buildOpenStreetMapTileUrl(pickupPoint, destinationPoint);
+  const mapProviderLabel = googleMapUrl ? 'Google map' : 'OpenStreetMap preview';
+  const toPointStyle = (location: { lon: number; lat: number }) => {
     const lon = Number(location.lon);
     const lat = Number(location.lat);
     const left = Math.max(6, Math.min(88, ((lon - 38.65) / (38.91 - 38.65)) * 100));
@@ -1698,18 +1776,26 @@ function RouteMapPreview({
 
   return (
     <View style={styles.mapPreview}>
+      <Image source={{ uri: googleMapUrl || fallbackTileUrl }} resizeMode="cover" style={styles.mapTile} />
+      <View style={styles.mapScrim} />
       <View style={styles.mapGridLineVertical} />
       <View style={styles.mapGridLineHorizontal} />
       <View style={styles.mapRoute} />
-      <View style={[styles.mapPin, styles.mapPinPickup, toPointStyle(pickup)]}>
+      <View style={[styles.mapPin, styles.mapPinPickup, toPointStyle(pickupPoint)]}>
         <Text style={styles.mapPinText}>P</Text>
       </View>
-      <View style={[styles.mapPin, styles.mapPinDestination, toPointStyle(destination)]}>
+      <View style={[styles.mapPin, styles.mapPinDestination, toPointStyle(destinationPoint)]}>
         <Text style={styles.mapPinText}>D</Text>
       </View>
+      {truckPoint ? (
+        <View style={[styles.mapPin, styles.mapPinTruck, toPointStyle(truckPoint)]}>
+          <Text style={styles.mapPinText}>T</Text>
+        </View>
+      ) : null}
       <View style={styles.mapLegend}>
-        <Text style={styles.mapLegendText}>Pickup: {pickup.label}</Text>
-        <Text style={styles.mapLegendText}>Drop-off: {destination.label}</Text>
+        <Text style={styles.mapLegendText}>{mapProviderLabel} / Pickup: {pickupPoint.label}</Text>
+        <Text style={styles.mapLegendText}>Drop-off: {destinationPoint.label}</Text>
+        {truckPoint ? <Text style={styles.mapLegendText}>Truck: {truckPoint.label}{statusLabel ? ` / ${statusLabel}` : ''}</Text> : null}
       </View>
     </View>
   );
@@ -2006,7 +2092,7 @@ function ClientQuoteScreen() {
             )}
             {quote.candidates.length > 0 ? (
               <>
-                <Text style={styles.muted}>{selectedVehicleIds.length} selected for dispatch. Owners receive first-accept-wins offers.</Text>
+                <Text style={styles.muted}>{selectedVehicleIds.length} selected for dispatch. When one owner accepts, KULI automatically closes the other offers.</Text>
                 <Pressable
                   accessibilityRole="button"
                   disabled={requestPending || selectedVehicleIds.length === 0}
@@ -2032,7 +2118,7 @@ function ClientQuoteScreen() {
             <Text style={styles.muted}>
               Offers expire {requestResult.waitingState?.expiresAt ? new Date(requestResult.waitingState.expiresAt).toLocaleTimeString() : 'soon'} if no owner accepts.
             </Text>
-            <Text style={styles.noticeText}>You can follow or cancel this request from Home while it is still cancellable.</Text>
+            <Text style={styles.noticeText}>You can follow or cancel this request from Home while it is still cancellable. Once a truck accepts, other offers are released automatically.</Text>
           </ShellCard>
         ) : null}
       </ScrollView>
@@ -2071,8 +2157,9 @@ function RequestSummaryCard({
           <Text style={styles.metricLabel}>offers</Text>
         </View>
       </View>
-      {request.status === 'pending' ? <Text style={styles.noticeText}>Waiting for an owner to accept. Open offers can still expire or be cancelled.</Text> : null}
-      {request.status === 'accepted' ? <Text style={styles.noticeText}>A truck owner accepted. Watch the manual timeline and send request-scoped messages here.</Text> : null}
+      {request.status === 'pending' ? <Text style={styles.noticeText}>Waiting for an owner to accept. The first accepted truck gets the trip, and all other open offers close automatically.</Text> : null}
+      {request.status === 'accepted' ? <Text style={styles.noticeText}>A truck owner accepted. Other offers are closed, the truck is assigned, and messages stay attached to this request.</Text> : null}
+      {isPaymentSettlingRequest(request) ? <Text style={styles.noticeText}>Payment is still open. Keep any final cash/payment coordination in chat until it is confirmed.</Text> : null}
       {children}
       <Pressable
         accessibilityRole="button"
@@ -2104,7 +2191,8 @@ function TimelineEventRow({ event }: { event: StatusEvent }) {
 function TripTimeline({ requestId }: { requestId: string }) {
   const eventsQuery = useQuery({
     queryKey: ['kuli-requests', requestId, 'events'],
-    queryFn: async () => ((await kuliApi.request(`/kuli-requests/${requestId}/events`)) as ApiEnvelope<StatusEvent[]>).data
+    queryFn: async () => ((await kuliApi.request(`/kuli-requests/${requestId}/events`)) as ApiEnvelope<StatusEvent[]>).data,
+    refetchInterval: 15000
   });
 
   const events = eventsQuery.data ?? [];
@@ -2128,7 +2216,17 @@ function TripTimeline({ requestId }: { requestId: string }) {
   );
 }
 
-function MessageThread({ requestId, profile }: { requestId: string; profile: UserProfile }) {
+function MessageThread({
+  requestId,
+  profile,
+  closed = false,
+  closedReason = 'This request thread is closed.'
+}: {
+  requestId: string;
+  profile: UserProfile;
+  closed?: boolean;
+  closedReason?: string;
+}) {
   const queryClient = useQueryClient();
   const [body, setBody] = useState('');
   const [retryBody, setRetryBody] = useState('');
@@ -2137,13 +2235,14 @@ function MessageThread({ requestId, profile }: { requestId: string; profile: Use
 
   const messagesQuery = useQuery({
     queryKey: ['kuli-requests', requestId, 'messages'],
-    queryFn: async () => ((await kuliApi.request(`/kuli-requests/${requestId}/messages`)) as ApiEnvelope<TripMessage[]>).data
+    queryFn: async () => ((await kuliApi.request(`/kuli-requests/${requestId}/messages`)) as ApiEnvelope<TripMessage[]>).data,
+    refetchInterval: closed ? false : 15000
   });
 
   const sendMessage = async (nextBody = body) => {
     const trimmed = nextBody.trim();
 
-    if (!trimmed || pending) {
+    if (!trimmed || pending || closed) {
       return;
     }
 
@@ -2180,6 +2279,7 @@ function MessageThread({ requestId, profile }: { requestId: string; profile: Use
         <StatusPill tone={messagesQuery.isError ? 'blocked' : 'ready'}>{messages.length}</StatusPill>
       </View>
       {messagesQuery.isError ? <Text style={styles.errorText}>Connection issue loading messages. Pull this panel by refreshing after the network returns.</Text> : null}
+      {closed ? <Text style={styles.noticeText}>{closedReason}</Text> : null}
       <View style={styles.messageList}>
         {messages.length === 0 ? <Text style={styles.muted}>No messages yet. Keep coordination inside the request for accountability.</Text> : null}
         {messages.map((message) => {
@@ -2207,9 +2307,9 @@ function MessageThread({ requestId, profile }: { requestId: string; profile: Use
           ) : null}
         </View>
       ) : null}
-      <Field label="Message" value={body} onChangeText={setBody} placeholder="Share arrival detail or loading instruction" />
-      <Pressable accessibilityRole="button" disabled={!body.trim() || pending} onPress={() => sendMessage()} style={[styles.primaryButton, (!body.trim() || pending) && styles.buttonDisabled]}>
-        <Text style={styles.primaryButtonText}>{pending ? 'Sending...' : 'Send message'}</Text>
+      <Field label="Message" value={body} onChangeText={setBody} placeholder={closed ? 'Messages reopen only if support reopens the payment record' : 'Share arrival detail or loading instruction'} />
+      <Pressable accessibilityRole="button" disabled={!body.trim() || pending || closed} onPress={() => sendMessage()} style={[styles.primaryButton, (!body.trim() || pending || closed) && styles.buttonDisabled]}>
+        <Text style={styles.primaryButtonText}>{closed ? 'Chat closed' : pending ? 'Sending...' : 'Send message'}</Text>
       </Pressable>
     </View>
   );
@@ -2284,11 +2384,28 @@ function ActiveTripWorkspace({
   profile: UserProfile;
   ownerControls?: boolean;
 }) {
+  const paymentSettling = isPaymentSettlingRequest(request);
+  const paymentClosed = isPaymentClosedRequest(request);
+
   return (
     <View style={styles.tripWorkspace}>
+      <RouteMapPreview
+        pickup={request.pickupLocation}
+        destination={request.destinationLocation}
+        truck={request.selectedVehicleLocation}
+        statusLabel={request.status === 'completed' ? request.payment?.status ?? 'payment pending' : statusLabels[request.status]}
+      />
+      {paymentSettling ? (
+        <Text style={styles.noticeText}>Trip is complete, but this chat stays open until the cash/manual payment is confirmed or resolved.</Text>
+      ) : null}
       {ownerControls ? <OwnerStatusControls request={request} /> : null}
       <TripTimeline requestId={request.id} />
-      <MessageThread requestId={request.id} profile={profile} />
+      <MessageThread
+        requestId={request.id}
+        profile={profile}
+        closed={paymentClosed}
+        closedReason="Payment is confirmed or resolved, so the trip chat is now closed."
+      />
     </View>
   );
 }
@@ -2364,12 +2481,13 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
 
   const requestsQuery = useQuery({
     queryKey: ['kuli-requests', 'mine'],
-    queryFn: async () => ((await kuliApi.request('/kuli-requests/mine')) as ApiEnvelope<KuliRequest[]>).data
+    queryFn: async () => ((await kuliApi.request('/kuli-requests/mine')) as ApiEnvelope<KuliRequest[]>).data,
+    refetchInterval: 15000
   });
 
   const requests = requestsQuery.data ?? [];
-  const activeRequests = requests.filter((request) => activeRequestStatuses.includes(request.status));
-  const recentRequests = requests.filter((request) => !activeRequestStatuses.includes(request.status)).slice(0, 3);
+  const activeRequests = requests.filter((request) => activeRequestStatuses.includes(request.status) || isPaymentSettlingRequest(request));
+  const recentRequests = requests.filter((request) => !activeRequestStatuses.includes(request.status) && !isPaymentSettlingRequest(request)).slice(0, 3);
 
   const cancelRequest = async (request: KuliRequest, reason: string) => {
     setPendingCancelId(request.id);
@@ -2510,6 +2628,7 @@ function OwnerOfferCard({
       </View>
       {expanded && request ? (
         <View style={styles.detailPanel}>
+          <RouteMapPreview pickup={request.pickupLocation} destination={request.destinationLocation} statusLabel="Offer route" />
           <View style={styles.requestRow}>
             <View style={styles.flex}>
               <Text style={styles.fieldLabel}>Pickup</Text>
@@ -2561,16 +2680,18 @@ function OwnerOffersScreen({ profile }: { profile: UserProfile }) {
 
   const offersQuery = useQuery({
     queryKey: ['owner-offers'],
-    queryFn: async () => ((await kuliApi.request('/owner/offers')) as ApiEnvelope<TripOffer[]>).data
+    queryFn: async () => ((await kuliApi.request('/owner/offers')) as ApiEnvelope<TripOffer[]>).data,
+    refetchInterval: 15000
   });
 
   const ownerRequestsQuery = useQuery({
     queryKey: ['kuli-requests', 'mine', 'owner'],
-    queryFn: async () => ((await kuliApi.request('/kuli-requests/mine')) as ApiEnvelope<KuliRequest[]>).data
+    queryFn: async () => ((await kuliApi.request('/kuli-requests/mine')) as ApiEnvelope<KuliRequest[]>).data,
+    refetchInterval: 15000
   });
 
   const offers = offersQuery.data ?? [];
-  const acceptedTrips = (ownerRequestsQuery.data ?? []).filter((request) => activeRequestStatuses.includes(request.status));
+  const acceptedTrips = (ownerRequestsQuery.data ?? []).filter((request) => activeRequestStatuses.includes(request.status) || isPaymentSettlingRequest(request));
 
   const toggleOfferDetails = async (offer: TripOffer) => {
     const nextExpanded = expandedOfferId === offer.id ? '' : offer.id;
@@ -2700,7 +2821,8 @@ function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
 
   const notificationsQuery = useQuery({
     queryKey: ['notifications'],
-    queryFn: async () => ((await kuliApi.request('/notifications')) as ApiEnvelope<NotificationRecord[]>).data
+    queryFn: async () => ((await kuliApi.request('/notifications')) as ApiEnvelope<NotificationRecord[]>).data,
+    refetchInterval: 20000
   });
 
   const notifications = notificationsQuery.data ?? [];
@@ -2719,6 +2841,31 @@ function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
       setMessage('Notification marked read.');
     } catch (readError) {
       setError(getErrorMessage(readError));
+    } finally {
+      setPendingId('');
+    }
+  };
+
+  const openNotificationDetail = async (notification: NotificationRecord) => {
+    setPendingId(notification.id);
+    setError('');
+    setMessage('');
+
+    try {
+      if (notification.deliveryStatus !== 'read') {
+        await kuliApi.request(`/notifications/${notification.id}/read`, {
+          method: 'PATCH'
+        });
+        await queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      }
+
+      if (profile.role === 'truck_owner') {
+        navigation.navigate(notification.type === 'offer.sent' ? 'Offers' : notification.data?.requestId ? 'Offers' : 'Home');
+      } else {
+        navigation.navigate(notification.data?.requestId ? 'Home' : 'Alerts');
+      }
+    } catch (detailError) {
+      setError(getErrorMessage(detailError));
     } finally {
       setPendingId('');
     }
@@ -2802,9 +2949,9 @@ function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
                   ) : null}
                 </View>
                 <View style={styles.notificationActions}>
-                  {profile.role === 'truck_owner' && notification.type === 'offer.sent' ? (
-                    <Pressable accessibilityRole="button" onPress={() => navigation.navigate('Offers')} style={styles.compactButton}>
-                      <Text style={styles.compactButtonText}>Open offer</Text>
+                  {notification.data?.requestId ? (
+                    <Pressable accessibilityRole="button" disabled={pendingId === notification.id} onPress={() => openNotificationDetail(notification)} style={[styles.compactButton, pendingId === notification.id && styles.buttonDisabled]}>
+                      <Text style={styles.compactButtonText}>{profile.role === 'truck_owner' && notification.type === 'offer.sent' ? 'View offer' : 'View detail'}</Text>
                     </Pressable>
                   ) : null}
                   <Pressable
@@ -3170,7 +3317,7 @@ function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
     queryFn: async () => ((await kuliApi.request(`/owners/${profile.id}/ratings`)) as ApiEnvelope<RatingRecord[]>).data
   });
 
-  const completedRequests = (requestsQuery.data ?? []).filter((request) => request.status === 'completed');
+  const completedRequests = (requestsQuery.data ?? []).filter((request) => request.status === 'completed' && !isPaymentClosedRequest(request));
   const ratings = ratingsQuery.data ?? [];
   const averageRating = ratings.length ? ratings.reduce((sum, rating) => sum + rating.rating, 0) / ratings.length : 0;
 
@@ -3190,6 +3337,8 @@ function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
 
       setMessage(`Payment ${result.data.payment.status}: ${result.data.payment.currency} ${Number(result.data.payment.amountConfirmed ?? result.data.payment.amountExpected).toFixed(2)}.`);
       await queryClient.invalidateQueries({ queryKey: ['kuli-requests', 'mine', 'owner-earnings'] });
+      await queryClient.invalidateQueries({ queryKey: ['kuli-requests', 'mine', 'owner'] });
+      await queryClient.invalidateQueries({ queryKey: ['notifications'] });
     } catch (paymentError) {
       setError(getErrorMessage(paymentError));
     } finally {
@@ -3228,7 +3377,7 @@ function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
           {message ? <Text style={styles.noticeText}>{message}</Text> : null}
           <Field label="Override amount ETB" value={amountConfirmed} onChangeText={setAmountConfirmed} placeholder="Leave blank for estimate" keyboardType="numeric" />
-          {completedRequests.length === 0 ? <Text style={styles.muted}>No completed trips yet. Payment confirmation is blocked until completion.</Text> : null}
+          {completedRequests.length === 0 ? <Text style={styles.muted}>No completed trips waiting for cash confirmation. Payment confirmation is blocked until completion.</Text> : null}
           <View style={styles.roleGrid}>
             {completedRequests.map((request) => (
               <View key={request.id} style={styles.card}>
@@ -3237,7 +3386,7 @@ function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
                     <Text style={styles.cardTitle}>{request.requestCode}</Text>
                     <Text style={styles.muted}>{request.quoteSnapshot?.currency ?? 'ETB'} {Number(request.quoteSnapshot?.totalEstimate ?? 0).toFixed(2)}</Text>
                   </View>
-                  <StatusPill tone="ready">Completed</StatusPill>
+                  <StatusPill tone={request.payment?.status === 'disputed' ? 'warn' : 'ready'}>{request.payment?.status ?? 'Payment pending'}</StatusPill>
                 </View>
                 <Pressable accessibilityRole="button" disabled={pendingRequestId === request.id} onPress={() => confirmPayment(request)} style={[styles.primaryButton, pendingRequestId === request.id && styles.buttonDisabled]}>
                   <Text style={styles.primaryButtonText}>{pendingRequestId === request.id ? 'Confirming...' : 'Confirm cash payment'}</Text>
@@ -3802,6 +3951,22 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative'
   },
+  mapTile: {
+    height: '100%',
+    left: 0,
+    opacity: 0.82,
+    position: 'absolute',
+    top: 0,
+    width: '100%'
+  },
+  mapScrim: {
+    backgroundColor: 'rgba(255, 250, 240, 0.18)',
+    height: '100%',
+    left: 0,
+    position: 'absolute',
+    top: 0,
+    width: '100%'
+  },
   mapGridLineVertical: {
     backgroundColor: '#cdded6',
     height: '100%',
@@ -3845,6 +4010,9 @@ const styles = StyleSheet.create({
   },
   mapPinDestination: {
     backgroundColor: colors.amber
+  },
+  mapPinTruck: {
+    backgroundColor: colors.primaryDeep
   },
   mapPinText: {
     color: '#fffaf0',

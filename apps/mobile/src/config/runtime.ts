@@ -5,6 +5,7 @@ type KuliRuntimeConfig = {
   supabaseUrl: string;
   supabaseAnonKey: string;
   demoAuthEnabled: boolean;
+  googleMapsApiKey: string;
 };
 
 const extra = (Constants.expoConfig?.extra?.kuli ?? {}) as Partial<KuliRuntimeConfig>;
@@ -15,12 +16,14 @@ export const runtimeConfig: KuliRuntimeConfig = {
   apiBaseUrl,
   supabaseUrl: extra.supabaseUrl || '',
   supabaseAnonKey: extra.supabaseAnonKey || '',
-  demoAuthEnabled: Boolean(extra.demoAuthEnabled) || isLocalApi(apiBaseUrl)
+  demoAuthEnabled: Boolean(extra.demoAuthEnabled) || isLocalApi(apiBaseUrl),
+  googleMapsApiKey: extra.googleMapsApiKey || ''
 };
 
 export const runtimeReadiness = {
   hasApiBaseUrl: Boolean(runtimeConfig.apiBaseUrl),
   hasSupabaseUrl: Boolean(runtimeConfig.supabaseUrl),
   hasSupabaseAnonKey: Boolean(runtimeConfig.supabaseAnonKey),
-  demoAuthEnabled: runtimeConfig.demoAuthEnabled
+  demoAuthEnabled: runtimeConfig.demoAuthEnabled,
+  hasGoogleMapsApiKey: Boolean(runtimeConfig.googleMapsApiKey)
 };

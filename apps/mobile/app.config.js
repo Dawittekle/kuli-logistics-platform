@@ -75,7 +75,8 @@ export default ({ config }) => ({
       apiBaseUrl,
       supabaseUrl: process.env.MOBILE_APP_SUPABASE_URL ?? env.MOBILE_APP_SUPABASE_URL ?? '',
       supabaseAnonKey: process.env.MOBILE_APP_SUPABASE_ANON_KEY ?? env.MOBILE_APP_SUPABASE_ANON_KEY ?? '',
-      demoAuthEnabled: resolveBoolean(demoAuthEnv, isLocalApi)
+      demoAuthEnabled: resolveBoolean(demoAuthEnv, isLocalApi),
+      googleMapsApiKey: process.env.MOBILE_APP_GOOGLE_MAPS_API_KEY ?? env.MOBILE_APP_GOOGLE_MAPS_API_KEY ?? ''
     }
   }
 });

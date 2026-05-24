@@ -254,14 +254,20 @@ class MemoryTripOfferRepository {
   }
 
   async expireCompeting({ requestId, exceptOfferId }) {
+    const expiredOffers = [];
+
     for (const [id, offer] of this.records.entries()) {
       if (offer.requestId === requestId && id !== exceptOfferId && [offerStatuses.sent, offerStatuses.viewed].includes(offer.status)) {
-        this.records.set(id, {
+        const expired = {
           ...offer,
           status: offerStatuses.expired
-        });
+        };
+        this.records.set(id, expired);
+        expiredOffers.push(expired);
       }
     }
+
+    return expiredOffers;
   }
 
   async cancelForRequest(requestId) {
@@ -301,16 +307,32 @@ class MemoryVehicleRepository {
           id: 'veh_one',
           ownerId: ownerOne.id,
           verificationStatus: verificationStatuses.approved,
-          availabilityStatus: vehicleAvailabilityStatuses.onlineAvailable
+          availabilityStatus: vehicleAvailabilityStatuses.onlineAvailable,
+          currentLocation: {
+            addressText: 'Bole standby',
+            source: 'manual_pin',
+            point: { type: 'Point', coordinates: [38.79, 8.98] }
+          },
+          currentLocationUpdatedAt: '2026-05-24T08:00:00.000Z'
         },
         {
           id: 'veh_two',
           ownerId: ownerTwo.id,
           verificationStatus: verificationStatuses.approved,
-          availabilityStatus: vehicleAvailabilityStatuses.onlineAvailable
+          availabilityStatus: vehicleAvailabilityStatuses.onlineAvailable,
+          currentLocation: {
+            addressText: 'Piassa standby',
+            source: 'manual_pin',
+            point: { type: 'Point', coordinates: [38.75, 9.03] }
+          },
+          currentLocationUpdatedAt: '2026-05-24T08:05:00.000Z'
         }
       ].map((vehicle) => [vehicle.id, vehicle])
     );
+  }
+
+  async findById(id) {
+    return this.records.get(id) ?? null;
   }
 
   async findByIds(ids) {
@@ -597,7 +619,7 @@ test('owner can view and decline an offer', async () => {
 });
 
 test('two simultaneous accepts produce one winner', async () => {
-  const { service, vehicleRepository, statusEventRepository } = createService();
+  const { service, vehicleRepository, statusEventRepository, notificationRepository } = createService();
   const created = await service.createRequest({
     actor: client,
     input: requestInput,
@@ -624,7 +646,9 @@ test('two simultaneous accepts produce one winner', async () => {
   assert.equal(rejected.length, 1);
   assert.equal(rejected[0].reason.code, 'REQUEST_ALREADY_ACCEPTED');
   assert.equal(fulfilled[0].value.request.status, kuliStatuses.accepted);
+  assert.equal(fulfilled[0].value.request.selectedVehicleLocation.addressText.endsWith('standby'), true);
   assert.equal(statusEventRepository.records.filter((event) => event.toStatus === kuliStatuses.accepted).length, 1);
+  assert.equal(notificationRepository.records.filter((entry) => entry.type === 'offer.expired').length, 1);
 
   const releasedLosingVehicle = Array.from(vehicleRepository.records.values()).find(
     (vehicle) => vehicle.ownerId !== fulfilled[0].value.request.selectedOwnerId
@@ -747,6 +771,13 @@ test('assigned owner can execute trip lifecycle and every transition creates an 
   assert.equal(releasedVehicle.availabilityStatus, vehicleAvailabilityStatuses.onlineAvailable);
   assert.equal(payment.status, 'pending');
   assert.equal(payment.amountExpected, 2200);
+
+  const ownerRequests = await service.listMine({
+    actor: ownerOne
+  });
+
+  assert.equal(ownerRequests[0].payment.status, 'pending');
+  assert.equal(ownerRequests[0].selectedVehicleLocation.addressText, 'Bole standby');
 });
 
 test('invalid and unauthorized status transitions are blocked', async () => {
@@ -833,6 +864,69 @@ test('request-scoped messages are idempotent and limited to participants', async
         }
       }),
     (error) => error instanceof AppError && error.code === 'KULI_REQUEST_NOT_FOUND'
+  );
+});
+
+test('completed trip chat stays open until payment is confirmed', async () => {
+  const { service, paymentRepository } = createService();
+  const created = await service.createRequest({
+    actor: client,
+    input: requestInput,
+    idempotencyKey: 'idem-010'
+  });
+  const offer = created.offers.find((entry) => entry.ownerId === ownerOne.id);
+  const accepted = await service.acceptOffer({
+    actor: ownerOne,
+    offerId: offer.id
+  });
+  const statuses = [
+    kuliStatuses.enRouteToPickup,
+    kuliStatuses.arrivedAtPickup,
+    kuliStatuses.loading,
+    kuliStatuses.inTransit,
+    kuliStatuses.unloading,
+    kuliStatuses.completed
+  ];
+
+  let current = accepted.request;
+
+  for (const status of statuses) {
+    const result = await service.transitionRequestStatus({
+      actor: ownerOne,
+      requestId: current.id,
+      input: { status }
+    });
+    current = result.request;
+  }
+
+  const afterCompletion = await service.sendMessage({
+    actor: client,
+    requestId: current.id,
+    input: {
+      body: 'I will pay cash at unloading.',
+      clientGeneratedId: 'mobile-msg-after-completion'
+    }
+  });
+  const payment = await paymentRepository.findByRequestId(current.id);
+
+  await paymentRepository.save({
+    ...payment,
+    status: 'confirmed_by_owner',
+    confirmedByOwnerId: ownerOne.id
+  });
+
+  assert.equal(afterCompletion.message.body, 'I will pay cash at unloading.');
+  await assert.rejects(
+    () =>
+      service.sendMessage({
+        actor: ownerOne,
+        requestId: current.id,
+        input: {
+          body: 'Payment confirmed.',
+          clientGeneratedId: 'mobile-msg-after-payment'
+        }
+      }),
+    (error) => error instanceof AppError && error.code === 'MESSAGE_THREAD_CLOSED'
   );
 });
 

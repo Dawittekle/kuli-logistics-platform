@@ -13,6 +13,11 @@ import { AppError } from '../../common/errors/app-error.mjs';
 const createId = (prefix) => `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 const offerExpiryMinutes = 10;
 const terminalRequestStatuses = [kuliStatuses.cancelled, kuliStatuses.timedOut];
+const paymentClosedMessageStatuses = [
+  paymentStatuses.confirmedByOwner,
+  paymentStatuses.resolved,
+  paymentStatuses.cancelled
+];
 
 const statusTransitions = {
   [kuliStatuses.pending]: [kuliStatuses.cancelled, kuliStatuses.timedOut],
@@ -121,6 +126,41 @@ export class MarketplaceService {
       amountExpected: request.quoteSnapshot?.totalEstimate ?? 0,
       platformCommissionAmount: 0
     });
+  }
+
+  async enrichRequest(request) {
+    if (!request) {
+      return null;
+    }
+
+    const [payment, selectedVehicle] = await Promise.all([
+      this.paymentRepository ? this.paymentRepository.findByRequestId(request.id) : null,
+      request.selectedVehicleId ? this.vehicleRepository.findById(request.selectedVehicleId) : null
+    ]);
+
+    return {
+      ...request,
+      payment: payment ?? undefined,
+      selectedVehicleLocation: selectedVehicle?.currentLocation,
+      selectedVehicleLocationUpdatedAt: selectedVehicle?.currentLocationUpdatedAt
+    };
+  }
+
+  async enrichRequests(requests) {
+    return Promise.all(requests.map((request) => this.enrichRequest(request)));
+  }
+
+  async isMessageThreadClosed(request) {
+    if (terminalRequestStatuses.includes(request.status)) {
+      return true;
+    }
+
+    if (request.status !== kuliStatuses.completed || !this.paymentRepository) {
+      return false;
+    }
+
+    const payment = await this.paymentRepository.findByRequestId(request.id);
+    return payment ? paymentClosedMessageStatuses.includes(payment.status) : false;
   }
 
   async createRequest({ actor, input, idempotencyKey }) {
@@ -312,10 +352,12 @@ export class MarketplaceService {
   }
 
   async listMine({ actor }) {
-    return this.kuliRequestRepository.listMine({
+    const requests = await this.kuliRequestRepository.listMine({
       userId: actor.id,
       role: actor.role
     });
+
+    return this.enrichRequests(requests);
   }
 
   async getRequest({ actor, requestId }) {
@@ -331,10 +373,10 @@ export class MarketplaceService {
       throw new AppError(404, 'KULI_REQUEST_NOT_FOUND', 'KULI request was not found.');
     }
 
-    return {
+    return this.enrichRequest({
       ...request,
       offers: await this.tripOfferRepository.listByRequestId(request.id)
-    };
+    });
   }
 
   async cancelRequest({ actor, requestId, input }) {
@@ -409,7 +451,7 @@ export class MarketplaceService {
     );
 
     return {
-      request: cancelledRequest,
+      request: await this.enrichRequest(cancelledRequest),
       offers
     };
   }
@@ -421,7 +463,7 @@ export class MarketplaceService {
     return Promise.all(
       offers.map(async (offer) => ({
         ...offer,
-        request: await this.kuliRequestRepository.findById(offer.requestId)
+          request: await this.enrichRequest(await this.kuliRequestRepository.findById(offer.requestId))
       }))
     );
   }
@@ -458,7 +500,7 @@ export class MarketplaceService {
 
       if (request?.acceptedOfferId === offer.id) {
         return {
-          request,
+          request: await this.enrichRequest(request),
           offer,
           idempotentReplay: Boolean(idempotencyKey)
         };
@@ -517,31 +559,45 @@ export class MarketplaceService {
       throw new AppError(409, 'OFFER_NOT_AVAILABLE', 'This offer is no longer available.');
     }
 
-    await this.tripOfferRepository.expireCompeting({
+    const expiredCompetingOffers = await this.tripOfferRepository.expireCompeting({
       requestId: offer.requestId,
       exceptOfferId: offer.id
     });
 
     await this.notificationRepository.insertMany(
-      acceptedRequest.clientId
-        ? [
-            createNotification({
-              recipientUserId: acceptedRequest.clientId,
-              type: 'offer.accepted',
-              title: 'Truck owner accepted',
-              body: 'Your KULI request has been accepted.',
-              data: {
-                requestId: acceptedRequest.id,
-                offerId: offer.id,
-                ownerId: actor.id
-              }
-            })
-          ]
-        : []
+      [
+        ...(acceptedRequest.clientId
+          ? [
+              createNotification({
+                recipientUserId: acceptedRequest.clientId,
+                type: 'offer.accepted',
+                title: 'Truck owner accepted',
+                body: 'Your KULI request has been accepted. Other pending offers were closed automatically.',
+                data: {
+                  requestId: acceptedRequest.id,
+                  offerId: offer.id,
+                  ownerId: actor.id
+                }
+              })
+            ]
+          : []),
+        ...expiredCompetingOffers.map((expiredOffer) =>
+          createNotification({
+            recipientUserId: expiredOffer.ownerId,
+            type: 'offer.expired',
+            title: 'Request accepted by another owner',
+            body: 'This KULI request is no longer available because another truck owner accepted first.',
+            data: {
+              requestId: acceptedRequest.id,
+              offerId: expiredOffer.id
+            }
+          })
+        )
+      ]
     );
 
     return {
-      request: acceptedRequest,
+      request: await this.enrichRequest(acceptedRequest),
       offer: acceptedOffer
     };
   }
@@ -666,7 +722,7 @@ export class MarketplaceService {
     });
 
     return {
-      request: updatedRequest,
+      request: await this.enrichRequest(updatedRequest),
       event
     };
   }
@@ -688,7 +744,7 @@ export class MarketplaceService {
       throw new AppError(404, 'KULI_REQUEST_NOT_FOUND', 'KULI request was not found.');
     }
 
-    if (terminalRequestStatuses.includes(request.status)) {
+    if (await this.isMessageThreadClosed(request)) {
       throw new AppError(409, 'MESSAGE_THREAD_CLOSED', 'This request no longer accepts new messages.');
     }
 

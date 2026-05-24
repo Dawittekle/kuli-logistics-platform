@@ -141,11 +141,22 @@ export class MongoTripOfferRepository {
   }
 
   async expireCompeting({ requestId, exceptOfferId }) {
-    await this.collection.updateMany(
-      {
+    const competingOffers = await this.collection
+      .find({
         requestId,
         _id: { $ne: exceptOfferId },
         status: { $in: ['sent', 'viewed'] }
+      })
+      .toArray();
+
+    if (competingOffers.length === 0) {
+      return [];
+    }
+
+    await this.collection.updateMany(
+      {
+        requestId,
+        _id: { $in: competingOffers.map((offer) => offer._id) }
       },
       {
         $set: {
@@ -153,6 +164,13 @@ export class MongoTripOfferRepository {
           updatedAt: new Date().toISOString()
         }
       }
+    );
+
+    return competingOffers.map((offer) =>
+      normalize({
+        ...offer,
+        status: 'expired'
+      })
     );
   }
 
