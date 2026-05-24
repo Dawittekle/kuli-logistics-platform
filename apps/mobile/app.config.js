@@ -53,6 +53,15 @@ export default ({ config }) => ({
   splash: {
     backgroundColor: '#0d3446'
   },
+  plugins: [
+    [
+      'expo-image-picker',
+      {
+        photosPermission: 'KULI lets you upload photos for vehicle documents and report evidence.',
+        cameraPermission: 'KULI lets you take pictures for vehicle documents and report evidence.'
+      }
+    ]
+  ],
   assetBundlePatterns: ['**/*'],
   ios: {
     supportsTablet: true,

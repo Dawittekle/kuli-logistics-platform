@@ -13,6 +13,7 @@ import {
   View
 } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -269,6 +270,13 @@ type Vehicle = {
 };
 
 type VehicleDocumentType = 'identity' | 'driver_license' | 'vehicle_registration' | 'ownership_proof' | 'insurance';
+type PickedFile = {
+  uri?: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  source: 'camera' | 'library';
+};
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -438,6 +446,85 @@ function RoleOption({
         {role === 'client' ? 'Book verified trucks and follow your move.' : 'Register vehicles and receive verified requests.'}
       </Text>
     </Pressable>
+  );
+}
+
+function FilePickerField({
+  label,
+  value,
+  onChange
+}: {
+  label: string;
+  value: PickedFile | null;
+  onChange: (file: PickedFile | null) => void;
+}) {
+  const [error, setError] = useState('');
+
+  const pickFile = async (source: PickedFile['source']) => {
+    setError('');
+
+    try {
+      const permission =
+        source === 'camera'
+          ? await ImagePicker.requestCameraPermissionsAsync()
+          : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permission.granted) {
+        setError(source === 'camera' ? 'Camera permission is needed to take a picture.' : 'Photo library permission is needed to upload an image.');
+        return;
+      }
+
+      const result =
+        source === 'camera'
+          ? await ImagePicker.launchCameraAsync({
+              allowsEditing: false,
+              quality: 0.85
+            })
+          : await ImagePicker.launchImageLibraryAsync({
+              allowsEditing: false,
+              mediaTypes: ['images'],
+              quality: 0.85
+            });
+
+      if (result.canceled || !result.assets[0]) {
+        return;
+      }
+
+      onChange(normalizePickedAsset(result.assets[0], source));
+    } catch (pickError) {
+      setError(getErrorMessage(pickError));
+    }
+  };
+
+  return (
+    <View style={styles.subsection}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        {value ? <StatusPill tone="ready">{value.source === 'camera' ? 'Camera' : 'Upload'}</StatusPill> : <StatusPill tone="warn">Optional</StatusPill>}
+      </View>
+      {value ? (
+        <View style={styles.fileSummary}>
+          <Text style={styles.fieldLabel}>{value.name}</Text>
+          <Text style={styles.muted}>{value.mimeType} / {Math.max(1, Math.round(value.sizeBytes / 1024))} KB</Text>
+        </View>
+      ) : (
+        <Text style={styles.muted}>Attach a clear photo when it helps support review the issue.</Text>
+      )}
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      <View style={styles.actionRow}>
+        <Pressable accessibilityRole="button" onPress={() => pickFile('library')} style={[styles.secondaryButton, styles.actionButton]}>
+          <Text style={styles.secondaryButtonText}>Upload photo</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" onPress={() => pickFile('camera')} style={[styles.secondaryButton, styles.actionButton]}>
+          <Text style={styles.secondaryButtonText}>Take picture</Text>
+        </Pressable>
+        {value ? (
+          <Pressable accessibilityRole="button" onPress={() => onChange(null)} style={[styles.secondaryButton, styles.actionButton]}>
+            <Text style={styles.secondaryButtonText}>Remove</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
   );
 }
 
@@ -992,6 +1079,7 @@ function DocumentUploadField({
   onUploaded: () => void;
 }) {
   const [type, setType] = useState<VehicleDocumentType>('identity');
+  const [pickedFile, setPickedFile] = useState<PickedFile | null>(null);
   const [fileName, setFileName] = useState('identity.pdf');
   const [mimeType, setMimeType] = useState('application/pdf');
   const [sizeBytes, setSizeBytes] = useState('320000');
@@ -1000,10 +1088,12 @@ function DocumentUploadField({
   const [error, setError] = useState('');
 
   const submit = async () => {
-    const parsedSize = Number(sizeBytes);
+    const selectedFileName = pickedFile?.name ?? fileName.trim();
+    const selectedMimeType = pickedFile?.mimeType ?? mimeType.trim();
+    const parsedSize = pickedFile?.sizeBytes ?? Number(sizeBytes);
 
-    if (!fileName.trim() || !mimeType.trim() || !Number.isFinite(parsedSize) || parsedSize <= 0) {
-      setError('File name, MIME type, and positive size are required.');
+    if (!selectedFileName || !selectedMimeType || !Number.isFinite(parsedSize) || parsedSize <= 0) {
+      setError('Choose a document photo/file or enter valid file metadata.');
       return;
     }
 
@@ -1017,8 +1107,8 @@ function DocumentUploadField({
         body: {
           vehicleId,
           type,
-          originalFileName: fileName.trim(),
-          mimeType: mimeType.trim(),
+          originalFileName: selectedFileName,
+          mimeType: selectedMimeType,
           sizeBytes: parsedSize
         }
       })) as ApiEnvelope<{ file: { id: string }; upload: { url: string } }>;
@@ -1038,7 +1128,8 @@ function DocumentUploadField({
         }
       });
 
-      setMessage('Document metadata attached and marked uploaded. Local-dev upload URL was reserved by the backend.');
+      setMessage(pickedFile ? 'Document selected and attached for review.' : 'Document metadata attached and marked uploaded.');
+      setPickedFile(null);
       onUploaded();
     } catch (uploadError) {
       setError(getErrorMessage(uploadError));
@@ -1048,8 +1139,8 @@ function DocumentUploadField({
   };
 
   return (
-    <ShellCard title="Document upload metadata">
-      <Text style={styles.muted}>Phase 2 uses backend upload intents and file metadata. Real binary upload waits for object storage configuration.</Text>
+    <ShellCard title="Document upload">
+      <Text style={styles.muted}>Choose an existing image/file or take a new picture. KULI stores protected file metadata for admin review in local development.</Text>
       <View style={styles.roleGrid}>
         {documentTypes.map((doc) => (
           <Pressable
@@ -1064,9 +1155,15 @@ function DocumentUploadField({
           </Pressable>
         ))}
       </View>
-      <Field label="File name" value={fileName} onChangeText={setFileName} placeholder="insurance.pdf" />
-      <Field label="MIME type" value={mimeType} onChangeText={setMimeType} placeholder="application/pdf" />
-      <Field label="Size bytes" value={sizeBytes} onChangeText={setSizeBytes} placeholder="320000" keyboardType="phone-pad" />
+      <FilePickerField label="Document image" value={pickedFile} onChange={setPickedFile} />
+      {!pickedFile ? (
+        <View style={styles.detailPanel}>
+          <Text style={styles.muted}>Manual metadata is still available for PDF or local-dev testing.</Text>
+          <Field label="File name" value={fileName} onChangeText={setFileName} placeholder="insurance.pdf" />
+          <Field label="MIME type" value={mimeType} onChangeText={setMimeType} placeholder="application/pdf" />
+          <Field label="Size bytes" value={sizeBytes} onChangeText={setSizeBytes} placeholder="320000" keyboardType="phone-pad" />
+        </View>
+      ) : null}
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
       {message ? <Text style={styles.noticeText}>{message}</Text> : null}
       <Pressable accessibilityRole="button" disabled={pending} onPress={submit} style={[styles.primaryButton, pending && styles.buttonDisabled]}>
@@ -1347,6 +1444,22 @@ const activeRequestStatuses = ['pending', 'accepted', 'en_route_to_pickup', 'arr
 const terminalRequestStatuses = ['completed', 'cancelled', 'timed_out'];
 const ownerForwardStatuses: KuliStatus[] = ['en_route_to_pickup', 'arrived_at_pickup', 'loading', 'in_transit', 'unloading', 'completed'];
 const reportCategories = ['overcharge', 'no_show', 'misconduct', 'damage', 'safety', 'platform_issue', 'other'];
+const reportCategoryLabels: Record<string, string> = {
+  overcharge: 'Price or cash issue',
+  no_show: 'No-show',
+  misconduct: 'Conduct issue',
+  damage: 'Damage',
+  safety: 'Safety concern',
+  platform_issue: 'App or booking issue',
+  other: 'Something else'
+};
+const cancellationReasons = [
+  { key: 'plans_changed', label: 'Plans changed', detail: 'I no longer need this move.' },
+  { key: 'wrong_location_or_time', label: 'Wrong pickup or time', detail: 'The request details need correction.' },
+  { key: 'owner_taking_too_long', label: 'Truck is taking too long', detail: 'The accepted truck is delayed.' },
+  { key: 'made_other_arrangement', label: 'Found another option', detail: 'I arranged the move another way.' },
+  { key: 'safety_or_contact_issue', label: 'Safety or contact issue', detail: 'Something feels wrong or I cannot reach the owner.' }
+];
 const statusLabels: Record<KuliStatus, string> = {
   pending: 'Waiting',
   accepted: 'Accepted',
@@ -1368,6 +1481,19 @@ const buildManualLocation = ({ addressText, lon, lat }: { addressText: string; l
     coordinates: [Number(lon), Number(lat)]
   }
 });
+
+const normalizePickedAsset = (asset: ImagePicker.ImagePickerAsset, source: PickedFile['source']): PickedFile => {
+  const extension = asset.uri?.split('.').pop()?.split('?')[0];
+  const fallbackName = `${source}-evidence-${Date.now()}${extension ? `.${extension}` : '.jpg'}`;
+
+  return {
+    uri: asset.uri,
+    name: asset.fileName || fallbackName,
+    mimeType: asset.mimeType || 'image/jpeg',
+    sizeBytes: asset.fileSize && asset.fileSize > 0 ? asset.fileSize : 250000,
+    source
+  };
+};
 
 function PriceLine({ label, value, currency }: { label: string; value: number; currency: string }) {
   return (
@@ -1924,6 +2050,7 @@ function RequestSummaryCard({
   children?: ReactNode;
 }) {
   const isCancellable = ['pending', 'accepted', 'en_route_to_pickup'].includes(request.status);
+  const cancelLabel = request.status === 'pending' ? 'Cancel request' : 'Cancel trip';
 
   return (
     <View style={styles.card}>
@@ -1951,9 +2078,9 @@ function RequestSummaryCard({
         accessibilityRole="button"
         disabled={!isCancellable}
         onPress={() => onCancel(request)}
-        style={[styles.secondaryButton, !isCancellable && styles.buttonDisabled]}
+        style={[styles.secondaryButton, isCancellable && styles.dangerOutlineButton, !isCancellable && styles.buttonDisabled]}
       >
-        <Text style={styles.secondaryButtonText}>{isCancellable ? 'Cancel request' : 'Terminal request'}</Text>
+        <Text style={[styles.secondaryButtonText, isCancellable && styles.dangerOutlineText]}>{isCancellable ? cancelLabel : 'Cancellation closed'}</Text>
       </Pressable>
     </View>
   );
@@ -2166,10 +2293,74 @@ function ActiveTripWorkspace({
   );
 }
 
+function ClientCancelDialog({
+  request,
+  pending,
+  onClose,
+  onConfirm
+}: {
+  request: KuliRequest | null;
+  pending: boolean;
+  onClose: () => void;
+  onConfirm: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState(cancellationReasons[0].key);
+  const acceptedOrMoving = Boolean(request && request.status !== 'pending');
+
+  useEffect(() => {
+    if (request) {
+      setReason(cancellationReasons[0].key);
+    }
+  }, [request?.id]);
+
+  return (
+    <Modal animationType="fade" transparent visible={Boolean(request)} onRequestClose={onClose}>
+      <View style={styles.modalBackdrop}>
+        <View style={styles.pickerDialog}>
+          <Text style={styles.pickerEyebrow}>{acceptedOrMoving ? 'Cancel trip' : 'Cancel request'}</Text>
+          <Text style={styles.pickerTitle}>{request?.requestCode}</Text>
+          <Text style={styles.muted}>
+            {acceptedOrMoving
+              ? 'The owner will be notified immediately. If the truck has already started moving, support may still review payment or dispute records.'
+              : 'This removes open offers before an owner accepts. You can create a new request with corrected details anytime.'}
+          </Text>
+          <View style={styles.roleGrid}>
+            {cancellationReasons.map((option) => {
+              const selected = option.key === reason;
+
+              return (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  key={option.key}
+                  onPress={() => setReason(option.key)}
+                  style={[styles.reasonOption, selected && styles.reasonOptionSelected]}
+                >
+                  <Text style={[styles.fieldLabel, selected && styles.documentOptionSelectedText]}>{option.label}</Text>
+                  <Text style={[styles.muted, selected && styles.documentOptionSelectedText]}>{option.detail}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={styles.actionRow}>
+            <Pressable accessibilityRole="button" disabled={pending} onPress={onClose} style={[styles.secondaryButton, styles.actionButton, pending && styles.buttonDisabled]}>
+              <Text style={styles.secondaryButtonText}>Keep trip</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" disabled={pending} onPress={() => onConfirm(reason)} style={[styles.primaryButton, styles.dangerButton, styles.actionButton, pending && styles.buttonDisabled]}>
+              <Text style={styles.primaryButtonText}>{pending ? 'Cancelling...' : acceptedOrMoving ? 'Cancel trip' : 'Cancel request'}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
   const queryClient = useQueryClient();
   const [actionError, setActionError] = useState('');
   const [pendingCancelId, setPendingCancelId] = useState('');
+  const [cancelTarget, setCancelTarget] = useState<KuliRequest | null>(null);
 
   const requestsQuery = useQuery({
     queryKey: ['kuli-requests', 'mine'],
@@ -2180,7 +2371,7 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
   const activeRequests = requests.filter((request) => activeRequestStatuses.includes(request.status));
   const recentRequests = requests.filter((request) => !activeRequestStatuses.includes(request.status)).slice(0, 3);
 
-  const cancelRequest = async (request: KuliRequest) => {
+  const cancelRequest = async (request: KuliRequest, reason: string) => {
     setPendingCancelId(request.id);
     setActionError('');
 
@@ -2188,10 +2379,11 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
       await kuliApi.request(`/kuli-requests/${request.id}/cancel`, {
         method: 'POST',
         body: {
-          reason: 'client_cancelled'
+          reason
         }
       });
       await queryClient.invalidateQueries({ queryKey: ['kuli-requests', 'mine'] });
+      setCancelTarget(null);
     } catch (cancelError) {
       setActionError(getErrorMessage(cancelError));
     } finally {
@@ -2226,7 +2418,7 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
                 request={request}
                 onCancel={(nextRequest) => {
                   if (!pendingCancelId) {
-                    cancelRequest(nextRequest);
+                    setCancelTarget(nextRequest);
                   }
                 }}
               >
@@ -2254,6 +2446,20 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
           <Text style={styles.secondaryButtonText}>Sign out</Text>
         </Pressable>
       </ScrollView>
+      <ClientCancelDialog
+        request={cancelTarget}
+        pending={Boolean(pendingCancelId)}
+        onClose={() => {
+          if (!pendingCancelId) {
+            setCancelTarget(null);
+          }
+        }}
+        onConfirm={(reason) => {
+          if (cancelTarget) {
+            cancelRequest(cancelTarget, reason);
+          }
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -2623,11 +2829,11 @@ function RatingReportPanel({ request, onRatingSaved }: { request: KuliRequest; o
   const queryClient = useQueryClient();
   const [rating, setRating] = useState('5');
   const [reviewText, setReviewText] = useState('');
+  const [mode, setMode] = useState<'review' | 'issue' | 'payment'>('review');
   const [category, setCategory] = useState('damage');
+  const [categoryOpen, setCategoryOpen] = useState(false);
   const [description, setDescription] = useState('');
-  const [evidenceFileName, setEvidenceFileName] = useState('report-photo.jpg');
-  const [evidenceMimeType, setEvidenceMimeType] = useState('image/jpeg');
-  const [evidenceSizeBytes, setEvidenceSizeBytes] = useState('250000');
+  const [evidenceFile, setEvidenceFile] = useState<PickedFile | null>(null);
   const [pendingAction, setPendingAction] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -2644,7 +2850,7 @@ function RatingReportPanel({ request, onRatingSaved }: { request: KuliRequest; o
     }
 
     if (!Number.isInteger(parsedRating) || parsedRating < 1 || parsedRating > 5) {
-      setError('Choose a whole-number rating from 1 to 5.');
+      setError('Choose a rating from 1 to 5.');
       return;
     }
 
@@ -2661,7 +2867,7 @@ function RatingReportPanel({ request, onRatingSaved }: { request: KuliRequest; o
         }
       })) as ApiEnvelope<RatingRecord>;
 
-      setMessage(`Rating saved: ${result.data.rating}/5.`);
+      setMessage(`Review saved: ${result.data.rating}/5.`);
       onRatingSaved?.();
       await queryClient.invalidateQueries({ queryKey: ['kuli-requests', 'mine'] });
     } catch (ratingError) {
@@ -2705,7 +2911,7 @@ function RatingReportPanel({ request, onRatingSaved }: { request: KuliRequest; o
 
   const createReport = async () => {
     if (!description.trim()) {
-      setError('Report description is required.');
+      setError('Add a short description before submitting.');
       return;
     }
 
@@ -2723,17 +2929,16 @@ function RatingReportPanel({ request, onRatingSaved }: { request: KuliRequest; o
         }
       })) as ApiEnvelope<ReportRecord>;
 
-      const parsedSize = Number(evidenceSizeBytes);
       let evidenceMessage = '';
 
-      if (evidenceFileName.trim() && Number.isFinite(parsedSize) && parsedSize > 0) {
+      if (evidenceFile) {
         try {
           const intent = (await kuliApi.request(`/reports/${reportResult.data.id}/evidence/upload-intent`, {
             method: 'POST',
             body: {
-              originalFileName: evidenceFileName.trim(),
-              mimeType: evidenceMimeType.trim(),
-              sizeBytes: parsedSize
+              originalFileName: evidenceFile.name,
+              mimeType: evidenceFile.mimeType,
+              sizeBytes: evidenceFile.sizeBytes
             }
           })) as ApiEnvelope<{ file: { id: string } }>;
 
@@ -2749,7 +2954,8 @@ function RatingReportPanel({ request, onRatingSaved }: { request: KuliRequest; o
         }
       }
 
-      setMessage(`Report ${reportResult.data.reportCode} created.${evidenceMessage}`);
+      setMessage(`Issue ${reportResult.data.reportCode} submitted.${evidenceMessage}`);
+      setEvidenceFile(null);
       await queryClient.invalidateQueries({ queryKey: ['notifications'] });
     } catch (reportError) {
       setError(getErrorMessage(reportError));
@@ -2761,46 +2967,113 @@ function RatingReportPanel({ request, onRatingSaved }: { request: KuliRequest; o
   return (
     <View style={styles.subsection}>
       <View style={styles.cardHeader}>
-        <Text style={styles.fieldLabel}>Trust and payment</Text>
-        <StatusPill tone={terminal ? 'ready' : 'warn'}>{terminal ? 'Terminal' : 'Trip active'}</StatusPill>
+        <Text style={styles.fieldLabel}>After-trip actions</Text>
+        <StatusPill tone={terminal ? 'ready' : 'warn'}>{terminal ? 'Ready' : 'Trip active'}</StatusPill>
       </View>
-      <Text style={styles.muted}>Ratings require a completed or owner-linked cancelled trip; cash disputes are accepted after completion or cancellation. Reports stay linked to this request.</Text>
-      <View style={styles.inlineFields}>
-        <Field containerStyle={styles.inlineField} label="Rating" value={rating} onChangeText={setRating} placeholder="1-5" keyboardType="numeric" />
-        <Field containerStyle={styles.inlineField} label="Evidence size" value={evidenceSizeBytes} onChangeText={setEvidenceSizeBytes} placeholder="250000" keyboardType="numeric" />
-      </View>
-      <Field label="Review" value={reviewText} onChangeText={setReviewText} placeholder="Short public review after completion" />
-      <View style={styles.roleGrid}>
-        {reportCategories.map((option) => (
+      <View style={styles.segmentedCompact}>
+        {[
+          { key: 'review', label: 'Review' },
+          { key: 'issue', label: 'Issue' },
+          { key: 'payment', label: 'Payment' }
+        ].map((option) => (
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ selected: category === option }}
-            key={option}
-            onPress={() => setCategory(option)}
-            style={[styles.documentOption, category === option && styles.documentOptionSelected]}
+            accessibilityState={{ selected: mode === option.key }}
+            key={option.key}
+            onPress={() => setMode(option.key as 'review' | 'issue' | 'payment')}
+            style={[styles.segmentButton, mode === option.key && styles.segmentButtonActive]}
           >
-            <Text style={[styles.fieldLabel, category === option && styles.documentOptionSelectedText]}>{option.replaceAll('_', ' ')}</Text>
+            <Text style={[styles.segmentText, mode === option.key && styles.segmentTextActive]}>{option.label}</Text>
           </Pressable>
         ))}
       </View>
-      <Field label="Report or dispute description" value={description} onChangeText={setDescription} placeholder="What happened?" />
-      <View style={styles.inlineFields}>
-        <Field containerStyle={styles.inlineField} label="Evidence file" value={evidenceFileName} onChangeText={setEvidenceFileName} placeholder="photo.jpg" />
-        <Field containerStyle={styles.inlineField} label="MIME" value={evidenceMimeType} onChangeText={setEvidenceMimeType} placeholder="image/jpeg" />
-      </View>
+
+      {mode === 'review' ? (
+        <View style={styles.trustSection}>
+          <Text style={styles.muted}>Rate the completed move. Five stars means everything went smoothly.</Text>
+          <View style={styles.starRow}>
+            {[1, 2, 3, 4, 5].map((star) => {
+              const selected = Number(rating) >= star;
+
+              return (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  key={star}
+                  onPress={() => setRating(String(star))}
+                  style={styles.starButton}
+                >
+                  <Text style={[styles.starText, selected && styles.starTextSelected]}>{selected ? '★' : '☆'}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={styles.ratingSummary}>{rating}/5 selected</Text>
+          <Field label="Review note" value={reviewText} onChangeText={setReviewText} placeholder="Optional: what went well?" />
+        </View>
+      ) : null}
+
+      {mode === 'issue' ? (
+        <View style={styles.trustSection}>
+          <Text style={styles.muted}>Report safety, damage, no-show, or app issues. Add a photo when it helps explain what happened.</Text>
+          <Pressable accessibilityRole="button" onPress={() => setCategoryOpen((value) => !value)} style={styles.locationSelectButton}>
+            <View style={styles.flex}>
+              <Text style={styles.locationSelectTitle}>{reportCategoryLabels[category]}</Text>
+              <Text style={styles.muted}>Issue category</Text>
+            </View>
+            <Text style={styles.locationChevron}>{categoryOpen ? 'Close' : 'Change'}</Text>
+          </Pressable>
+          {categoryOpen ? (
+            <View style={styles.locationMenuContent}>
+              {reportCategories.map((option) => {
+                const selected = category === option;
+
+                return (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    key={option}
+                    onPress={() => {
+                      setCategory(option);
+                      setCategoryOpen(false);
+                    }}
+                    style={[styles.locationOption, selected && styles.locationOptionSelected]}
+                  >
+                    <Text style={[styles.fieldLabel, selected && styles.documentOptionSelectedText]}>{reportCategoryLabels[option]}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+          <Field label="What happened?" value={description} onChangeText={setDescription} placeholder="Add a short, clear description" />
+          <FilePickerField label="Evidence photo" value={evidenceFile} onChange={setEvidenceFile} />
+        </View>
+      ) : null}
+
+      {mode === 'payment' ? (
+        <View style={styles.trustSection}>
+          <Text style={styles.muted}>Use this only if the cash/manual payment amount or status needs review.</Text>
+          <Field label="Payment issue" value={description} onChangeText={setDescription} placeholder="Describe the payment problem" />
+        </View>
+      ) : null}
+
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
       {message ? <Text style={styles.noticeText}>{message}</Text> : null}
-      <View style={styles.actionRow}>
-        <Pressable accessibilityRole="button" disabled={!canRate || Boolean(pendingAction)} onPress={submitRating} style={[styles.primaryButton, styles.actionButton, (!canRate || Boolean(pendingAction)) && styles.buttonDisabled]}>
-          <Text style={styles.primaryButtonText}>{pendingAction === 'rating' ? 'Saving...' : 'Rate'}</Text>
+      {mode === 'review' ? (
+        <Pressable accessibilityRole="button" disabled={!canRate || Boolean(pendingAction)} onPress={submitRating} style={[styles.primaryButton, (!canRate || Boolean(pendingAction)) && styles.buttonDisabled]}>
+          <Text style={styles.primaryButtonText}>{pendingAction === 'rating' ? 'Saving...' : 'Submit review'}</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" disabled={!canDisputePayment || Boolean(pendingAction)} onPress={disputePayment} style={[styles.secondaryButton, styles.actionButton, (!canDisputePayment || Boolean(pendingAction)) && styles.buttonDisabled]}>
-          <Text style={styles.secondaryButtonText}>Dispute</Text>
+      ) : null}
+      {mode === 'issue' ? (
+        <Pressable accessibilityRole="button" disabled={Boolean(pendingAction)} onPress={createReport} style={[styles.primaryButton, Boolean(pendingAction) && styles.buttonDisabled]}>
+          <Text style={styles.primaryButtonText}>{pendingAction === 'report' ? 'Submitting...' : 'Submit issue'}</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" disabled={Boolean(pendingAction)} onPress={createReport} style={[styles.secondaryButton, styles.actionButton, Boolean(pendingAction) && styles.buttonDisabled]}>
-          <Text style={styles.secondaryButtonText}>{pendingAction === 'report' ? 'Reporting...' : 'Report'}</Text>
+      ) : null}
+      {mode === 'payment' ? (
+        <Pressable accessibilityRole="button" disabled={!canDisputePayment || Boolean(pendingAction)} onPress={disputePayment} style={[styles.primaryButton, (!canDisputePayment || Boolean(pendingAction)) && styles.buttonDisabled]}>
+          <Text style={styles.primaryButtonText}>{pendingAction === 'dispute' ? 'Submitting...' : 'Dispute payment'}</Text>
         </Pressable>
-      </View>
+      ) : null}
     </View>
   );
 }
@@ -2860,17 +3133,19 @@ function ClientHistoryScreen({ profile }: { profile: UserProfile }) {
       <Modal animationType="fade" transparent visible={Boolean(ratingPromptRequest)} onRequestClose={() => ratingPromptRequest && dismissRatingPrompt(ratingPromptRequest.id)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.pickerDialog}>
-            <Text style={styles.pickerEyebrow}>Trip complete</Text>
-            <Text style={styles.pickerTitle}>Rate your KULI move</Text>
-            {ratingPromptRequest ? (
-              <>
-                <Text style={styles.muted}>{ratingPromptRequest.requestCode} / {ratingPromptRequest.pickupLocation?.addressText} to {ratingPromptRequest.destinationLocation?.addressText}</Text>
-                <RatingReportPanel request={ratingPromptRequest} onRatingSaved={() => dismissRatingPrompt(ratingPromptRequest.id)} />
-                <Pressable accessibilityRole="button" onPress={() => dismissRatingPrompt(ratingPromptRequest.id)} style={styles.secondaryButton}>
-                  <Text style={styles.secondaryButtonText}>Not now</Text>
-                </Pressable>
-              </>
-            ) : null}
+            <ScrollView contentContainerStyle={styles.modalScrollContent}>
+              <Text style={styles.pickerEyebrow}>Trip complete</Text>
+              <Text style={styles.pickerTitle}>Rate your KULI move</Text>
+              {ratingPromptRequest ? (
+                <>
+                  <Text style={styles.muted}>{ratingPromptRequest.requestCode} / {ratingPromptRequest.pickupLocation?.addressText} to {ratingPromptRequest.destinationLocation?.addressText}</Text>
+                  <RatingReportPanel request={ratingPromptRequest} onRatingSaved={() => dismissRatingPrompt(ratingPromptRequest.id)} />
+                  <Pressable accessibilityRole="button" onPress={() => dismissRatingPrompt(ratingPromptRequest.id)} style={styles.secondaryButton}>
+                    <Text style={styles.secondaryButtonText}>Not now</Text>
+                  </Pressable>
+                </>
+              ) : null}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -3184,6 +3459,13 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     padding: spacing.xs
   },
+  segmentedCompact: {
+    backgroundColor: '#e7ddcf',
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    padding: spacing.xs
+  },
   segmentButton: {
     alignItems: 'center',
     borderRadius: radii.sm,
@@ -3249,6 +3531,18 @@ const styles = StyleSheet.create({
   documentOptionSelectedText: {
     color: '#fffaf0'
   },
+  reasonOption: {
+    backgroundColor: '#fffdf7',
+    borderColor: colors.line,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    gap: spacing.xs,
+    padding: spacing.sm
+  },
+  reasonOptionSelected: {
+    backgroundColor: colors.red,
+    borderColor: colors.red
+  },
   primaryButton: {
     alignItems: 'center',
     backgroundColor: colors.primary,
@@ -3262,6 +3556,9 @@ const styles = StyleSheet.create({
     color: '#fffaf0',
     fontSize: 15,
     fontWeight: '800'
+  },
+  dangerButton: {
+    backgroundColor: colors.red
   },
   secondaryButton: {
     alignItems: 'center',
@@ -3277,6 +3574,12 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 15,
     fontWeight: '800'
+  },
+  dangerOutlineButton: {
+    borderColor: colors.red
+  },
+  dangerOutlineText: {
+    color: colors.red
   },
   buttonDisabled: {
     opacity: 0.55
@@ -3571,6 +3874,40 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.sm
   },
+  trustSection: {
+    gap: spacing.sm
+  },
+  starRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between'
+  },
+  starButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44
+  },
+  starText: {
+    color: colors.line,
+    fontSize: 34,
+    fontWeight: '900'
+  },
+  starTextSelected: {
+    color: colors.accent
+  },
+  ratingSummary: {
+    color: colors.primaryDeep,
+    fontSize: 13,
+    fontWeight: '900',
+    textAlign: 'center'
+  },
+  fileSummary: {
+    backgroundColor: '#f1eadf',
+    borderRadius: radii.sm,
+    gap: spacing.xs,
+    padding: spacing.sm
+  },
   tripWorkspace: {
     gap: spacing.sm
   },
@@ -3685,6 +4022,9 @@ const styles = StyleSheet.create({
     maxHeight: '88%',
     padding: spacing.lg,
     width: '100%'
+  },
+  modalScrollContent: {
+    gap: spacing.md
   },
   pickerHeader: {
     backgroundColor: '#2990d8',
