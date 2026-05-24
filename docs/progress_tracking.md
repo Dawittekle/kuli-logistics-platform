@@ -325,3 +325,4 @@ Completion:
 - Demo login now preserves existing backend roles by email so returning to a truck-owner account cannot silently convert it to a client account.
 - Development CORS now supports local private-network browser origins such as `http://192.168.x.x:5174`, so admin/mobile web can be opened through LAN URLs while production still requires explicit hosted origins.
 - Owner offer inbox now includes request detail snapshots and a clearer accept/start-moving path, while offer notifications direct truck owners to the Offers tab for the actual decision flow.
+- Client mobile booking now uses Addis Ababa area selectors with generated coordinates, optional pin adjustment, route preview, and calendar/time-style pickup scheduling. Trip messages and owner notifications no longer fall back to anonymous "client" wording when profile names or neutral wording are available.

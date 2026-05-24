@@ -430,6 +430,20 @@ class MemoryMessageRepository {
   }
 }
 
+class MemoryUserRepository {
+  constructor() {
+    this.records = new Map([
+      [client.id, { ...client, fullName: 'Mimi Bekele', email: 'mimi@example.com' }],
+      [ownerOne.id, { ...ownerOne, fullName: 'Dawit Trucking', email: 'owner1@example.com' }],
+      [ownerTwo.id, { ...ownerTwo, fullName: 'Owner Two', email: 'owner2@example.com' }]
+    ]);
+  }
+
+  async findById(id) {
+    return this.records.get(id) ?? null;
+  }
+}
+
 class MemoryPaymentRepository {
   constructor() {
     this.records = new Map();
@@ -493,6 +507,7 @@ const createService = () => {
   const statusEventRepository = new MemoryStatusEventRepository();
   const messageRepository = new MemoryMessageRepository();
   const paymentRepository = new MemoryPaymentRepository();
+  const userRepository = new MemoryUserRepository();
   const service = new MarketplaceService({
     kuliRequestRepository,
     tripOfferRepository,
@@ -501,6 +516,7 @@ const createService = () => {
     statusEventRepository,
     messageRepository,
     paymentRepository,
+    userRepository,
     quoteService: new StubQuoteService()
   });
 
@@ -512,7 +528,8 @@ const createService = () => {
     notificationRepository,
     statusEventRepository,
     messageRepository,
-    paymentRepository
+    paymentRepository,
+    userRepository
   };
 };
 
@@ -803,6 +820,7 @@ test('request-scoped messages are idempotent and limited to participants', async
   assert.equal(first.message.id, second.message.id);
   assert.equal(second.idempotentReplay, true);
   assert.equal(messages.length, 1);
+  assert.equal(messages[0].senderDisplayName, 'Mimi Bekele');
   assert.equal(notificationRepository.records.filter((entry) => entry.type === 'message.created').length, 1);
 
   await assert.rejects(

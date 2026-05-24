@@ -72,7 +72,8 @@ export class MarketplaceService {
     statusEventRepository,
     messageRepository,
     paymentRepository,
-    quoteService
+    quoteService,
+    userRepository
   }) {
     this.kuliRequestRepository = kuliRequestRepository;
     this.tripOfferRepository = tripOfferRepository;
@@ -82,6 +83,7 @@ export class MarketplaceService {
     this.messageRepository = messageRepository;
     this.paymentRepository = paymentRepository;
     this.quoteService = quoteService;
+    this.userRepository = userRepository;
   }
 
   async recordStatusEvent({ request, fromStatus, toStatus, actor, reason }) {
@@ -195,7 +197,7 @@ export class MarketplaceService {
           recipientUserId: offer.ownerId,
           type: 'offer.sent',
           title: 'New KULI request',
-          body: 'A client selected your vehicle for a pending KULI request.',
+          body: 'A new KULI request selected your vehicle.',
           data: {
             requestId: request.id,
             offerId: offer.id
@@ -397,7 +399,7 @@ export class MarketplaceService {
           recipientUserId: offer.ownerId,
           type: 'request.cancelled',
           title: 'KULI request cancelled',
-          body: 'A pending KULI request was cancelled by the client.',
+          body: 'A pending KULI request was cancelled.',
           data: {
             requestId,
             offerId: offer.id
@@ -748,7 +750,25 @@ export class MarketplaceService {
       throw new AppError(404, 'KULI_REQUEST_NOT_FOUND', 'KULI request was not found.');
     }
 
-    return this.messageRepository.listByRequestId(requestId);
+    const messages = await this.messageRepository.listByRequestId(requestId);
+
+    if (!this.userRepository) {
+      return messages;
+    }
+
+    const senderIds = [...new Set(messages.map((message) => message.senderId).filter(Boolean))];
+    const senderEntries = await Promise.all(
+      senderIds.map(async (senderId) => {
+        const user = await this.userRepository.findById(senderId);
+        return [senderId, user?.fullName || user?.email || ''];
+      })
+    );
+    const senderNames = new Map(senderEntries);
+
+    return messages.map((message) => ({
+      ...message,
+      senderDisplayName: senderNames.get(message.senderId) || undefined
+    }));
   }
 
   async notifyRequestParticipants({ request, actor, type, title, body, data }) {

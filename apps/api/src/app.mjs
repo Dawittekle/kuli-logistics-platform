@@ -1209,7 +1209,8 @@ export const createAppContext = async (config = env) => {
     statusEventRepository,
     messageRepository,
     paymentRepository,
-    quoteService
+    quoteService,
+    userRepository
   });
   const supportService = new SupportService({
     hotlineTicketRepository,

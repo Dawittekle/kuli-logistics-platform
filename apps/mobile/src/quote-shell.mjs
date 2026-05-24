@@ -7,7 +7,7 @@ export const clientQuoteFlow = {
       id: 'route',
       label: 'Route',
       fields: ['pickupLocation', 'destinationLocation'],
-      interaction: 'pin_first_with_address_notes'
+      interaction: 'addis_area_dropdown_with_address_notes_and_pin_adjustment'
     },
     {
       id: 'load',

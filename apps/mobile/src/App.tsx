@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -177,6 +178,7 @@ type TripMessage = {
   requestId: string;
   senderId: string;
   senderRole: Role;
+  senderDisplayName?: string;
   body: string;
   clientGeneratedId?: string;
   createdAt?: string;
@@ -1259,6 +1261,81 @@ const loadTypeOptions = [
   { key: 'business_delivery', label: 'Business', detail: 'Shop stock or repeat delivery.' }
 ];
 
+type AddisLocationOption = {
+  key: string;
+  label: string;
+  area: string;
+  detail: string;
+  lon: string;
+  lat: string;
+};
+
+const addisLocationOptions: AddisLocationOption[] = [
+  { key: 'bole-medhanialem', label: 'Bole Medhanialem', area: 'Bole', detail: 'Airport, hotels, offices', lon: '38.7903', lat: '8.9806' },
+  { key: 'bole-atlas', label: 'Atlas', area: 'Bole', detail: 'Restaurants and apartments', lon: '38.7848', lat: '9.0002' },
+  { key: 'piassa', label: 'Piassa', area: 'Arada', detail: 'Central market streets', lon: '38.7578', lat: '9.0350' },
+  { key: 'merkato', label: 'Merkato', area: 'Addis Ketema', detail: 'Bulk goods and retail', lon: '38.7352', lat: '9.0347' },
+  { key: 'mexico-square', label: 'Mexico Square', area: 'Kirkos', detail: 'Offices and main roads', lon: '38.7468', lat: '9.0109' },
+  { key: 'kazanchis', label: 'Kazanchis', area: 'Kirkos', detail: 'Hotels and apartments', lon: '38.7670', lat: '9.0182' },
+  { key: 'megenagna', label: 'Megenagna', area: 'Yeka', detail: 'Transit and business area', lon: '38.8025', lat: '9.0247' },
+  { key: 'cmc', label: 'CMC', area: 'Yeka', detail: 'Residential compounds', lon: '38.8401', lat: '9.0188' },
+  { key: 'saris', label: 'Saris', area: 'Akaky Kaliti', detail: 'Industrial and warehouses', lon: '38.7689', lat: '8.9408' },
+  { key: 'kality', label: 'Kality', area: 'Akaky Kaliti', detail: 'Warehouses and logistics', lon: '38.7824', lat: '8.8945' },
+  { key: 'lafto', label: 'Lafto', area: 'Nifas Silk-Lafto', detail: 'Residential moves', lon: '38.7205', lat: '8.9671' },
+  { key: 'jemo', label: 'Jemo', area: 'Nifas Silk-Lafto', detail: 'Condos and homes', lon: '38.6867', lat: '8.9417' },
+  { key: 'kolfe', label: 'Kolfe', area: 'Kolfe Keranio', detail: 'West-side neighborhoods', lon: '38.6907', lat: '9.0288' },
+  { key: 'ayat', label: 'Ayat', area: 'Bole', detail: 'East-side homes', lon: '38.8842', lat: '9.0165' },
+  { key: 'goro', label: 'Goro', area: 'Bole', detail: 'Residential and airport side', lon: '38.8211', lat: '8.9644' }
+];
+
+const getLocationOption = (key: string) => addisLocationOptions.find((option) => option.key === key) ?? addisLocationOptions[0];
+
+const formatLocationAddress = (option: AddisLocationOption) => `${option.label}, ${option.area}, Addis Ababa`;
+
+const addDays = (date: Date, days: number) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const toDateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const fromDateKey = (dateKey: string) => {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const formatDateLabel = (dateKey: string) =>
+  fromDateKey(dateKey).toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric'
+  });
+
+const formatTimeLabel = (time: string) => {
+  const [hour, minute] = time.split(':').map(Number);
+  const date = new Date();
+  date.setHours(hour, minute, 0, 0);
+  return date.toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+};
+
+const pickupTimeSlots = Array.from({ length: 57 }, (_, index) => {
+  const totalMinutes = 5 * 60 + index * 15;
+  const hour = Math.floor(totalMinutes / 60);
+  const minute = totalMinutes % 60;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+});
+
+const formatPickupWindow = (dateKey: string, time: string) => `${formatDateLabel(dateKey)} at ${formatTimeLabel(time)}`;
+
 const parsePositiveNumber = (value: string, fallback = 0) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
@@ -1329,16 +1406,203 @@ function CandidateCard({ candidate, capacityLabel }: { candidate: QuoteCandidate
   );
 }
 
+function LocationDropdown({
+  label,
+  selectedKey,
+  onSelect,
+  avoidKey
+}: {
+  label: string;
+  selectedKey: string;
+  onSelect: (option: AddisLocationOption) => void;
+  avoidKey?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = getLocationOption(selectedKey);
+
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <Pressable accessibilityRole="button" onPress={() => setOpen((value) => !value)} style={styles.locationSelectButton}>
+        <View style={styles.flex}>
+          <Text style={styles.locationSelectTitle}>{selected.label}</Text>
+          <Text style={styles.muted}>{selected.area} / {selected.detail}</Text>
+        </View>
+        <Text style={styles.locationChevron}>{open ? 'Close' : 'Change'}</Text>
+      </Pressable>
+      {open ? (
+        <ScrollView style={styles.locationMenu} contentContainerStyle={styles.locationMenuContent}>
+          {addisLocationOptions.map((option) => {
+            const selectedOption = option.key === selectedKey;
+            const sameAsOtherPoint = option.key === avoidKey;
+
+            return (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: selectedOption, disabled: sameAsOtherPoint }}
+                disabled={sameAsOtherPoint}
+                key={option.key}
+                onPress={() => {
+                  onSelect(option);
+                  setOpen(false);
+                }}
+                style={[styles.locationOption, selectedOption && styles.locationOptionSelected, sameAsOtherPoint && styles.buttonDisabled]}
+              >
+                <View style={styles.flex}>
+                  <Text style={[styles.fieldLabel, selectedOption && styles.documentOptionSelectedText]}>{option.label}</Text>
+                  <Text style={[styles.muted, selectedOption && styles.documentOptionSelectedText]}>{option.area} / {option.detail}</Text>
+                </View>
+                <Text style={[styles.locationCoords, selectedOption && styles.documentOptionSelectedText]}>{option.lat}, {option.lon}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      ) : null}
+    </View>
+  );
+}
+
+function PickupSchedulePicker({
+  dateKey,
+  time,
+  onChange
+}: {
+  dateKey: string;
+  time: string;
+  onChange: (next: { dateKey?: string; time?: string }) => void;
+}) {
+  const [picker, setPicker] = useState<'date' | 'time' | ''>('');
+  const dateOptions = useMemo(() => Array.from({ length: 14 }, (_, index) => addDays(new Date(), index)), []);
+
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>Pickup time</Text>
+      <View style={styles.actionRow}>
+        <Pressable accessibilityRole="button" onPress={() => setPicker('date')} style={[styles.secondaryButton, styles.actionButton]}>
+          <Text style={styles.secondaryButtonText}>{formatDateLabel(dateKey)}</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" onPress={() => setPicker('time')} style={[styles.secondaryButton, styles.actionButton]}>
+          <Text style={styles.secondaryButtonText}>{formatTimeLabel(time)}</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.muted}>Selected pickup: {formatPickupWindow(dateKey, time)}</Text>
+      <Modal animationType="fade" transparent visible={Boolean(picker)} onRequestClose={() => setPicker('')}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.pickerDialog}>
+            <View style={styles.pickerHeader}>
+              <Text style={[styles.pickerEyebrow, styles.pickerHeaderText]}>{picker === 'date' ? fromDateKey(dateKey).getFullYear() : 'Pickup'}</Text>
+              <Text style={[styles.pickerTitle, styles.pickerHeaderTitle]}>{picker === 'date' ? formatDateLabel(dateKey) : 'Select time'}</Text>
+            </View>
+            {picker === 'date' ? (
+              <View style={styles.calendarGrid}>
+                {dateOptions.map((date) => {
+                  const nextKey = toDateKey(date);
+                  const selected = nextKey === dateKey;
+
+                  return (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      key={nextKey}
+                      onPress={() => onChange({ dateKey: nextKey })}
+                      style={[styles.dateCell, selected && styles.dateCellSelected]}
+                    >
+                      <Text style={[styles.dateCellWeekday, selected && styles.documentOptionSelectedText]}>
+                        {date.toLocaleDateString(undefined, { weekday: 'short' })}
+                      </Text>
+                      <Text style={[styles.dateCellDay, selected && styles.documentOptionSelectedText]}>{date.getDate()}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : (
+              <ScrollView style={styles.timeList}>
+                {pickupTimeSlots.map((slot) => {
+                  const selected = slot === time;
+
+                  return (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      key={slot}
+                      onPress={() => onChange({ time: slot })}
+                      style={[styles.timeOption, selected && styles.dateCellSelected]}
+                    >
+                      <View style={[styles.radioOuter, selected && styles.radioOuterSelected]}>
+                        {selected ? <View style={styles.radioInner} /> : null}
+                      </View>
+                      <Text style={[styles.timeOptionText, selected && styles.documentOptionSelectedText]}>{formatTimeLabel(slot)}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
+            <View style={styles.pickerActions}>
+              <Pressable accessibilityRole="button" onPress={() => setPicker('')} style={styles.secondaryButton}>
+                <Text style={styles.secondaryButtonText}>Cancel</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={() => setPicker('')} style={styles.primaryButton}>
+                <Text style={styles.primaryButtonText}>OK</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+function RouteMapPreview({
+  pickup,
+  destination
+}: {
+  pickup: AddisLocationOption;
+  destination: AddisLocationOption;
+}) {
+  const toPointStyle = (location: AddisLocationOption) => {
+    const lon = Number(location.lon);
+    const lat = Number(location.lat);
+    const left = Math.max(6, Math.min(88, ((lon - 38.65) / (38.91 - 38.65)) * 100));
+    const top = Math.max(8, Math.min(84, (1 - (lat - 8.88) / (9.08 - 8.88)) * 100));
+    return {
+      left: `${left}%`,
+      top: `${top}%`
+    };
+  };
+
+  return (
+    <View style={styles.mapPreview}>
+      <View style={styles.mapGridLineVertical} />
+      <View style={styles.mapGridLineHorizontal} />
+      <View style={styles.mapRoute} />
+      <View style={[styles.mapPin, styles.mapPinPickup, toPointStyle(pickup)]}>
+        <Text style={styles.mapPinText}>P</Text>
+      </View>
+      <View style={[styles.mapPin, styles.mapPinDestination, toPointStyle(destination)]}>
+        <Text style={styles.mapPinText}>D</Text>
+      </View>
+      <View style={styles.mapLegend}>
+        <Text style={styles.mapLegendText}>Pickup: {pickup.label}</Text>
+        <Text style={styles.mapLegendText}>Drop-off: {destination.label}</Text>
+      </View>
+    </View>
+  );
+}
+
 function ClientQuoteScreen() {
   const queryClient = useQueryClient();
   const [vehicleClassId, setVehicleClassId] = useState('');
-  const [pickupAddress, setPickupAddress] = useState('Bole, Addis Ababa');
-  const [pickupLon, setPickupLon] = useState('38.7903');
-  const [pickupLat, setPickupLat] = useState('8.9806');
-  const [destinationAddress, setDestinationAddress] = useState('Piassa, Addis Ababa');
-  const [destinationLon, setDestinationLon] = useState('38.7578');
-  const [destinationLat, setDestinationLat] = useState('9.0350');
-  const [pickupWindow, setPickupWindow] = useState('Today, flexible');
+  const [pickupLocationKey, setPickupLocationKey] = useState('bole-medhanialem');
+  const [pickupAddressNote, setPickupAddressNote] = useState('');
+  const [pickupLon, setPickupLon] = useState(getLocationOption('bole-medhanialem').lon);
+  const [pickupLat, setPickupLat] = useState(getLocationOption('bole-medhanialem').lat);
+  const [destinationLocationKey, setDestinationLocationKey] = useState('piassa');
+  const [destinationAddressNote, setDestinationAddressNote] = useState('');
+  const [destinationLon, setDestinationLon] = useState(getLocationOption('piassa').lon);
+  const [destinationLat, setDestinationLat] = useState(getLocationOption('piassa').lat);
+  const [pickupDateKey, setPickupDateKey] = useState(toDateKey(new Date()));
+  const [pickupTime, setPickupTime] = useState('09:00');
+  const [showManualCoordinates, setShowManualCoordinates] = useState(false);
   const [itemType, setItemType] = useState('household_move');
   const [estimatedWeightKg, setEstimatedWeightKg] = useState('800');
   const [estimatedVolumeCubicMeters, setEstimatedVolumeCubicMeters] = useState('8');
@@ -1361,6 +1625,8 @@ function ClientQuoteScreen() {
   const vehicleClasses = vehicleClassesQuery.data ?? [];
   const selectedVehicleClass = vehicleClasses.find((vehicleClass) => vehicleClass.id === vehicleClassId);
   const selectedCapacityLabel = selectedVehicleClass?.capacityKg ? `${selectedVehicleClass.capacityKg}kg` : 'class';
+  const pickupOption = getLocationOption(pickupLocationKey);
+  const destinationOption = getLocationOption(destinationLocationKey);
 
   useEffect(() => {
     if (!vehicleClassId && vehicleClasses[0]) {
@@ -1369,14 +1635,22 @@ function ClientQuoteScreen() {
   }, [vehicleClassId, vehicleClasses]);
 
   const buildQuoteInput = (): QuoteInput => {
-    const pickupLocation = buildManualLocation({ addressText: pickupAddress, lon: pickupLon, lat: pickupLat });
-    const destinationLocation = buildManualLocation({ addressText: destinationAddress, lon: destinationLon, lat: destinationLat });
+    const pickupLocation = buildManualLocation({
+      addressText: [formatLocationAddress(pickupOption), pickupAddressNote.trim()].filter(Boolean).join(' / '),
+      lon: pickupLon,
+      lat: pickupLat
+    });
+    const destinationLocation = buildManualLocation({
+      addressText: [formatLocationAddress(destinationOption), destinationAddressNote.trim()].filter(Boolean).join(' / '),
+      lon: destinationLon,
+      lat: destinationLat
+    });
 
     return {
       pickupLocation,
       destinationLocation,
       requestedVehicleClassId: vehicleClassId,
-      requestedPickupTime: pickupWindow.trim() || undefined,
+      requestedPickupTime: formatPickupWindow(pickupDateKey, pickupTime),
       loadDetails: {
         itemType,
         estimatedWeightKg: parsePositiveNumber(estimatedWeightKg),
@@ -1391,6 +1665,11 @@ function ClientQuoteScreen() {
   const submitQuote = async () => {
     const nextQuoteInput = buildQuoteInput();
     const coordinates = [...nextQuoteInput.pickupLocation.point.coordinates, ...nextQuoteInput.destinationLocation.point.coordinates];
+
+    if (pickupLocationKey === destinationLocationKey) {
+      setError('Choose different pickup and drop-off areas.');
+      return;
+    }
 
     if (!vehicleClassId || !nextQuoteInput.pickupLocation.addressText || !nextQuoteInput.destinationLocation.addressText) {
       setError('Pickup, destination, and vehicle class are required.');
@@ -1460,23 +1739,68 @@ function ClientQuoteScreen() {
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.eyebrow}>/client/request/new</Text>
-        <Text style={styles.title}>Price the move before you send it.</Text>
-        <Text style={styles.copy}>Manual coordinates keep this phase deterministic while the backend handles route estimate, pricing, and nearby approved trucks.</Text>
+        <Text style={styles.title}>Set pickup, drop-off, and load.</Text>
+        <Text style={styles.copy}>Choose familiar Addis Ababa areas, then confirm the quote before owners receive the request.</Text>
 
         <ShellCard title="Route and load">
           {vehicleClassesQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(vehicleClassesQuery.error)}</Text> : null}
           <VehicleClassPicker vehicleClasses={vehicleClasses} selectedVehicleClassId={vehicleClassId} onSelect={setVehicleClassId} />
-          <Field label="Pickup address" value={pickupAddress} onChangeText={setPickupAddress} placeholder="Bole, Addis Ababa" />
-          <View style={styles.inlineFields}>
-            <Field containerStyle={styles.inlineField} label="Pickup lon" value={pickupLon} onChangeText={setPickupLon} placeholder="38.7903" keyboardType="decimal-pad" />
-            <Field containerStyle={styles.inlineField} label="Pickup lat" value={pickupLat} onChangeText={setPickupLat} placeholder="8.9806" keyboardType="decimal-pad" />
-          </View>
-          <Field label="Destination address" value={destinationAddress} onChangeText={setDestinationAddress} placeholder="Piassa, Addis Ababa" />
-          <View style={styles.inlineFields}>
-            <Field containerStyle={styles.inlineField} label="Destination lon" value={destinationLon} onChangeText={setDestinationLon} placeholder="38.7578" keyboardType="decimal-pad" />
-            <Field containerStyle={styles.inlineField} label="Destination lat" value={destinationLat} onChangeText={setDestinationLat} placeholder="9.0350" keyboardType="decimal-pad" />
-          </View>
-          <Field label="Pickup window" value={pickupWindow} onChangeText={setPickupWindow} placeholder="Today, 2-5 PM" />
+          <RouteMapPreview pickup={pickupOption} destination={destinationOption} />
+          <LocationDropdown
+            label="Pickup area"
+            selectedKey={pickupLocationKey}
+            avoidKey={destinationLocationKey}
+            onSelect={(option) => {
+              setPickupLocationKey(option.key);
+              setPickupLon(option.lon);
+              setPickupLat(option.lat);
+            }}
+          />
+          <Field label="Pickup note" value={pickupAddressNote} onChangeText={setPickupAddressNote} placeholder="Building, gate, floor, or nearby landmark" />
+          <LocationDropdown
+            label="Drop-off area"
+            selectedKey={destinationLocationKey}
+            avoidKey={pickupLocationKey}
+            onSelect={(option) => {
+              setDestinationLocationKey(option.key);
+              setDestinationLon(option.lon);
+              setDestinationLat(option.lat);
+            }}
+          />
+          <Field label="Drop-off note" value={destinationAddressNote} onChangeText={setDestinationAddressNote} placeholder="Building, gate, floor, or nearby landmark" />
+          <PickupSchedulePicker
+            dateKey={pickupDateKey}
+            time={pickupTime}
+            onChange={(next) => {
+              if (next.dateKey) {
+                setPickupDateKey(next.dateKey);
+              }
+
+              if (next.time) {
+                setPickupTime(next.time);
+              }
+            }}
+          />
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setShowManualCoordinates((value) => !value)}
+            style={styles.secondaryButton}
+          >
+            <Text style={styles.secondaryButtonText}>{showManualCoordinates ? 'Hide pin details' : 'Adjust map pin'}</Text>
+          </Pressable>
+          {showManualCoordinates ? (
+            <View style={styles.detailPanel}>
+              <Text style={styles.muted}>Fine tune the generated coordinates only when the selected area is not close enough.</Text>
+              <View style={styles.inlineFields}>
+                <Field containerStyle={styles.inlineField} label="Pickup lon" value={pickupLon} onChangeText={setPickupLon} placeholder="38.7903" keyboardType="decimal-pad" />
+                <Field containerStyle={styles.inlineField} label="Pickup lat" value={pickupLat} onChangeText={setPickupLat} placeholder="8.9806" keyboardType="decimal-pad" />
+              </View>
+              <View style={styles.inlineFields}>
+                <Field containerStyle={styles.inlineField} label="Drop-off lon" value={destinationLon} onChangeText={setDestinationLon} placeholder="38.7578" keyboardType="decimal-pad" />
+                <Field containerStyle={styles.inlineField} label="Drop-off lat" value={destinationLat} onChangeText={setDestinationLat} placeholder="9.0350" keyboardType="decimal-pad" />
+              </View>
+            </View>
+          ) : null}
           <View style={styles.roleGrid}>
             {loadTypeOptions.map((option) => {
               const selected = itemType === option.key;
@@ -1677,7 +2001,7 @@ function TripTimeline({ requestId }: { requestId: string }) {
   );
 }
 
-function MessageThread({ requestId, currentUserId }: { requestId: string; currentUserId: string }) {
+function MessageThread({ requestId, profile }: { requestId: string; profile: UserProfile }) {
   const queryClient = useQueryClient();
   const [body, setBody] = useState('');
   const [retryBody, setRetryBody] = useState('');
@@ -1732,12 +2056,16 @@ function MessageThread({ requestId, currentUserId }: { requestId: string; curren
       <View style={styles.messageList}>
         {messages.length === 0 ? <Text style={styles.muted}>No messages yet. Keep coordination inside the request for accountability.</Text> : null}
         {messages.map((message) => {
-          const mine = message.senderId === currentUserId;
+          const mine = message.senderId === profile.id;
+          const profileName = profile.fullName || profile.email || 'You';
+          const senderName = mine
+            ? `${profileName} (you)`
+            : message.senderDisplayName || (message.senderRole === 'truck_owner' ? 'Truck owner' : 'Trip partner');
 
           return (
             <View key={message.id} style={[styles.messageBubble, mine && styles.messageBubbleMine]}>
               <Text style={[styles.messageBody, mine && styles.messageBodyMine]}>{message.body}</Text>
-              <Text style={[styles.messageMeta, mine && styles.messageBodyMine]}>{mine ? 'You' : roleLabels[message.senderRole]} {message.createdAt ? `/ ${new Date(message.createdAt).toLocaleTimeString()}` : ''}</Text>
+              <Text style={[styles.messageMeta, mine && styles.messageBodyMine]}>{senderName} {message.createdAt ? `/ ${new Date(message.createdAt).toLocaleTimeString()}` : ''}</Text>
             </View>
           );
         })}
@@ -1833,7 +2161,7 @@ function ActiveTripWorkspace({
     <View style={styles.tripWorkspace}>
       {ownerControls ? <OwnerStatusControls request={request} /> : null}
       <TripTimeline requestId={request.id} />
-      <MessageThread requestId={request.id} currentUserId={profile.id} />
+      <MessageThread requestId={request.id} profile={profile} />
     </View>
   );
 }
@@ -1883,7 +2211,7 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
         </View>
         <ShellCard title="Authenticated profile">
           <Text style={styles.copy}>{profile.fullName || profile.email}</Text>
-          <Text style={styles.muted}>{roleLabels[profile.role]} routed from backend `/me`.</Text>
+          <Text style={styles.muted}>Signed in through your KULI profile.</Text>
           <Text style={styles.muted}>{profile.email}</Text>
         </ShellCard>
         <ShellCard title="Active requests">
@@ -2291,7 +2619,7 @@ function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
   );
 }
 
-function RatingReportPanel({ request }: { request: KuliRequest }) {
+function RatingReportPanel({ request, onRatingSaved }: { request: KuliRequest; onRatingSaved?: () => void }) {
   const queryClient = useQueryClient();
   const [rating, setRating] = useState('5');
   const [reviewText, setReviewText] = useState('');
@@ -2334,6 +2662,7 @@ function RatingReportPanel({ request }: { request: KuliRequest }) {
       })) as ApiEnvelope<RatingRecord>;
 
       setMessage(`Rating saved: ${result.data.rating}/5.`);
+      onRatingSaved?.();
       await queryClient.invalidateQueries({ queryKey: ['kuli-requests', 'mine'] });
     } catch (ratingError) {
       setError(getErrorMessage(ratingError));
@@ -2477,6 +2806,8 @@ function RatingReportPanel({ request }: { request: KuliRequest }) {
 }
 
 function ClientHistoryScreen({ profile }: { profile: UserProfile }) {
+  const [expandedRequestId, setExpandedRequestId] = useState('');
+  const [dismissedRatingRequestIds, setDismissedRatingRequestIds] = useState<string[]>([]);
   const requestsQuery = useQuery({
     queryKey: ['kuli-requests', 'mine', 'history'],
     queryFn: async () => ((await kuliApi.request('/kuli-requests/mine')) as ApiEnvelope<KuliRequest[]>).data
@@ -2484,6 +2815,11 @@ function ClientHistoryScreen({ profile }: { profile: UserProfile }) {
 
   const requests = requestsQuery.data ?? [];
   const terminalRequests = requests.filter((request) => terminalRequestStatuses.includes(request.status));
+  const ratingPromptRequest = terminalRequests.find((request) => request.status === 'completed' && request.selectedOwnerId && !dismissedRatingRequestIds.includes(request.id));
+
+  const dismissRatingPrompt = (requestId: string) => {
+    setDismissedRatingRequestIds((current) => [...new Set([...current, requestId])]);
+  };
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -2496,7 +2832,7 @@ function ClientHistoryScreen({ profile }: { profile: UserProfile }) {
           {terminalRequests.length === 0 ? <Text style={styles.muted}>No terminal trips yet. Complete or cancel an accepted trip before rating or disputing payment.</Text> : null}
           <View style={styles.roleGrid}>
             {terminalRequests.map((request) => (
-              <View key={request.id} style={styles.card}>
+              <View key={request.id} style={styles.requestRowStack}>
                 <View style={styles.cardHeader}>
                   <View style={styles.flex}>
                     <Text style={styles.cardTitle}>{request.requestCode}</Text>
@@ -2504,14 +2840,40 @@ function ClientHistoryScreen({ profile }: { profile: UserProfile }) {
                   </View>
                   <StatusPill tone={statusTone(request.status)}>{statusLabels[request.status]}</StatusPill>
                 </View>
-                <Text style={styles.muted}>{request.quoteSnapshot?.currency ?? 'ETB'} {Number(request.quoteSnapshot?.totalEstimate ?? 0).toFixed(2)} / owner {request.selectedOwnerId || 'not assigned'}</Text>
-                <RatingReportPanel request={request} />
+                <View style={styles.cardHeader}>
+                  <Text style={styles.muted}>{request.quoteSnapshot?.currency ?? 'ETB'} {Number(request.quoteSnapshot?.totalEstimate ?? 0).toFixed(2)}</Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setExpandedRequestId((current) => (current === request.id ? '' : request.id))}
+                    style={styles.compactButton}
+                  >
+                    <Text style={styles.compactButtonText}>{expandedRequestId === request.id ? 'Hide' : 'Details'}</Text>
+                  </Pressable>
+                </View>
+                {expandedRequestId === request.id ? <RatingReportPanel request={request} /> : null}
               </View>
             ))}
           </View>
         </ShellCard>
         <Text style={styles.muted}>Signed in as {profile.fullName || profile.email}.</Text>
       </ScrollView>
+      <Modal animationType="fade" transparent visible={Boolean(ratingPromptRequest)} onRequestClose={() => ratingPromptRequest && dismissRatingPrompt(ratingPromptRequest.id)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.pickerDialog}>
+            <Text style={styles.pickerEyebrow}>Trip complete</Text>
+            <Text style={styles.pickerTitle}>Rate your KULI move</Text>
+            {ratingPromptRequest ? (
+              <>
+                <Text style={styles.muted}>{ratingPromptRequest.requestCode} / {ratingPromptRequest.pickupLocation?.addressText} to {ratingPromptRequest.destinationLocation?.addressText}</Text>
+                <RatingReportPanel request={ratingPromptRequest} onRatingSaved={() => dismissRatingPrompt(ratingPromptRequest.id)} />
+                <Pressable accessibilityRole="button" onPress={() => dismissRatingPrompt(ratingPromptRequest.id)} style={styles.secondaryButton}>
+                  <Text style={styles.secondaryButtonText}>Not now</Text>
+                </Pressable>
+              </>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -3069,6 +3431,138 @@ const styles = StyleSheet.create({
     minHeight: 62,
     padding: spacing.sm
   },
+  requestRowStack: {
+    backgroundColor: '#fffdf7',
+    borderColor: colors.line,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.sm
+  },
+  locationSelectButton: {
+    alignItems: 'center',
+    backgroundColor: '#fffdf7',
+    borderColor: colors.line,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'space-between',
+    minHeight: 58,
+    padding: spacing.sm
+  },
+  locationSelectTitle: {
+    color: colors.ink,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  locationChevron: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '900',
+    textTransform: 'uppercase'
+  },
+  locationMenu: {
+    borderColor: colors.line,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    maxHeight: 360
+  },
+  locationMenuContent: {
+    gap: spacing.xs,
+    padding: spacing.xs
+  },
+  locationOption: {
+    alignItems: 'center',
+    backgroundColor: '#fffdf7',
+    borderRadius: radii.sm,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'space-between',
+    minHeight: 54,
+    padding: spacing.sm
+  },
+  locationOptionSelected: {
+    backgroundColor: colors.primaryDeep
+  },
+  locationCoords: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '800'
+  },
+  mapPreview: {
+    backgroundColor: '#eaf1ed',
+    borderColor: colors.primary,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    height: 190,
+    overflow: 'hidden',
+    position: 'relative'
+  },
+  mapGridLineVertical: {
+    backgroundColor: '#cdded6',
+    height: '100%',
+    left: '50%',
+    position: 'absolute',
+    top: 0,
+    width: 1
+  },
+  mapGridLineHorizontal: {
+    backgroundColor: '#cdded6',
+    height: 1,
+    left: 0,
+    position: 'absolute',
+    top: '50%',
+    width: '100%'
+  },
+  mapRoute: {
+    backgroundColor: colors.accent,
+    borderRadius: radii.sm,
+    height: 6,
+    left: '18%',
+    opacity: 0.75,
+    position: 'absolute',
+    top: '48%',
+    width: '64%'
+  },
+  mapPin: {
+    alignItems: 'center',
+    borderColor: '#fffaf0',
+    borderRadius: 14,
+    borderWidth: 2,
+    height: 28,
+    justifyContent: 'center',
+    marginLeft: -14,
+    marginTop: -14,
+    position: 'absolute',
+    width: 28
+  },
+  mapPinPickup: {
+    backgroundColor: colors.primary
+  },
+  mapPinDestination: {
+    backgroundColor: colors.amber
+  },
+  mapPinText: {
+    color: '#fffaf0',
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  mapLegend: {
+    backgroundColor: 'rgba(255, 250, 240, 0.92)',
+    borderRadius: radii.sm,
+    bottom: spacing.sm,
+    gap: 2,
+    left: spacing.sm,
+    padding: spacing.sm,
+    position: 'absolute',
+    right: spacing.sm
+  },
+  mapLegendText: {
+    color: colors.primaryDeep,
+    fontSize: 12,
+    fontWeight: '800'
+  },
   subsection: {
     backgroundColor: '#fffdf7',
     borderColor: colors.line,
@@ -3176,6 +3670,112 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: spacing.xs,
     padding: spacing.md
+  },
+  modalBackdrop: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(23, 33, 38, 0.55)',
+    flex: 1,
+    justifyContent: 'center',
+    padding: spacing.lg
+  },
+  pickerDialog: {
+    backgroundColor: colors.panel,
+    borderRadius: radii.md,
+    gap: spacing.md,
+    maxHeight: '88%',
+    padding: spacing.lg,
+    width: '100%'
+  },
+  pickerHeader: {
+    backgroundColor: '#2990d8',
+    borderRadius: radii.sm,
+    gap: spacing.xs,
+    margin: -spacing.lg,
+    marginBottom: spacing.sm,
+    padding: spacing.lg
+  },
+  pickerEyebrow: {
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '900',
+    textTransform: 'uppercase'
+  },
+  pickerTitle: {
+    color: colors.ink,
+    fontSize: 24,
+    fontWeight: '900',
+    lineHeight: 30
+  },
+  pickerHeaderText: {
+    color: '#e9f5ff'
+  },
+  pickerHeaderTitle: {
+    color: '#ffffff'
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs
+  },
+  dateCell: {
+    alignItems: 'center',
+    borderRadius: radii.sm,
+    minHeight: 58,
+    justifyContent: 'center',
+    width: '22.8%'
+  },
+  dateCellSelected: {
+    backgroundColor: '#4f83f1'
+  },
+  dateCellWeekday: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase'
+  },
+  dateCellDay: {
+    color: colors.ink,
+    fontSize: 17,
+    fontWeight: '900'
+  },
+  timeList: {
+    maxHeight: 260
+  },
+  timeOption: {
+    alignItems: 'center',
+    borderRadius: radii.sm,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    minHeight: 48,
+    paddingHorizontal: spacing.sm
+  },
+  timeOptionText: {
+    color: colors.ink,
+    fontSize: 16,
+    fontWeight: '700'
+  },
+  radioOuter: {
+    alignItems: 'center',
+    borderColor: colors.muted,
+    borderRadius: 10,
+    borderWidth: 2,
+    height: 20,
+    justifyContent: 'center',
+    width: 20
+  },
+  radioOuterSelected: {
+    borderColor: '#2990d8'
+  },
+  radioInner: {
+    backgroundColor: '#2990d8',
+    borderRadius: 5,
+    height: 10,
+    width: 10
+  },
+  pickerActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'flex-end'
   },
   pill: {
     borderRadius: radii.sm,

@@ -300,6 +300,7 @@ Notes:
 - Follow-up local demo pass on 2026-05-22 added development-only demo auth buttons for all roles, local fake user seeding, and production release-readiness protection against demo auth being enabled.
 - Follow-up local demo fix on 2026-05-23 made blank phone safe for sparse unique indexes, allowed demo profile reuse by email, and improved API error messages with request ids.
 - Follow-up monorepo Expo fix on 2026-05-24 added a repository-root Expo entrypoint/config that delegates to `apps/mobile`, preventing root `expo start` from failing with a missing `../../App` import.
+- Follow-up client mobile UX pass on 2026-05-24 replaced raw pickup/destination coordinate entry with Addis Ababa area selectors, generated coordinates, optional pin adjustment, route preview, and calendar/time-style pickup scheduling. Trip messages now display profile names when available, owner notifications avoid anonymous "client" wording, and client history is condensed behind detail actions with a post-trip rating prompt.
 
 ## Commit Discipline
 
