@@ -1516,6 +1516,20 @@ function PriceLine({ label, value, currency }: { label: string; value: number; c
   );
 }
 
+function StarRating({ value, compact = false }: { value: number; compact?: boolean }) {
+  const normalized = Math.max(0, Math.min(5, value));
+
+  return (
+    <View style={styles.candidateStarRow}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <Text key={star} style={[styles.candidateStar, compact && styles.candidateStarCompact, normalized >= star && styles.candidateStarFilled]}>
+          {normalized >= star ? '★' : '☆'}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
 function CandidateCard({ candidate, capacityLabel }: { candidate: QuoteCandidate; capacityLabel: string }) {
   return (
     <View style={styles.candidateCard}>
@@ -1523,13 +1537,14 @@ function CandidateCard({ candidate, capacityLabel }: { candidate: QuoteCandidate
         <View style={styles.flex}>
           <Text style={styles.cardTitle}>{candidate.licensePlate}</Text>
           <Text style={styles.muted}>{candidate.vehicleClassSnapshot?.name || 'Available vehicle'}</Text>
+          <StarRating value={candidate.rating} compact />
         </View>
         <StatusPill tone="ready">{candidate.distanceKm}km</StatusPill>
       </View>
       <View style={styles.metricGrid}>
         <View style={styles.metricBox}>
           <Text style={styles.metricValue}>{candidate.rating.toFixed(1)}</Text>
-          <Text style={styles.metricLabel}>rating</Text>
+          <Text style={styles.metricLabel}>owner rating</Text>
         </View>
         <View style={styles.metricBox}>
           <Text style={styles.metricValue}>{candidate.rankingScore.toFixed(1)}</Text>
@@ -1720,7 +1735,12 @@ const lonLatToTile = ({ lon, lat, zoom }: { lon: number; lat: number; zoom: numb
   };
 };
 
-const buildGoogleStaticMapUrl = (points: { pickup: ReturnType<typeof normalizeMapLocation>; destination: ReturnType<typeof normalizeMapLocation>; truck?: ReturnType<typeof normalizeMapLocation> }) => {
+const buildGoogleStaticMapUrl = (points: {
+  pickup: ReturnType<typeof normalizeMapLocation>;
+  destination: ReturnType<typeof normalizeMapLocation>;
+  truck?: ReturnType<typeof normalizeMapLocation>;
+  zoom: number;
+}) => {
   if (!runtimeConfig.googleMapsApiKey) {
     return '';
   }
@@ -1732,15 +1752,14 @@ const buildGoogleStaticMapUrl = (points: { pickup: ReturnType<typeof normalizeMa
   ].filter(Boolean);
   const path = `path=color:0x0d5668ff%7Cweight:5%7C${points.pickup.lat},${points.pickup.lon}%7C${points.destination.lat},${points.destination.lon}`;
 
-  return `https://maps.googleapis.com/maps/api/staticmap?center=${points.pickup.lat},${points.pickup.lon}&zoom=12&size=640x320&scale=2&maptype=roadmap&${markers.join('&')}&${path}&key=${encodeURIComponent(runtimeConfig.googleMapsApiKey)}`;
+  return `https://maps.googleapis.com/maps/api/staticmap?center=${points.pickup.lat},${points.pickup.lon}&zoom=${points.zoom}&size=640x320&scale=2&maptype=roadmap&${markers.join('&')}&${path}&key=${encodeURIComponent(runtimeConfig.googleMapsApiKey)}`;
 };
 
-const buildOpenStreetMapTileUrl = (pickup: ReturnType<typeof normalizeMapLocation>, destination: ReturnType<typeof normalizeMapLocation>) => {
+const buildOpenStreetMapTileUrl = (pickup: ReturnType<typeof normalizeMapLocation>, destination: ReturnType<typeof normalizeMapLocation>, zoom: number) => {
   const center = {
     lon: (pickup.lon + destination.lon) / 2,
     lat: (pickup.lat + destination.lat) / 2
   };
-  const zoom = 12;
   const tile = lonLatToTile({ ...center, zoom });
 
   return `https://tile.openstreetmap.org/${zoom}/${tile.x}/${tile.y}.png`;
@@ -1757,12 +1776,15 @@ function RouteMapPreview({
   truck?: QuoteLocation;
   statusLabel?: string;
 }) {
+  const [zoom, setZoom] = useState(12);
+  const [expanded, setExpanded] = useState(false);
   const pickupPoint = normalizeMapLocation(pickup, 'Pickup');
   const destinationPoint = normalizeMapLocation(destination, 'Drop-off');
   const truckPoint = truck ? normalizeMapLocation(truck, 'Truck') : undefined;
-  const googleMapUrl = buildGoogleStaticMapUrl({ pickup: pickupPoint, destination: destinationPoint, truck: truckPoint });
-  const fallbackTileUrl = buildOpenStreetMapTileUrl(pickupPoint, destinationPoint);
+  const googleMapUrl = buildGoogleStaticMapUrl({ pickup: pickupPoint, destination: destinationPoint, truck: truckPoint, zoom });
+  const fallbackTileUrl = buildOpenStreetMapTileUrl(pickupPoint, destinationPoint, zoom);
   const mapProviderLabel = googleMapUrl ? 'Google map' : 'OpenStreetMap preview';
+  const zoomMap = (direction: 'in' | 'out') => setZoom((current) => Math.max(10, Math.min(15, direction === 'in' ? current + 1 : current - 1)));
   const toPointStyle = (location: { lon: number; lat: number }) => {
     const lon = Number(location.lon);
     const lat = Number(location.lat);
@@ -1774,8 +1796,8 @@ function RouteMapPreview({
     };
   };
 
-  return (
-    <View style={styles.mapPreview}>
+  const renderMap = (fullScreen = false) => (
+    <View style={[styles.mapPreview, fullScreen && styles.mapPreviewFullScreen]}>
       <Image source={{ uri: googleMapUrl || fallbackTileUrl }} resizeMode="cover" style={styles.mapTile} />
       <View style={styles.mapScrim} />
       <View style={styles.mapGridLineVertical} />
@@ -1792,12 +1814,45 @@ function RouteMapPreview({
           <Text style={styles.mapPinText}>T</Text>
         </View>
       ) : null}
+      <View style={styles.mapControls}>
+        <Pressable accessibilityRole="button" onPress={() => zoomMap('in')} style={styles.mapControlButton}>
+          <Text style={styles.mapControlText}>+</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" onPress={() => zoomMap('out')} style={styles.mapControlButton}>
+          <Text style={styles.mapControlText}>-</Text>
+        </Pressable>
+        {!fullScreen ? (
+          <Pressable accessibilityRole="button" onPress={() => setExpanded(true)} style={styles.mapExpandButton}>
+            <Text style={styles.mapExpandText}>Expand</Text>
+          </Pressable>
+        ) : null}
+      </View>
       <View style={styles.mapLegend}>
         <Text style={styles.mapLegendText}>{mapProviderLabel} / Pickup: {pickupPoint.label}</Text>
         <Text style={styles.mapLegendText}>Drop-off: {destinationPoint.label}</Text>
         {truckPoint ? <Text style={styles.mapLegendText}>Truck: {truckPoint.label}{statusLabel ? ` / ${statusLabel}` : ''}</Text> : null}
       </View>
     </View>
+  );
+
+  return (
+    <>
+      {renderMap()}
+      <Modal animationType="slide" visible={expanded} onRequestClose={() => setExpanded(false)}>
+        <SafeAreaView style={styles.fullscreenMapShell}>
+          <View style={styles.fullscreenMapHeader}>
+            <View style={styles.flex}>
+              <Text style={styles.eyebrow}>Route map</Text>
+              <Text style={styles.cardTitle}>{pickupPoint.label} to {destinationPoint.label}</Text>
+            </View>
+            <Pressable accessibilityRole="button" onPress={() => setExpanded(false)} style={styles.compactButton}>
+              <Text style={styles.compactButtonText}>Close</Text>
+            </Pressable>
+          </View>
+          {renderMap(true)}
+        </SafeAreaView>
+      </Modal>
+    </>
   );
 }
 
@@ -2216,6 +2271,18 @@ function TripTimeline({ requestId }: { requestId: string }) {
   );
 }
 
+function ArchivedMessagePanel({ request }: { request: KuliRequest }) {
+  return (
+    <View style={styles.subsection}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.fieldLabel}>Messages</Text>
+        <StatusPill tone="blocked">{statusLabels[request.status]}</StatusPill>
+      </View>
+      <Text style={styles.muted}>Trip messaging is archived after cancellation or timeout. Use History or support actions for any follow-up.</Text>
+    </View>
+  );
+}
+
 function MessageThread({
   requestId,
   profile,
@@ -2315,7 +2382,13 @@ function MessageThread({
   );
 }
 
-function OwnerStatusControls({ request }: { request: KuliRequest }) {
+function OwnerStatusControls({
+  request,
+  onRequestUpdated
+}: {
+  request: KuliRequest;
+  onRequestUpdated?: (request: KuliRequest) => void;
+}) {
   const queryClient = useQueryClient();
   const [pendingStatus, setPendingStatus] = useState<KuliStatus | ''>('');
   const [error, setError] = useState('');
@@ -2328,13 +2401,14 @@ function OwnerStatusControls({ request }: { request: KuliRequest }) {
     setError('');
 
     try {
-      await kuliApi.request(`/kuli-requests/${request.id}/status`, {
+      const result = (await kuliApi.request(`/kuli-requests/${request.id}/status`, {
         method: 'PATCH',
         body: {
           status,
           reason
         }
-      });
+      })) as ApiEnvelope<{ request: KuliRequest; event: StatusEvent }>;
+      onRequestUpdated?.(result.data.request);
       await queryClient.invalidateQueries({ queryKey: ['kuli-requests', 'mine', 'owner'] });
       await queryClient.invalidateQueries({ queryKey: ['kuli-requests', request.id, 'events'] });
       await queryClient.invalidateQueries({ queryKey: ['notifications'] });
@@ -2378,14 +2452,17 @@ function OwnerStatusControls({ request }: { request: KuliRequest }) {
 function ActiveTripWorkspace({
   request,
   profile,
-  ownerControls = false
+  ownerControls = false,
+  onRequestUpdated
 }: {
   request: KuliRequest;
   profile: UserProfile;
   ownerControls?: boolean;
+  onRequestUpdated?: (request: KuliRequest) => void;
 }) {
   const paymentSettling = isPaymentSettlingRequest(request);
   const paymentClosed = isPaymentClosedRequest(request);
+  const terminalWithoutSettlement = terminalRequestStatuses.includes(request.status);
 
   return (
     <View style={styles.tripWorkspace}>
@@ -2398,14 +2475,18 @@ function ActiveTripWorkspace({
       {paymentSettling ? (
         <Text style={styles.noticeText}>Trip is complete, but this chat stays open until the cash/manual payment is confirmed or resolved.</Text>
       ) : null}
-      {ownerControls ? <OwnerStatusControls request={request} /> : null}
+      {ownerControls && !terminalWithoutSettlement ? <OwnerStatusControls request={request} onRequestUpdated={onRequestUpdated} /> : null}
       <TripTimeline requestId={request.id} />
-      <MessageThread
-        requestId={request.id}
-        profile={profile}
-        closed={paymentClosed}
-        closedReason="Payment is confirmed or resolved, so the trip chat is now closed."
-      />
+      {terminalWithoutSettlement ? (
+        <ArchivedMessagePanel request={request} />
+      ) : (
+        <MessageThread
+          requestId={request.id}
+          profile={profile}
+          closed={paymentClosed}
+          closedReason="Payment is confirmed or resolved, so the trip chat is now closed."
+        />
+      )}
     </View>
   );
 }
@@ -2692,6 +2773,8 @@ function OwnerOffersScreen({ profile }: { profile: UserProfile }) {
 
   const offers = offersQuery.data ?? [];
   const acceptedTrips = (ownerRequestsQuery.data ?? []).filter((request) => activeRequestStatuses.includes(request.status) || isPaymentSettlingRequest(request));
+  const acceptedRequest = acceptedResult?.request;
+  const showAcceptedResult = Boolean(acceptedRequest && (activeRequestStatuses.includes(acceptedRequest.status) || isPaymentSettlingRequest(acceptedRequest)));
 
   const toggleOfferDetails = async (offer: TripOffer) => {
     const nextExpanded = expandedOfferId === offer.id ? '' : offer.id;
@@ -2772,16 +2855,23 @@ function OwnerOffersScreen({ profile }: { profile: UserProfile }) {
           </View>
         </ShellCard>
 
-        {acceptedResult ? (
+        {showAcceptedResult && acceptedRequest ? (
           <ShellCard title="Accepted trip">
             <View style={styles.cardHeader}>
               <View style={styles.flex}>
-                <Text style={styles.cardTitle}>{acceptedResult.request.requestCode}</Text>
-                <Text style={styles.muted}>{acceptedResult.request.pickupLocation?.addressText} to {acceptedResult.request.destinationLocation?.addressText}</Text>
+                <Text style={styles.cardTitle}>{acceptedRequest.requestCode}</Text>
+                <Text style={styles.muted}>{acceptedRequest.pickupLocation?.addressText} to {acceptedRequest.destinationLocation?.addressText}</Text>
               </View>
-              <StatusPill tone="ready">{acceptedResult.request.status}</StatusPill>
+              <StatusPill tone={statusTone(acceptedRequest.status)}>{statusLabels[acceptedRequest.status]}</StatusPill>
             </View>
-            <ActiveTripWorkspace request={acceptedResult.request} profile={profile} ownerControls />
+            <ActiveTripWorkspace
+              request={acceptedRequest}
+              profile={profile}
+              ownerControls
+              onRequestUpdated={(request) => {
+                setAcceptedResult((current) => (current ? { ...current, request } : current));
+              }}
+            />
           </ShellCard>
         ) : null}
 
@@ -3951,6 +4041,24 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative'
   },
+  mapPreviewFullScreen: {
+    borderRadius: 0,
+    flex: 1,
+    height: 'auto'
+  },
+  fullscreenMapShell: {
+    backgroundColor: colors.canvas,
+    flex: 1
+  },
+  fullscreenMapHeader: {
+    alignItems: 'center',
+    backgroundColor: colors.panel,
+    borderBottomColor: colors.line,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    padding: spacing.md
+  },
   mapTile: {
     height: '100%',
     left: 0,
@@ -4014,6 +4122,42 @@ const styles = StyleSheet.create({
   mapPinTruck: {
     backgroundColor: colors.primaryDeep
   },
+  mapControls: {
+    gap: spacing.xs,
+    position: 'absolute',
+    right: spacing.sm,
+    top: spacing.sm
+  },
+  mapControlButton: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 250, 240, 0.94)',
+    borderColor: colors.primary,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    height: 34,
+    justifyContent: 'center',
+    width: 34
+  },
+  mapControlText: {
+    color: colors.primaryDeep,
+    fontSize: 20,
+    fontWeight: '900'
+  },
+  mapExpandButton: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 250, 240, 0.94)',
+    borderColor: colors.primary,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    minHeight: 34,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm
+  },
+  mapExpandText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '900'
+  },
   mapPinText: {
     color: '#fffaf0',
     fontSize: 12,
@@ -4069,6 +4213,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '900',
     textAlign: 'center'
+  },
+  candidateStarRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 2,
+    marginTop: 2
+  },
+  candidateStar: {
+    color: colors.line,
+    fontSize: 18,
+    fontWeight: '900'
+  },
+  candidateStarCompact: {
+    fontSize: 14
+  },
+  candidateStarFilled: {
+    color: colors.accent
   },
   fileSummary: {
     backgroundColor: '#f1eadf',
