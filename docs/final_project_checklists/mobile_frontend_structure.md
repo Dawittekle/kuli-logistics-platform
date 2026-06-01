@@ -146,7 +146,7 @@ Owner vehicle and verification:
 |---|---|
 | `OwnerVehiclesScreen` | Vehicle list, registration form, approval state, active vehicle, availability. |
 | `VehicleClassPicker` | Backend-backed vehicle class selector. |
-| `VehicleCard` | Owner vehicle row/card with verification and availability actions. |
+| `VehicleCard` | Owner vehicle row/card with vehicle image/default truck fallback, verification, and availability actions. |
 | `DocumentUploadField` | Per-document upload slot for identity, driver license, registration certificate, ownership proof, and optional insurance. |
 
 Client request and matching:
@@ -214,14 +214,15 @@ Typical truck-owner path:
 2. Backend `/me` returns `role: truck_owner`.
 3. Land on `OwnerTabs`.
 4. Use `Vehicles` to register vehicle details and upload all required documents.
-5. Wait for admin approval. Unapproved vehicles cannot go online.
-6. Set an approved vehicle online/available.
-7. Receive offer notifications and view offer detail from `Offers`.
-8. Accept or decline offers. First accepted owner wins; other offers close.
-9. Use active trip controls to progress statuses through the allowed transition map.
-10. Coordinate with the client in request-scoped chat.
-11. Complete the trip and confirm cash/manual payment from `Earnings`.
-12. Review aggregate rating and recent reviews.
+5. Add a vehicle photo where possible, then complete the verification checklist for the selected vehicle.
+6. Wait for admin approval. Unapproved vehicles cannot go online.
+7. Set an approved vehicle online/available.
+8. Receive offer notifications and view offer detail from `Offers`.
+9. Accept or decline offers. First accepted owner wins; other offers close.
+10. Use active trip controls to progress statuses through the allowed transition map.
+11. Coordinate with the client in request-scoped chat.
+12. Complete the trip and confirm cash/manual payment from `Earnings`.
+13. Review aggregate rating and recent reviews.
 
 UX rules for owner work:
 

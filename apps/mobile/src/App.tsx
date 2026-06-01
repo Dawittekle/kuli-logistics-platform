@@ -96,6 +96,7 @@ type QuoteCandidate = {
     slug: string;
   };
   licensePlate: string;
+  photo?: VehiclePhoto;
   distanceKm: number;
   rating: number;
   rankingScore: number;
@@ -282,6 +283,7 @@ type Vehicle = {
   capacityKg?: number;
   capacityCubicMeters?: number;
   description?: string;
+  photo?: VehiclePhoto;
   verificationStatus: 'draft' | 'pending' | 'approved' | 'rejected';
   availabilityStatus: 'offline' | 'online_available' | 'busy_on_job' | 'under_maintenance' | 'suspended';
   rejectionReason?: string;
@@ -295,6 +297,13 @@ type PickedFile = {
   mimeType: string;
   sizeBytes: number;
   source: 'camera' | 'library';
+};
+type VehiclePhoto = {
+  fileId?: string;
+  originalFileName?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  previewUrl?: string;
 };
 
 const queryClient = new QueryClient({
@@ -1459,11 +1468,13 @@ function VehicleClassPicker({
 function VehicleCard({
   vehicle,
   selected,
+  previewUri,
   onSelect,
   onToggleAvailability
 }: {
   vehicle: Vehicle;
   selected: boolean;
+  previewUri?: string;
   onSelect: (vehicle: Vehicle) => void;
   onToggleAvailability: (vehicle: Vehicle) => void;
 }) {
@@ -1486,9 +1497,7 @@ function VehicleCard({
   return (
     <View style={[styles.ownerVehicleCard, selected && styles.ownerVehicleCardSelected]}>
       <View style={styles.ownerVehicleTop}>
-        <View style={[styles.ownerVehicleIcon, online && styles.ownerVehicleIconOnline]}>
-          <MaterialCommunityIcons name={online ? 'truck-check-outline' : 'truck-outline'} color={online ? colors.success : colors.black} size={28} />
-        </View>
+        <VehicleImageFrame photo={vehicle.photo} previewUri={previewUri} selected={selected} online={online} />
         <View style={styles.flex}>
           <Text style={styles.ownerVehicleTitle}>{vehicle.licensePlate}</Text>
           <Text style={styles.ownerVehicleType}>{vehicle.vehicleClassSnapshot?.name || vehicle.vehicleClassId}</Text>
@@ -1578,49 +1587,13 @@ function DocumentUploadField({
       throw new Error(`Choose a clear ${documentTypes.find((entry) => entry.type === documentType)?.label ?? 'document'} photo first.`);
     }
 
-    const intent = (await kuliApi.request('/files/upload-intent', {
-      method: 'POST',
-      body: {
-        vehicleId: vehicle.id,
-        type: documentType,
-        originalFileName: file.name,
-        mimeType: file.mimeType,
-        sizeBytes: file.sizeBytes
-      }
-    })) as ApiEnvelope<{ file: { id: string }; upload: { url: string; method?: string } }>;
-
-    if (intent.data.upload.url.startsWith('http')) {
-      if (!file.uri) {
-        throw new Error(`Could not read ${file.name} for upload. Choose the file again.`);
-      }
-
-      const fileResponse = await fetch(file.uri);
-      const fileBlob = await fileResponse.blob();
-      const uploadResponse = await fetch(intent.data.upload.url, {
-        method: intent.data.upload.method ?? 'PUT',
-        headers: {
-          'content-type': file.mimeType
-        },
-        body: fileBlob
-      });
-
-      if (!uploadResponse.ok) {
-        throw new Error(`Storage upload failed for ${file.name}.`);
-      }
-    }
-
-    await kuliApi.request(`/files/${intent.data.file.id}/complete`, {
-      method: 'POST',
-      body: {
-        uploadedSizeBytes: file.sizeBytes
-      }
-    });
+    const uploadedFile = await uploadVehicleFile(vehicle.id, documentType, file);
 
     await kuliApi.request(`/vehicles/${vehicle.id}/documents`, {
       method: 'POST',
       body: {
         type: documentType,
-        fileId: intent.data.file.id
+        fileId: uploadedFile.id
       }
     });
 
@@ -1781,6 +1754,9 @@ function OwnerVehiclesScreen() {
   const [capacityKg, setCapacityKg] = useState('1200');
   const [capacityCubicMeters, setCapacityCubicMeters] = useState('10');
   const [description, setDescription] = useState('');
+  const [vehicleImage, setVehicleImage] = useState<PickedFile | null>(null);
+  const [vehiclePhotoPreviews, setVehiclePhotoPreviews] = useState<Record<string, string>>({});
+  const [showAddVehicleForm, setShowAddVehicleForm] = useState(false);
   const [activeVehicleId, setActiveVehicleId] = useState('');
   const [activeVehiclePendingId, setActiveVehiclePendingId] = useState('');
   const [pending, setPending] = useState(false);
@@ -1799,6 +1775,7 @@ function OwnerVehiclesScreen() {
   const vehicleClasses = vehicleClassesQuery.data ?? [];
   const vehicles = vehiclesQuery.data ?? [];
   const activeVehicle = vehicles.find((vehicle) => vehicle.id === activeVehicleId) ?? vehicles[0];
+  const shouldShowAddVehicleForm = showAddVehicleForm || vehicles.length === 0;
   const approvedCount = vehicles.filter((vehicle) => vehicle.verificationStatus === 'approved').length;
   const onlineCount = vehicles.filter((vehicle) => vehicle.availabilityStatus === 'online_available').length;
   const pendingCount = vehicles.filter((vehicle) => vehicle.verificationStatus === 'pending' || vehicle.verificationStatus === 'draft').length;
@@ -1861,6 +1838,26 @@ function OwnerVehiclesScreen() {
       })) as ApiEnvelope<Vehicle>;
 
       setActiveVehicleId(result.data.id);
+      if (vehicleImage) {
+        const uploadedPhoto = await uploadVehicleFile(result.data.id, 'vehicle_photo', vehicleImage);
+        await kuliApi.request(`/vehicles/${result.data.id}`, {
+          method: 'PATCH',
+          body: {
+            photo: {
+              fileId: uploadedPhoto.id,
+              previewUrl: vehicleImage.uri
+            }
+          }
+        });
+
+        if (vehicleImage.uri) {
+          setVehiclePhotoPreviews((current) => ({
+            ...current,
+            [result.data.id]: vehicleImage.uri ?? ''
+          }));
+        }
+      }
+
       await kuliApi.request('/owners/me/active-vehicle', {
         method: 'PATCH',
         body: {
@@ -1870,7 +1867,10 @@ function OwnerVehiclesScreen() {
       setNotice('Vehicle submitted for KULI verification.');
       setLicensePlate('');
       setDescription('');
+      setVehicleImage(null);
+      setShowAddVehicleForm(false);
       await queryClient.invalidateQueries({ queryKey: ['vehicles', 'mine'] });
+      await vehiclesQuery.refetch();
     } catch (createError) {
       setError(getErrorMessage(createError));
     } finally {
@@ -1943,33 +1943,70 @@ function OwnerVehiclesScreen() {
         <MetricCard label="In review" value={String(pendingCount)} detail="Waiting approval" tone={pendingCount ? 'warning' : 'default'} style={styles.ownerMetricCard} />
       </View>
 
-      <View style={styles.ownerVehiclePanel}>
-        <View style={styles.ownerSectionHeader}>
-          <View style={styles.flex}>
-            <Text style={styles.ownerSectionTitle}>Add a vehicle</Text>
-            <Text style={styles.ownerSectionCopy}>Step 1: choose a class. Step 2: confirm capacity. Step 3: upload documents for review.</Text>
-          </View>
-          {selectedClass ? <StatusBadge tone="neutral">{selectedClass.name}</StatusBadge> : null}
-        </View>
-        {vehicleClassesQuery.isLoading ? <LoadingState title="Loading vehicle classes" message="Preparing truck options." /> : null}
-        {vehicleClassesQuery.isError ? <ErrorState title="Vehicle classes unavailable" message={getErrorMessage(vehicleClassesQuery.error)} /> : null}
-        <VehicleClassPicker vehicleClasses={vehicleClasses} selectedVehicleClassId={vehicleClassId} onSelect={selectVehicleClass} />
-        <View style={styles.ownerFormCard}>
-          <Field label="License plate" value={licensePlate} onChangeText={setLicensePlate} placeholder="AA-12345" />
-          <View style={styles.ownerFormTwoColumn}>
+      {shouldShowAddVehicleForm ? (
+        <View style={styles.ownerVehiclePanel}>
+          <View style={styles.ownerSectionHeader}>
             <View style={styles.flex}>
-              <Field label="Capacity kg" value={capacityKg} onChangeText={setCapacityKg} placeholder="1200" keyboardType="phone-pad" />
+              <Text style={styles.ownerSectionTitle}>Add a vehicle</Text>
+              <Text style={styles.ownerSectionCopy}>Step 1: choose a class. Step 2: add details and photo. Step 3: complete verification.</Text>
             </View>
-            <View style={styles.flex}>
-              <Field label="Volume m3" value={capacityCubicMeters} onChangeText={setCapacityCubicMeters} placeholder="10" keyboardType="phone-pad" />
-            </View>
+            {selectedClass ? <StatusBadge tone="neutral">{selectedClass.name}</StatusBadge> : null}
           </View>
-          <Field label="Vehicle notes" value={description} onChangeText={setDescription} placeholder="Clean covered truck, good for furniture" />
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          {notice ? <Text style={styles.noticeText}>{notice}</Text> : null}
-          <PrimaryButton disabled={pending} loading={pending} label={pending ? 'Submitting...' : 'Submit for verification'} onPress={createVehicle} />
+          {vehicleClassesQuery.isLoading ? <LoadingState title="Loading vehicle classes" message="Preparing truck options." /> : null}
+          {vehicleClassesQuery.isError ? <ErrorState title="Vehicle classes unavailable" message={getErrorMessage(vehicleClassesQuery.error)} /> : null}
+          <VehicleClassPicker vehicleClasses={vehicleClasses} selectedVehicleClassId={vehicleClassId} onSelect={selectVehicleClass} />
+          <View style={styles.ownerFormCard}>
+            <Field label="License plate" value={licensePlate} onChangeText={setLicensePlate} placeholder="AA-12345" />
+            <View style={styles.ownerFormTwoColumn}>
+              <View style={styles.flex}>
+                <Field label="Capacity kg" value={capacityKg} onChangeText={setCapacityKg} placeholder="1200" keyboardType="phone-pad" />
+              </View>
+              <View style={styles.flex}>
+                <Field label="Volume m3" value={capacityCubicMeters} onChangeText={setCapacityCubicMeters} placeholder="10" keyboardType="phone-pad" />
+              </View>
+            </View>
+            <Field label="Vehicle notes" value={description} onChangeText={setDescription} placeholder="Clean covered truck, good for furniture" />
+            <View style={styles.vehiclePhotoPickerCard}>
+              <VehicleImageFrame previewUri={vehicleImage?.uri} size="large" />
+              <View style={styles.flex}>
+                <Text style={styles.ownerSectionTitle}>Vehicle photo</Text>
+                <Text style={styles.ownerSectionCopy}>Add a clear side or front photo so customers recognize the truck. Existing vehicles use a default image until a photo is added.</Text>
+              </View>
+            </View>
+            <FilePickerField
+              label="Vehicle image"
+              value={vehicleImage}
+              onChange={setVehicleImage}
+              emptyText="Optional for now, recommended before demo."
+              emptyTone="warn"
+              uploadLabel="Upload"
+              takeLabel="Camera"
+            />
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {notice ? <Text style={styles.noticeText}>{notice}</Text> : null}
+            <PrimaryButton disabled={pending} loading={pending} label={pending ? 'Submitting...' : 'Submit for verification'} onPress={createVehicle} />
+          </View>
         </View>
-      </View>
+      ) : (
+        <View style={styles.ownerVehiclePanel}>
+          <View style={styles.ownerSectionHeader}>
+            <View style={styles.flex}>
+              <Text style={styles.ownerSectionTitle}>Vehicle verification</Text>
+              <Text style={styles.ownerSectionCopy}>Your selected vehicle is ready for document upload. Add another truck only when you need a separate vehicle profile.</Text>
+            </View>
+            <SecondaryButton label="Add another" onPress={() => setShowAddVehicleForm(true)} style={styles.ownerSmallButton} />
+          </View>
+        </View>
+      )}
+
+      {activeVehicle ? (
+        <DocumentUploadField
+          vehicle={activeVehicle}
+          onUploaded={() => {
+            queryClient.invalidateQueries({ queryKey: ['vehicles', 'mine'] });
+          }}
+        />
+      ) : null}
 
       <View style={styles.ownerVehiclePanel}>
         <View style={styles.ownerSectionHeader}>
@@ -1993,6 +2030,7 @@ function OwnerVehiclesScreen() {
             <VehicleCard
               key={vehicle.id}
               vehicle={vehicle}
+              previewUri={vehiclePhotoPreviews[vehicle.id]}
               selected={activeVehicle?.id === vehicle.id}
               onSelect={(nextVehicle) => selectActiveVehicle(nextVehicle.id)}
               onToggleAvailability={toggleAvailability}
@@ -2001,14 +2039,6 @@ function OwnerVehiclesScreen() {
         </View>
       </View>
 
-      {activeVehicle ? (
-        <DocumentUploadField
-          vehicle={activeVehicle}
-          onUploaded={() => {
-            queryClient.invalidateQueries({ queryKey: ['vehicles', 'mine'] });
-          }}
-        />
-      ) : null}
     </Screen>
   );
 }
@@ -2165,6 +2195,79 @@ const normalizePickedAsset = (asset: ImagePicker.ImagePickerAsset, source: Picke
   };
 };
 
+const canPreviewVehiclePhoto = (uri?: string) => Boolean(uri && /^(https?:|file:|blob:|data:)/.test(uri));
+
+async function uploadVehicleFile(vehicleId: string, type: string, file: PickedFile) {
+  const intent = (await kuliApi.request('/files/upload-intent', {
+    method: 'POST',
+    body: {
+      vehicleId,
+      type,
+      originalFileName: file.name,
+      mimeType: file.mimeType,
+      sizeBytes: file.sizeBytes
+    }
+  })) as ApiEnvelope<{ file: { id: string; originalFileName?: string; mimeType?: string; sizeBytes?: number }; upload: { url: string; method?: string } }>;
+
+  if (intent.data.upload.url.startsWith('http')) {
+    if (!file.uri) {
+      throw new Error(`Could not read ${file.name} for upload. Choose the file again.`);
+    }
+
+    const fileResponse = await fetch(file.uri);
+    const fileBlob = await fileResponse.blob();
+    const uploadResponse = await fetch(intent.data.upload.url, {
+      method: intent.data.upload.method ?? 'PUT',
+      headers: {
+        'content-type': file.mimeType
+      },
+      body: fileBlob
+    });
+
+    if (!uploadResponse.ok) {
+      throw new Error(`Storage upload failed for ${file.name}.`);
+    }
+  }
+
+  await kuliApi.request(`/files/${intent.data.file.id}/complete`, {
+    method: 'POST',
+    body: {
+      uploadedSizeBytes: file.sizeBytes
+    }
+  });
+
+  return intent.data.file;
+}
+
+function VehicleImageFrame({
+  photo,
+  previewUri,
+  selected = false,
+  online = false,
+  size = 'regular'
+}: {
+  photo?: VehiclePhoto;
+  previewUri?: string;
+  selected?: boolean;
+  online?: boolean;
+  size?: 'regular' | 'large';
+}) {
+  const uri = previewUri ?? photo?.previewUrl;
+  const showImage = canPreviewVehiclePhoto(uri);
+
+  return (
+    <View style={[styles.vehicleImageFrame, size === 'large' && styles.vehicleImageFrameLarge, selected && styles.vehicleImageFrameSelected, online && styles.vehicleImageFrameOnline]}>
+      {showImage ? (
+        <Image source={{ uri }} style={styles.vehicleImage} resizeMode="cover" />
+      ) : (
+        <View style={styles.vehicleDefaultArt}>
+          <MaterialCommunityIcons name="truck-outline" color={selected ? colors.card : colors.black} size={size === 'large' ? 38 : 28} />
+        </View>
+      )}
+    </View>
+  );
+}
+
 function PriceLine({ label, value, currency }: { label: string; value: number; currency: string }) {
   return (
     <View style={styles.priceLine}>
@@ -2192,6 +2295,7 @@ function CandidateCard({ candidate, capacityLabel }: { candidate: QuoteCandidate
   return (
     <View style={styles.candidateCard}>
       <View style={styles.cardHeader}>
+        <VehicleImageFrame photo={candidate.photo} />
         <View style={styles.flex}>
           <Text style={styles.cardTitle}>{candidate.licensePlate}</Text>
           <Text style={styles.muted}>{candidate.vehicleClassSnapshot?.name || 'Available vehicle'}</Text>
@@ -2653,6 +2757,7 @@ function RequestCandidateOption({
       style={[styles.requestCandidateCard, selected && styles.requestCandidateCardSelected]}
     >
       <View style={styles.cardHeader}>
+        <VehicleImageFrame photo={candidate.photo} selected={selected} size="large" />
         <View style={styles.flex}>
           <Text style={[styles.requestCandidateTitle, selected && styles.requestTextOnDark]}>{candidate.licensePlate}</Text>
           <Text style={[styles.requestCandidateSubtitle, selected && styles.requestMutedOnDark]}>{candidate.vehicleClassSnapshot?.name || 'Available vehicle'}</Text>
@@ -6001,6 +6106,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm
   },
+  vehicleImageFrame: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    height: 56,
+    justifyContent: 'center',
+    overflow: 'hidden',
+    width: 56
+  },
+  vehicleImageFrameLarge: {
+    height: 72,
+    width: 72
+  },
+  vehicleImageFrameSelected: {
+    backgroundColor: colors.darkSurface,
+    borderColor: colors.darkSurface
+  },
+  vehicleImageFrameOnline: {
+    borderColor: colors.success
+  },
+  vehicleImage: {
+    height: '100%',
+    width: '100%'
+  },
+  vehicleDefaultArt: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center'
+  },
   requestCandidateList: {
     gap: spacing.md
   },
@@ -7160,6 +7296,14 @@ const styles = StyleSheet.create({
   ownerFormTwoColumn: {
     flexDirection: 'row',
     gap: spacing.sm
+  },
+  vehiclePhotoPickerCard: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md
   },
   ownerVehicleList: {
     gap: spacing.md

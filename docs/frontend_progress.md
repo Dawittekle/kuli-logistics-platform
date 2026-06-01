@@ -306,6 +306,7 @@ Notes:
 - Owner trip correction pass on 2026-05-24 updates owner trip state immediately from status mutation responses, collapses request messages after cancellation/timeout, adds zoom/full-screen controls to the map preview, and improves candidate cards with compact star ratings for easier truck comparison.
 - Vehicle document upload pass on 2026-06-01 turns owner onboarding into a per-document checklist for identity, driver license, registration certificate, ownership proof, and optional insurance. Each slot can upload from library or camera, uses the picked file's real metadata, supports production signed-URL uploads when object storage returns HTTP URLs, and keeps the local-dev metadata completion flow.
 - Final mobile UI QA pass on 2026-06-01 removed remaining prototype/admin-facing copy from owner verification and request empty states, aligned bottom tab labels with the product navigation, refreshed the mobile structure handoff, and expanded the test plan/cases with UI regression and demo-flow coverage.
+- Vehicle onboarding follow-up on 2026-06-01 collapses the add-vehicle form after a successful submission so the selected vehicle moves directly into its verification checklist, asks owners for a vehicle image during registration, shows vehicle photo/default-truck thumbnails in owner vehicle cards, and includes the same vehicle image frame in client candidate rankings.
 
 ## Commit Discipline
 

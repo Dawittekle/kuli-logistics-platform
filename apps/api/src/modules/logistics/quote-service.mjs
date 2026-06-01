@@ -253,6 +253,7 @@ export class QuoteService {
             ownerId: vehicle.ownerId,
             vehicleClassSnapshot: vehicle.vehicleClassSnapshot,
             licensePlate: vehicle.licensePlate,
+            photo: vehicle.photo,
             distanceKm: Number(distanceKm.toFixed(2)),
             rating,
             rankingScore

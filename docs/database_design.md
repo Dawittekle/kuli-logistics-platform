@@ -169,6 +169,13 @@ Supply-side vehicle records.
   capacityKg?: number,
   capacityCubicMeters?: number,
   description?: string,
+  photo?: {
+    fileId: ObjectId,
+    originalFileName?: string,
+    mimeType?: string,
+    sizeBytes?: number,
+    previewUrl?: string
+  },
   verificationStatus: VerificationStatus,
   verificationSubmittedAt?: Date,
   verifiedAt?: Date,
@@ -643,4 +650,3 @@ Critical queries:
 - Fetch request detail with events, offers, payment, rating, and reports.
 
 Avoid joining too much in one request. Use targeted endpoints for detail pages and aggregate cards for list views.
-
