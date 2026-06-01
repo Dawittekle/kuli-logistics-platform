@@ -457,14 +457,14 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
   return (
     <main className="login-shell">
       <section className="login-brand" aria-label="KULI staff login context">
-        <p className="eyebrow">KULI operations</p>
-        <h1>Staff access for verified logistics work.</h1>
-        <p>Admins and assistants sign in here. Public client and truck-owner registration belongs in the mobile app.</p>
+        <p className="eyebrow">KULI Operations</p>
+        <h1>Control verified truck logistics.</h1>
+        <p>Review vehicles, protect users, tune pricing, and keep Addis Ababa moves accountable from one staff console.</p>
       </section>
       <form className="login-panel" onSubmit={submit}>
         <div>
-          <p className="eyebrow">Secure staff login</p>
-          <h2>Use your provisioned Supabase account.</h2>
+          <p className="eyebrow">Staff sign in</p>
+          <h2>Welcome back.</h2>
         </div>
         <label>
           Email
@@ -485,7 +485,7 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
             <button className="secondary-action" disabled={pending} onClick={() => startDemoProfile('assistant')} type="button">Demo assistant</button>
           </div>
         ) : null}
-        <p className="muted">There is intentionally no staff self-registration path.</p>
+        <p className="muted">Staff accounts are provisioned by an administrator. Clients and truck owners use the mobile app.</p>
       </form>
     </main>
   );
@@ -2560,10 +2560,25 @@ function StaffWorkspace({ profile, onSignOut }: { profile: UserProfile; onSignOu
   return (
     <main className="app-shell">
       <aside className="sidebar" aria-label="Workspace navigation">
-        <div>
-          <p className="eyebrow">KULI operations</p>
-          <h1>{workspace === 'admin' ? 'Control room for verified truck logistics.' : 'Fast console for live caller support.'}</h1>
+        <div className="sidebar-brand">
+          <span className="brand-mark" aria-hidden="true">K</span>
+          <div>
+            <p className="eyebrow">KULI Operations</p>
+            <h1>{workspace === 'admin' ? 'Admin control room' : 'Assistant console'}</h1>
+          </div>
         </div>
+        <nav className="sidebar-nav" aria-label={`${workspace} sections`}>
+          {routes.map((route) => {
+            const Icon = route.icon;
+
+            return (
+              <div className="sidebar-nav__item" key={route.path}>
+                <Icon aria-hidden="true" size={18} />
+                <span>{route.label}</span>
+              </div>
+            );
+          })}
+        </nav>
         <div className="identity-card">
           <strong>{profile.fullName || profile.email}</strong>
           <span>{roleLabels[profile.role]}</span>
@@ -2571,7 +2586,7 @@ function StaffWorkspace({ profile, onSignOut }: { profile: UserProfile; onSignOu
         </div>
         <div className="notice">
           <AlertTriangle aria-hidden="true" size={18} />
-          <p>Route visibility follows backend `/me`. Hidden controls are UX help, not security.</p>
+          <p>Your staff permissions decide which operational tools appear here.</p>
         </div>
         <button className="sidebar-button" type="button" onClick={onSignOut}>
           <LogOut aria-hidden="true" size={18} />
@@ -2582,8 +2597,8 @@ function StaffWorkspace({ profile, onSignOut }: { profile: UserProfile; onSignOu
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Frontend Phase 7</p>
-            <h2>{workspace === 'admin' ? 'Admin dashboard' : 'Assistant console'}</h2>
+            <p className="eyebrow">{workspace === 'admin' ? 'Operations overview' : 'Live support'}</p>
+            <h2>{workspace === 'admin' ? 'Keep the marketplace ready' : 'Support active callers'}</h2>
           </div>
           <StatusBadge tone="ready">
             <CheckCircle2 aria-hidden="true" size={14} /> Authenticated
@@ -2593,7 +2608,6 @@ function StaffWorkspace({ profile, onSignOut }: { profile: UserProfile; onSignOu
         <div className="panel-grid">
           <ApiHealthPanel />
           <RuntimePanel />
-          <RouteTable title={workspace === 'admin' ? 'Admin routes' : 'Assistant routes'} routes={routes} />
           <AdminDashboardPanel enabled={profile.role === 'admin'} />
           <AssistantSupportPanel enabled={profile.role === 'assistant'} profile={profile} />
           <AdminVerificationPanel enabled={profile.role === 'admin'} />
