@@ -25,10 +25,16 @@ import { clearDemoAccessToken, kuliApi, setDemoAccessToken } from './lib/api';
 import { supabase } from './lib/supabase';
 import { runtimeConfig, runtimeReadiness } from './config/runtime';
 import { colors, radii, spacing } from './theme';
+import { AppHeader } from './components/ui/AppHeader';
+import { Card as UiCard } from './components/ui/Card';
+import { PrimaryButton } from './components/ui/PrimaryButton';
+import { SecondaryButton } from './components/ui/SecondaryButton';
+import { SectionHeader } from './components/ui/SectionHeader';
+import { StatusBadge } from './components/ui/StatusBadge';
 
 type Role = 'client' | 'truck_owner' | 'assistant' | 'admin';
 type AccountStatus = 'active' | 'pending_verification' | 'suspended' | 'banned' | 'deleted';
-type AuthMode = 'login' | 'register';
+type AuthMode = 'login' | 'register' | 'forgot';
 type PublicRole = Extract<Role, 'client' | 'truck_owner'>;
 type VerificationDraft = {
   email: string;
@@ -415,17 +421,15 @@ function HealthCard() {
   };
 
   return (
-    <ShellCard title="API connection">
+    <UiCard style={styles.authCard}>
       <View style={styles.cardHeader}>
-        <Text style={styles.muted}>{message}</Text>
-        <StatusPill tone={state === 'ready' ? 'ready' : state === 'blocked' ? 'blocked' : 'warn'}>
+        <SectionHeader eyebrow="Diagnostics" title="API connection" description={message} style={styles.flex} />
+        <StatusBadge tone={state === 'ready' ? 'success' : state === 'blocked' ? 'error' : 'warning'}>
           {state === 'ready' ? 'Ready' : state === 'blocked' ? 'Check API' : state === 'checking' ? 'Checking' : 'Idle'}
-        </StatusPill>
+        </StatusBadge>
       </View>
-      <Pressable accessibilityRole="button" onPress={checkHealth} style={styles.secondaryButton}>
-        <Text style={styles.secondaryButtonText}>Check health</Text>
-      </Pressable>
-    </ShellCard>
+      <SecondaryButton label="Check health" onPress={checkHealth} />
+    </UiCard>
   );
 }
 
@@ -480,6 +484,46 @@ function RoleOption({
         {role === 'client' ? 'Book verified trucks and follow your move.' : 'Register vehicles and receive verified requests.'}
       </Text>
     </Pressable>
+  );
+}
+
+function AuthBrandPanel({ mode }: { mode: AuthMode }) {
+  return (
+    <View style={styles.authHero}>
+      <View style={styles.authLogoMark}>
+        <Text style={styles.authLogoText}>KULI</Text>
+      </View>
+      <Text style={styles.authHeroTitle}>
+        {mode === 'register' ? 'Create your KULI account.' : mode === 'forgot' ? 'Recover access securely.' : 'Move with verified trucks.'}
+      </Text>
+      <Text style={styles.authHeroCopy}>
+        {mode === 'forgot'
+          ? 'Enter your email and Supabase will send a secure password reset link.'
+          : 'Book, verify, accept, and track logistics work with backend-confirmed KULI profiles.'}
+      </Text>
+      {runtimeConfig.demoAuthEnabled ? <StatusBadge tone="warning">Local demo mode</StatusBadge> : null}
+    </View>
+  );
+}
+
+function AuthModeTabs({ mode, onChange }: { mode: AuthMode; onChange: (mode: AuthMode) => void }) {
+  return (
+    <View style={styles.authTabs}>
+      <Pressable accessibilityRole="button" onPress={() => onChange('login')} style={[styles.authTab, mode === 'login' && styles.authTabActive]}>
+        <Text style={[styles.authTabText, mode === 'login' && styles.authTabTextActive]}>Login</Text>
+      </Pressable>
+      <Pressable accessibilityRole="button" onPress={() => onChange('register')} style={[styles.authTab, mode === 'register' && styles.authTabActive]}>
+        <Text style={[styles.authTabText, mode === 'register' && styles.authTabTextActive]}>Register</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function AuthMessage({ tone, message }: { tone: 'notice' | 'error'; message: string }) {
+  return (
+    <View style={[styles.authMessage, tone === 'error' ? styles.authMessageError : styles.authMessageNotice]}>
+      <Text style={[styles.authMessageText, tone === 'error' ? styles.authMessageTextError : styles.authMessageTextNotice]}>{message}</Text>
+    </View>
   );
 }
 
@@ -581,16 +625,67 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
   const [verificationDraft, setVerificationDraft] = useState<VerificationDraft | null>(null);
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationPending, setVerificationPending] = useState(false);
+  const [resetPending, setResetPending] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
+  const isLogin = mode === 'login';
+  const isRegister = mode === 'register';
+  const normalizedEmail = email.trim().toLowerCase();
   const canSubmit = runtimeConfig.demoAuthEnabled
-    ? Boolean(email.trim()) && (mode === 'login' || Boolean(fullName.trim()))
-    : Boolean(email.trim()) && password.length >= 6 && (mode === 'login' || Boolean(fullName.trim()));
+    ? Boolean(normalizedEmail) && (isLogin || (isRegister && Boolean(fullName.trim())))
+    : Boolean(normalizedEmail) && password.length >= 6 && (isLogin || (isRegister && Boolean(fullName.trim())));
+  const canResetPassword = !resetPending;
+
+  const changeMode = (nextMode: AuthMode) => {
+    setMode(nextMode);
+    setError('');
+    setNotice('');
+  };
 
   const loadProfile = async (session: Session) => {
     const profile = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
     onAuthenticated(profile.data, session);
+  };
+
+  const sendPasswordReset = async () => {
+    if (resetPending) {
+      return;
+    }
+
+    setError('');
+    setNotice('');
+
+    if (!normalizedEmail) {
+      setError('Enter the email address for your KULI account.');
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      setError('Enter a valid email address.');
+      return;
+    }
+
+    if (!runtimeReadiness.hasSupabaseUrl || !runtimeReadiness.hasSupabaseAnonKey) {
+      setError('Supabase is not configured for password recovery in this environment.');
+      return;
+    }
+
+    setResetPending(true);
+
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(normalizedEmail);
+
+      if (resetError) {
+        throw resetError;
+      }
+
+      setNotice('Password reset email sent. Open the Supabase link from your inbox, then return to sign in.');
+    } catch (resetError) {
+      setError(getErrorMessage(resetError));
+    } finally {
+      setResetPending(false);
+    }
   };
 
   const startDemoProfile = async (demoRole: PublicRole, options: { preserveExistingRole?: boolean } = {}) => {
@@ -603,7 +698,6 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
     setNotice('');
 
     try {
-      const normalizedEmail = email.trim().toLowerCase();
       const suffix = normalizedEmail
         ? normalizedEmail.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 42)
         : Date.now().toString(36);
@@ -723,8 +817,6 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
     setNotice('');
 
     try {
-      const normalizedEmail = email.trim().toLowerCase();
-
       if (verificationDraft && verificationDraft.email !== normalizedEmail) {
         setVerificationDraft(null);
         setVerificationCode('');
@@ -810,85 +902,99 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
   return (
     <SafeAreaView style={styles.screen}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
-        <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.eyebrow}>KULI mobile</Text>
-          <Text style={styles.title}>{mode === 'login' ? 'Sign in to your route.' : 'Create your logistics profile.'}</Text>
-          <Text style={styles.copy}>
-            Public registration is only for clients and truck owners. Staff accounts are provisioned by an admin and must use the web dashboard.
-          </Text>
+        <ScrollView contentContainerStyle={styles.authContent}>
+          <AuthBrandPanel mode={mode} />
 
-          <View style={styles.segmented}>
-            <Pressable accessibilityRole="button" onPress={() => setMode('login')} style={[styles.segmentButton, mode === 'login' && styles.segmentButtonActive]}>
-              <Text style={[styles.segmentText, mode === 'login' && styles.segmentTextActive]}>Login</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => setMode('register')} style={[styles.segmentButton, mode === 'register' && styles.segmentButtonActive]}>
-              <Text style={[styles.segmentText, mode === 'register' && styles.segmentTextActive]}>Register</Text>
-            </Pressable>
-          </View>
+          {mode !== 'forgot' ? <AuthModeTabs mode={mode} onChange={changeMode} /> : null}
 
-          {mode === 'register' ? (
-            <View style={styles.roleGrid}>
-              <RoleOption role="client" selected={role === 'client'} onPress={() => setRole('client')} />
-              <RoleOption role="truck_owner" selected={role === 'truck_owner'} onPress={() => setRole('truck_owner')} />
-            </View>
-          ) : null}
+          {mode === 'forgot' ? (
+            <UiCard style={styles.authCard}>
+              <AppHeader
+                eyebrow="Account recovery"
+                title="Reset your password."
+                subtitle="We will send a secure reset link to the email on your KULI account."
+              />
+              <Field label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" />
+              {error ? <AuthMessage tone="error" message={error} /> : null}
+              {notice ? <AuthMessage tone="notice" message={notice} /> : null}
+              <PrimaryButton disabled={!canResetPassword} label={resetPending ? 'Sending...' : 'Send reset email'} loading={resetPending} onPress={sendPasswordReset} />
+              <SecondaryButton label="Back to login" onPress={() => changeMode('login')} />
+            </UiCard>
+          ) : (
+            <>
+              {mode === 'register' ? (
+                <View style={styles.roleGrid}>
+                  <RoleOption role="client" selected={role === 'client'} onPress={() => setRole('client')} />
+                  <RoleOption role="truck_owner" selected={role === 'truck_owner'} onPress={() => setRole('truck_owner')} />
+                </View>
+              ) : null}
 
-          <ShellCard title={mode === 'login' ? 'Account credentials' : 'Public account details'}>
-            {mode === 'register' ? <Field label="Full name" value={fullName} onChangeText={setFullName} placeholder="Abebe Bekele" /> : null}
-            <Field label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" />
-            {mode === 'register' ? <Field label="Phone" value={phone} onChangeText={setPhone} placeholder="+251911000000" keyboardType="phone-pad" /> : null}
-            <Field label="Password" value={password} onChangeText={setPassword} placeholder="Minimum 6 characters" secureTextEntry />
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
-            {notice ? <Text style={styles.noticeText}>{notice}</Text> : null}
-            <Pressable
-              accessibilityRole="button"
-              disabled={!canSubmit || pending}
-              onPress={submit}
-              style={[styles.primaryButton, (!canSubmit || pending) && styles.buttonDisabled]}
-            >
-              <Text style={styles.primaryButtonText}>{pending ? 'Working...' : mode === 'login' ? 'Login' : 'Create account'}</Text>
-            </Pressable>
-          </ShellCard>
+              <UiCard style={styles.authCard}>
+                <SectionHeader
+                  eyebrow={mode === 'login' ? 'Secure sign in' : 'Public registration'}
+                  title={mode === 'login' ? 'Use your KULI account.' : 'Tell us who is moving.'}
+                  description={
+                    mode === 'login'
+                      ? 'Your role and dashboard are loaded from the backend profile after authentication.'
+                      : 'Clients and truck owners can self-register. Staff accounts stay on the admin dashboard.'
+                  }
+                />
+                {mode === 'register' ? <Field label="Full name" value={fullName} onChangeText={setFullName} placeholder="Abebe Bekele" /> : null}
+                <Field label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" />
+                {mode === 'register' ? <Field label="Phone" value={phone} onChangeText={setPhone} placeholder="+251911000000" keyboardType="phone-pad" /> : null}
+                <Field label="Password" value={password} onChangeText={setPassword} placeholder="Minimum 6 characters" secureTextEntry />
+                {mode === 'login' ? (
+                  <Pressable accessibilityRole="button" onPress={() => changeMode('forgot')} style={styles.authInlineLink}>
+                    <Text style={styles.authInlineLinkText}>Forgot password?</Text>
+                  </Pressable>
+                ) : null}
+                {error ? <AuthMessage tone="error" message={error} /> : null}
+                {notice ? <AuthMessage tone="notice" message={notice} /> : null}
+                <PrimaryButton
+                  disabled={!canSubmit || pending}
+                  label={pending ? 'Working...' : mode === 'login' ? 'Login' : 'Create account'}
+                  loading={pending}
+                  onPress={submit}
+                />
+              </UiCard>
 
-          {verificationDraft ? (
-            <ShellCard title="Confirm email">
-              <Text style={styles.muted}>{verificationDraft.email}</Text>
-              <Text style={styles.copy}>Enter the confirmation code from your email. If Supabase sent a link instead, open that link, then return and sign in.</Text>
-              <Field label="Confirmation code" value={verificationCode} onChangeText={setVerificationCode} placeholder="6-digit code" keyboardType="numeric" />
-              <View style={styles.actionRow}>
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={!verificationCode.trim() || verificationPending}
-                  onPress={verifyEmailCode}
-                  style={[styles.primaryButton, styles.actionButton, (!verificationCode.trim() || verificationPending) && styles.buttonDisabled]}
-                >
-                  <Text style={styles.primaryButtonText}>{verificationPending ? 'Checking...' : 'Verify'}</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={verificationPending}
-                  onPress={() => resendConfirmation()}
-                  style={[styles.secondaryButton, styles.actionButton, verificationPending && styles.buttonDisabled]}
-                >
-                  <Text style={styles.secondaryButtonText}>Resend</Text>
-                </Pressable>
-              </View>
-            </ShellCard>
-          ) : null}
+              {verificationDraft ? (
+                <UiCard style={styles.authCard}>
+                  <SectionHeader
+                    eyebrow="Email confirmation"
+                    title="Confirm your email."
+                    description="Enter the confirmation code from your email. If Supabase sent a link instead, open that link, then return and sign in."
+                  />
+                  <Text style={styles.muted}>{verificationDraft.email}</Text>
+                  <Field label="Confirmation code" value={verificationCode} onChangeText={setVerificationCode} placeholder="6-digit code" keyboardType="numeric" />
+                  <View style={styles.actionRow}>
+                    <PrimaryButton
+                      disabled={!verificationCode.trim() || verificationPending}
+                      label={verificationPending ? 'Checking...' : 'Verify'}
+                      loading={verificationPending}
+                      onPress={verifyEmailCode}
+                      style={styles.actionButton}
+                    />
+                    <SecondaryButton disabled={verificationPending} label="Resend" onPress={() => resendConfirmation()} style={styles.actionButton} />
+                  </View>
+                </UiCard>
+              ) : null}
 
-          {runtimeConfig.demoAuthEnabled ? (
-            <ShellCard title="Local demo access">
-              <Text style={styles.copy}>Explore KULI without Supabase email verification. Demo profiles use local dev tokens and are only for this development environment.</Text>
-              <View style={styles.actionRow}>
-                <Pressable accessibilityRole="button" disabled={pending} onPress={() => startDemoProfile('client')} style={[styles.secondaryButton, styles.actionButton, pending && styles.buttonDisabled]}>
-                  <Text style={styles.secondaryButtonText}>Demo client</Text>
-                </Pressable>
-                <Pressable accessibilityRole="button" disabled={pending} onPress={() => startDemoProfile('truck_owner')} style={[styles.primaryButton, styles.actionButton, pending && styles.buttonDisabled]}>
-                  <Text style={styles.primaryButtonText}>Demo owner</Text>
-                </Pressable>
-              </View>
-            </ShellCard>
-          ) : null}
+              {runtimeConfig.demoAuthEnabled ? (
+                <UiCard style={styles.authCard}>
+                  <SectionHeader
+                    eyebrow="Development only"
+                    title="Local demo access"
+                    description="Explore KULI without Supabase email verification. Demo profiles use local dev tokens."
+                  />
+                  <View style={styles.actionRow}>
+                    <SecondaryButton disabled={pending} label="Demo client" onPress={() => startDemoProfile('client')} style={styles.actionButton} />
+                    <PrimaryButton disabled={pending} label="Demo owner" onPress={() => startDemoProfile('truck_owner')} style={styles.actionButton} />
+                  </View>
+                </UiCard>
+              ) : null}
+            </>
+          )}
 
           <HealthCard />
           <RuntimeReadiness />
@@ -3695,14 +3801,19 @@ function RuntimeReadiness() {
   );
 
   return (
-    <ShellCard title="Runtime readiness">
+    <UiCard style={styles.authCard}>
+      <SectionHeader
+        eyebrow="Development readiness"
+        title="Runtime configuration"
+        description="These values help verify local mobile web and Expo builds before testing auth flows."
+      />
       {readinessItems.map((item) => (
         <View key={item.label} style={styles.readinessRow}>
           <Text style={styles.readinessText}>{item.label}</Text>
-          <StatusPill tone={item.ready ? 'ready' : 'blocked'}>{item.ready ? 'Set' : 'Missing'}</StatusPill>
+          <StatusBadge tone={item.ready ? 'success' : 'error'}>{item.ready ? 'Set' : 'Missing'}</StatusBadge>
         </View>
       ))}
-    </ShellCard>
+    </UiCard>
   );
 }
 
@@ -3851,6 +3962,110 @@ const styles = StyleSheet.create({
   content: {
     gap: spacing.lg,
     padding: spacing.xl
+  },
+  authContent: {
+    gap: spacing.lg,
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl
+  },
+  authHero: {
+    backgroundColor: colors.black,
+    borderRadius: radii.xl,
+    gap: spacing.md,
+    minHeight: 220,
+    justifyContent: 'flex-end',
+    padding: spacing.xl
+  },
+  authLogoMark: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    justifyContent: 'center',
+    minHeight: 58,
+    minWidth: 112,
+    paddingHorizontal: spacing.lg
+  },
+  authLogoText: {
+    color: colors.black,
+    fontSize: 24,
+    fontWeight: '900',
+    letterSpacing: 0
+  },
+  authHeroTitle: {
+    color: colors.card,
+    fontSize: 30,
+    fontWeight: '900',
+    lineHeight: 36
+  },
+  authHeroCopy: {
+    color: '#D1D5DB',
+    fontSize: 15,
+    lineHeight: 22
+  },
+  authTabs: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    padding: spacing.sm
+  },
+  authTab: {
+    alignItems: 'center',
+    borderRadius: radii.md,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 48
+  },
+  authTabActive: {
+    backgroundColor: colors.black
+  },
+  authTabText: {
+    color: colors.black,
+    fontSize: 15,
+    fontWeight: '800'
+  },
+  authTabTextActive: {
+    color: colors.card
+  },
+  authCard: {
+    gap: spacing.lg
+  },
+  authInlineLink: {
+    alignSelf: 'flex-end',
+    minHeight: 36,
+    justifyContent: 'center'
+  },
+  authInlineLinkText: {
+    color: colors.black,
+    fontSize: 14,
+    fontWeight: '800'
+  },
+  authMessage: {
+    borderRadius: radii.md,
+    borderWidth: 1,
+    padding: spacing.md
+  },
+  authMessageNotice: {
+    backgroundColor: colors.successTint,
+    borderColor: colors.success
+  },
+  authMessageError: {
+    backgroundColor: colors.errorTint,
+    borderColor: colors.error
+  },
+  authMessageText: {
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20
+  },
+  authMessageTextNotice: {
+    color: colors.success
+  },
+  authMessageTextError: {
+    color: colors.error
   },
   eyebrow: {
     color: colors.textSecondary,
