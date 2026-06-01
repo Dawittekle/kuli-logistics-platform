@@ -3335,7 +3335,7 @@ function OwnerStatusControls({
   const [error, setError] = useState('');
   const nextStatus = request.status === 'accepted' ? 'en_route_to_pickup' : ownerForwardStatuses[ownerForwardStatuses.indexOf(request.status) + 1];
   const canAdvance = Boolean(nextStatus) && !terminalRequestStatuses.includes(request.status);
-  const nextStatusActionLabel = request.status === 'accepted' ? 'Start moving' : nextStatus ? statusLabels[nextStatus] : 'No next step';
+  const nextStatusActionLabel = ownerNextStatusLabel(request.status);
 
   const updateStatus = async (status: KuliStatus, reason = `owner_${status}`) => {
     setPendingStatus(status);
@@ -3361,31 +3361,33 @@ function OwnerStatusControls({
   };
 
   return (
-    <View style={styles.subsection}>
-      <Text style={styles.fieldLabel}>Trip controls</Text>
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-      <View style={styles.actionRow}>
-        <Pressable
-          accessibilityRole="button"
-          disabled={!canAdvance || Boolean(pendingStatus)}
-          onPress={() => {
-            if (nextStatus) {
-              updateStatus(nextStatus);
-            }
-          }}
-          style={[styles.primaryButton, styles.actionButton, (!canAdvance || Boolean(pendingStatus)) && styles.buttonDisabled]}
-        >
-          <Text style={styles.primaryButtonText}>{pendingStatus ? 'Updating...' : nextStatusActionLabel}</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          disabled={terminalRequestStatuses.includes(request.status) || Boolean(pendingStatus)}
-          onPress={() => updateStatus('cancelled', 'owner_cancelled')}
-          style={[styles.secondaryButton, styles.actionButton, (terminalRequestStatuses.includes(request.status) || Boolean(pendingStatus)) && styles.buttonDisabled]}
-        >
-          <Text style={styles.secondaryButtonText}>Cancel trip</Text>
-        </Pressable>
+    <View style={styles.ownerControlPanel}>
+      <View style={styles.ownerControlHeader}>
+        <View style={styles.ownerControlIcon}>
+          <MaterialCommunityIcons name="steering" color={colors.card} size={24} />
+        </View>
+        <View style={styles.flex}>
+          <Text style={styles.ownerControlTitle}>Job controls</Text>
+          <Text style={styles.ownerControlCopy}>{ownerNextStepCopy(request.status)}</Text>
+        </View>
       </View>
+      {error ? <ErrorState title="Status update failed" message={error} /> : null}
+      <PrimaryButton
+        disabled={!canAdvance || Boolean(pendingStatus)}
+        label={pendingStatus ? 'Updating...' : nextStatusActionLabel}
+        loading={Boolean(pendingStatus)}
+        onPress={() => {
+          if (nextStatus) {
+            updateStatus(nextStatus);
+          }
+        }}
+      />
+      <SecondaryButton
+        disabled={terminalRequestStatuses.includes(request.status) || Boolean(pendingStatus)}
+        label="Cancel job"
+        onPress={() => updateStatus('cancelled', 'owner_cancelled')}
+        tone="danger"
+      />
     </View>
   );
 }
@@ -3415,7 +3417,7 @@ function ActiveTripWorkspace({
           statusLabel={request.status === 'completed' ? request.payment?.status ?? 'payment pending' : statusLabels[request.status]}
         />
       </View>
-      <ActiveTripSummary request={request} />
+      <ActiveTripSummary request={request} ownerView={ownerControls} />
       {paymentSettling ? (
         <View style={styles.requestPaymentNote}>
           <Text style={styles.noticeText}>Trip is complete, but this chat stays open until the cash/manual payment is confirmed or resolved.</Text>
@@ -3530,6 +3532,86 @@ const requestRouteLabel = (request: KuliRequest) =>
   `${request.pickupLocation?.addressText ?? 'Pickup'} to ${request.destinationLocation?.addressText ?? 'Destination'}`;
 
 const formatRequestSchedule = (request: KuliRequest) => request.requestedPickupTime || 'Pickup time pending';
+
+const shortAreaLabel = (address?: string) => {
+  if (!address) {
+    return 'Addis Ababa';
+  }
+
+  return address.split('/')[0]?.split(',')[0]?.trim() || address;
+};
+
+const offerExpiryLabel = (expiresAt?: string) => {
+  if (!expiresAt) {
+    return 'Expires soon';
+  }
+
+  const expiry = new Date(expiresAt);
+  const diffMs = expiry.getTime() - Date.now();
+
+  if (Number.isNaN(expiry.getTime())) {
+    return 'Expires soon';
+  }
+
+  if (diffMs <= 0) {
+    return 'Expiring now';
+  }
+
+  const minutes = Math.floor(diffMs / 60000);
+  const seconds = Math.max(0, Math.floor((diffMs % 60000) / 1000));
+
+  if (minutes <= 0) {
+    return `${seconds}s left`;
+  }
+
+  return `${minutes}m ${seconds}s left`;
+};
+
+const loadSummaryLabel = (request?: KuliRequest) => {
+  const load = request?.loadDetails;
+
+  if (!load) {
+    return 'General load';
+  }
+
+  return [
+    load.itemType?.replace(/_/g, ' ') || 'General load',
+    load.estimatedWeightKg ? `${load.estimatedWeightKg}kg` : '',
+    load.estimatedVolumeCubicMeters ? `${load.estimatedVolumeCubicMeters}m3` : ''
+  ].filter(Boolean).join(' / ');
+};
+
+const ownerNextStatusLabel = (status: KuliStatus) => {
+  const nextStatus = status === 'accepted' ? 'en_route_to_pickup' : ownerForwardStatuses[ownerForwardStatuses.indexOf(status) + 1];
+
+  const labels: Partial<Record<KuliStatus, string>> = {
+    en_route_to_pickup: 'Start heading to pickup',
+    arrived_at_pickup: 'I have arrived',
+    loading: 'Start loading',
+    in_transit: 'Start trip',
+    unloading: 'Start unloading',
+    completed: 'Complete job'
+  };
+
+  return nextStatus ? labels[nextStatus] ?? statusLabels[nextStatus] : 'No next step';
+};
+
+const ownerNextStepCopy = (status: KuliStatus) => {
+  const copy: Record<KuliStatus, string> = {
+    pending: 'This request is waiting for an owner to accept.',
+    accepted: 'Head to the pickup when you are ready.',
+    en_route_to_pickup: 'Mark arrival when you reach the pickup point.',
+    arrived_at_pickup: 'Coordinate loading details with the customer in chat.',
+    loading: 'Start the trip once the load is secured.',
+    in_transit: 'Keep status updates moving as the delivery progresses.',
+    unloading: 'Complete the job after unloading is finished.',
+    completed: 'Confirm cash payment from Earnings when the customer has paid.',
+    cancelled: 'This job is cancelled and archived.',
+    timed_out: 'This request expired before acceptance.'
+  };
+
+  return copy[status];
+};
 
 const activeTrackingStatuses: KuliStatus[] = ['accepted', 'en_route_to_pickup', 'arrived_at_pickup', 'loading', 'in_transit', 'unloading', 'completed'];
 
@@ -3659,11 +3741,13 @@ function TrackingStatusStrip({ status }: { status: KuliStatus }) {
   );
 }
 
-function ActiveTripSummary({ request }: { request: KuliRequest }) {
+function ActiveTripSummary({ request, ownerView = false }: { request: KuliRequest; ownerView?: boolean }) {
   return (
-    <View style={styles.activeTripSheet}>
+    <View style={[styles.activeTripSheet, ownerView && styles.ownerActiveJobSheet]}>
+      {ownerView ? <View style={styles.ownerJobHandle} /> : null}
       <View style={styles.cardHeader}>
         <View style={styles.flex}>
+          <Text style={styles.ownerActiveJobEyebrow}>{ownerView ? 'Active job' : 'Active move'}</Text>
           <Text style={styles.activeTripTitle}>{request.requestCode}</Text>
           <Text style={styles.dashboardRoute}>{requestRouteLabel(request)}</Text>
         </View>
@@ -3676,18 +3760,29 @@ function ActiveTripSummary({ request }: { request: KuliRequest }) {
           <Text style={styles.dashboardMetricLabel}>estimate</Text>
         </View>
         <View style={styles.dashboardMetric}>
-          <Text style={styles.dashboardMetricValue}>{request.selectedVehicleId ? request.selectedVehicleId.slice(-6).toUpperCase() : 'Pending'}</Text>
-          <Text style={styles.dashboardMetricLabel}>vehicle</Text>
+          <Text style={styles.dashboardMetricValue}>{ownerView ? 'Cash' : request.selectedVehicleId ? request.selectedVehicleId.slice(-6).toUpperCase() : 'Pending'}</Text>
+          <Text style={styles.dashboardMetricLabel}>{ownerView ? 'payment' : 'vehicle'}</Text>
         </View>
       </View>
+      {ownerView ? (
+        <View style={styles.ownerJobContactCard}>
+          <View style={styles.ownerJobContactIcon}>
+            <MaterialCommunityIcons name="account-outline" color={colors.black} size={24} />
+          </View>
+          <View style={styles.flex}>
+            <Text style={styles.ownerJobContactTitle}>KULI customer</Text>
+            <Text style={styles.ownerJobContactCopy}>Use trip chat for pickup, loading, and delivery details.</Text>
+          </View>
+        </View>
+      ) : null}
       <View style={styles.activeNextStep}>
-        <Text style={styles.fieldLabel}>Next expected step</Text>
-        <Text style={styles.muted}>{nextStepForRequest(request.status)}</Text>
+        <Text style={styles.fieldLabel}>{ownerView ? 'Next driver action' : 'Next expected step'}</Text>
+        <Text style={styles.muted}>{ownerView ? ownerNextStepCopy(request.status) : nextStepForRequest(request.status)}</Text>
       </View>
       {request.selectedVehicleLocationUpdatedAt ? (
         <Text style={styles.muted}>Last truck status location update: {new Date(request.selectedVehicleLocationUpdatedAt).toLocaleString()}</Text>
       ) : (
-        <Text style={styles.muted}>KULI shows confirmed trip status and static map previews. Live GPS movement is not shown.</Text>
+        <Text style={styles.muted}>KULI v1 uses confirmed status updates and static map previews. Live GPS movement is not shown.</Text>
       )}
     </View>
   );
@@ -4026,53 +4121,88 @@ function OwnerOfferCard({
   onToggleExpanded: (offer: TripOffer) => void;
 }) {
   const isPending = pendingOfferId === offer.id;
-  const expiresAt = offer.expiresAt ? new Date(offer.expiresAt).toLocaleTimeString() : 'soon';
   const request = offer.request;
   const loadDetails = request?.loadDetails;
   const quoteSnapshot = request?.quoteSnapshot;
+  const pickup = shortAreaLabel(request?.pickupLocation?.addressText);
+  const destination = shortAreaLabel(request?.destinationLocation?.addressText);
+  const estimate = quoteSnapshot ? `${quoteSnapshot.currency} ${Number(quoteSnapshot.totalEstimate ?? 0).toFixed(0)}` : 'Estimate pending';
 
   return (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <View style={styles.flex}>
-          <Text style={styles.cardTitle}>{request?.requestCode ?? `Offer ${offer.id.slice(-6).toUpperCase()}`}</Text>
-          <Text style={styles.muted}>{request ? `${request.pickupLocation?.addressText} to ${request.destinationLocation?.addressText}` : `Request ${offer.requestId}`}</Text>
-        </View>
-        <StatusPill tone={statusTone(offer.status)}>{offerStatusLabels[offer.status]}</StatusPill>
+    <View style={styles.ownerOfferCard}>
+      <View style={styles.ownerOfferTimerBar}>
+        <View style={styles.ownerOfferTimerFill} />
       </View>
-      <View style={styles.metricGrid}>
-        <View style={styles.metricBox}>
-          <Text style={styles.metricValue}>{Number(offer.distanceKmAtOffer ?? 0).toFixed(1)}km</Text>
-          <Text style={styles.metricLabel}>pickup distance</Text>
+      <View style={styles.ownerOfferHeader}>
+        <View style={styles.flex}>
+          <Text style={styles.ownerOfferEyebrow}>Estimated earnings</Text>
+          <Text style={styles.ownerOfferPrice}>{estimate}</Text>
         </View>
-        <View style={styles.metricBox}>
-          <Text style={styles.metricValue}>{quoteSnapshot ? `${quoteSnapshot.currency} ${Number(quoteSnapshot.totalEstimate ?? 0).toFixed(0)}` : Math.round(offer.etaMinutesAtOffer ?? 0)}</Text>
-          <Text style={styles.metricLabel}>{quoteSnapshot ? 'estimate' : 'route minutes'}</Text>
+        <View style={styles.ownerOfferHeaderBadges}>
+          <StatusBadge tone={badgeToneForStatus(offer.status)}>{offerStatusLabels[offer.status]}</StatusBadge>
+          <View style={styles.ownerOfferExpiry}>
+            <MaterialCommunityIcons name="timer-outline" color={colors.warning} size={18} />
+            <Text style={styles.ownerOfferExpiryText}>{offerExpiryLabel(offer.expiresAt)}</Text>
+          </View>
         </View>
-        <View style={styles.metricBox}>
-          <Text style={styles.metricValue}>{expiresAt}</Text>
-          <Text style={styles.metricLabel}>expires</Text>
+      </View>
+      <View style={styles.ownerOfferRouteBox}>
+        <View style={styles.ownerOfferRouteRail}>
+          <View style={styles.ownerOfferRouteDotStart} />
+          <View style={styles.ownerOfferRouteLine} />
+          <View style={styles.ownerOfferRouteDotEnd} />
+        </View>
+        <View style={styles.flex}>
+          <Text style={styles.ownerOfferRouteLabel}>Pickup</Text>
+          <Text style={styles.ownerOfferRouteValue}>{pickup}</Text>
+          <Text style={styles.ownerOfferRouteLabel}>Drop-off</Text>
+          <Text style={styles.ownerOfferRouteValue}>{destination}</Text>
+        </View>
+        <View style={styles.ownerOfferDistanceBox}>
+          <Text style={styles.ownerOfferDistanceValue}>{Number(offer.distanceKmAtOffer ?? 0).toFixed(1)}km</Text>
+          <Text style={styles.ownerOfferDistanceLabel}>to pickup</Text>
+        </View>
+      </View>
+      <View style={styles.ownerOfferInfoGrid}>
+        <View style={styles.ownerOfferInfoCard}>
+          <MaterialCommunityIcons name="truck-outline" color={colors.textSecondary} size={20} />
+          <View style={styles.flex}>
+            <Text style={styles.ownerOfferInfoLabel}>Truck type</Text>
+            <Text style={styles.ownerOfferInfoValue}>{request?.requestedVehicleClassId?.slice(-6).toUpperCase() || 'Matched'}</Text>
+          </View>
+        </View>
+        <View style={styles.ownerOfferInfoCard}>
+          <MaterialCommunityIcons name="package-variant-closed" color={colors.textSecondary} size={20} />
+          <View style={styles.flex}>
+            <Text style={styles.ownerOfferInfoLabel}>Load</Text>
+            <Text style={styles.ownerOfferInfoValue}>{loadSummaryLabel(request)}</Text>
+          </View>
+        </View>
+        <View style={styles.ownerOfferInfoCard}>
+          <MaterialCommunityIcons name="map-marker-distance" color={colors.textSecondary} size={20} />
+          <View style={styles.flex}>
+            <Text style={styles.ownerOfferInfoLabel}>Route</Text>
+            <Text style={styles.ownerOfferInfoValue}>{offer.etaMinutesAtOffer ? `${Math.round(offer.etaMinutesAtOffer)} min estimate` : 'Review route'}</Text>
+          </View>
+        </View>
+        <View style={styles.ownerOfferInfoCard}>
+          <MaterialCommunityIcons name="flash-outline" color={colors.textSecondary} size={20} />
+          <View style={styles.flex}>
+            <Text style={styles.ownerOfferInfoLabel}>Rule</Text>
+            <Text style={styles.ownerOfferInfoValue}>Fastest confirmed owner gets the job.</Text>
+          </View>
         </View>
       </View>
       {expanded && request ? (
-        <View style={styles.detailPanel}>
+        <View style={styles.ownerOfferDetailPanel}>
           <RouteMapPreview pickup={request.pickupLocation} destination={request.destinationLocation} statusLabel="Offer route" />
-          <View style={styles.requestRow}>
-            <View style={styles.flex}>
-              <Text style={styles.fieldLabel}>Pickup</Text>
-              <Text style={styles.muted}>{request.pickupLocation?.addressText}</Text>
+          <RoutePill pickup={request.pickupLocation?.addressText ?? 'Pickup'} destination={request.destinationLocation?.addressText ?? 'Drop-off'} />
+          <View style={styles.ownerOfferDetailGrid}>
+            <View style={styles.ownerOfferDetailItem}>
+              <Text style={styles.fieldLabel}>Load details</Text>
+              <Text style={styles.muted}>{loadSummaryLabel(request)}</Text>
             </View>
-            <View style={styles.flex}>
-              <Text style={styles.fieldLabel}>Destination</Text>
-              <Text style={styles.muted}>{request.destinationLocation?.addressText}</Text>
-            </View>
-          </View>
-          <View style={styles.requestRow}>
-            <View style={styles.flex}>
-              <Text style={styles.fieldLabel}>Load</Text>
-              <Text style={styles.muted}>{loadDetails?.itemType ?? 'General load'}{loadDetails?.estimatedWeightKg ? ` / ${loadDetails.estimatedWeightKg}kg` : ''}{loadDetails?.estimatedVolumeCubicMeters ? ` / ${loadDetails.estimatedVolumeCubicMeters}m3` : ''}</Text>
-            </View>
-            <View style={styles.flex}>
+            <View style={styles.ownerOfferDetailItem}>
               <Text style={styles.fieldLabel}>Handling</Text>
               <Text style={styles.muted}>{loadDetails?.loadingAssistanceRequested ? 'Loading help requested' : 'No loading help requested'}</Text>
             </View>
@@ -4080,19 +4210,13 @@ function OwnerOfferCard({
           {loadDetails?.specialHandlingInstructions ? (
             <Text style={styles.noticeText}>{loadDetails.specialHandlingInstructions}</Text>
           ) : null}
-          <Text style={styles.muted}>Accepting this request assigns the trip to your vehicle and makes competing offers expire.</Text>
+          <Text style={styles.muted}>Accepting assigns this job to your active vehicle. Other owners lose access after the first confirmed accept.</Text>
         </View>
       ) : null}
-      <View style={styles.actionRow}>
-        <Pressable accessibilityRole="button" disabled={isPending} onPress={() => onToggleExpanded(offer)} style={[styles.secondaryButton, styles.actionButton, isPending && styles.buttonDisabled]}>
-          <Text style={styles.secondaryButtonText}>{expanded ? 'Hide details' : 'View details'}</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" disabled={isPending} onPress={() => onDecline(offer)} style={[styles.secondaryButton, styles.actionButton, isPending && styles.buttonDisabled]}>
-          <Text style={styles.secondaryButtonText}>Decline</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" disabled={isPending} onPress={() => onAccept(offer)} style={[styles.primaryButton, styles.actionButton, isPending && styles.buttonDisabled]}>
-          <Text style={styles.primaryButtonText}>{isPending ? 'Working...' : 'Accept request'}</Text>
-        </Pressable>
+      <View style={styles.ownerOfferActions}>
+        <PrimaryButton label={isPending ? 'Working...' : 'Accept'} loading={isPending} disabled={isPending} onPress={() => onAccept(offer)} style={styles.ownerOfferPrimaryAction} />
+        <SecondaryButton label={expanded ? 'Hide' : 'Details'} disabled={isPending} onPress={() => onToggleExpanded(offer)} style={styles.ownerOfferSecondaryAction} />
+        <SecondaryButton label="Decline" disabled={isPending} onPress={() => onDecline(offer)} tone="danger" style={styles.ownerOfferSecondaryAction} />
       </View>
     </View>
   );
@@ -4118,8 +4242,16 @@ function OwnerOffersScreen({ profile }: { profile: UserProfile }) {
     refetchInterval: 15000
   });
 
+  const vehiclesQuery = useQuery({
+    queryKey: ['vehicles', 'mine'],
+    queryFn: async () => ((await kuliApi.request('/vehicles/mine')) as ApiEnvelope<Vehicle[]>).data
+  });
+
   const offers = offersQuery.data ?? [];
   const acceptedTrips = (ownerRequestsQuery.data ?? []).filter((request) => activeRequestStatuses.includes(request.status) || isPaymentSettlingRequest(request));
+  const vehicles = vehiclesQuery.data ?? [];
+  const onlineVehicle = vehicles.find((vehicle) => vehicle.availabilityStatus === 'online_available' && vehicle.verificationStatus === 'approved');
+  const approvedVehicleCount = vehicles.filter((vehicle) => vehicle.verificationStatus === 'approved').length;
   const acceptedRequest = acceptedResult?.request;
   const showAcceptedResult = Boolean(acceptedRequest && (activeRequestStatuses.includes(acceptedRequest.status) || isPaymentSettlingRequest(acceptedRequest)));
 
@@ -4175,73 +4307,122 @@ function OwnerOffersScreen({ profile }: { profile: UserProfile }) {
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>Offers</Text>
-        <Text style={styles.title}>New requests</Text>
-        <Text style={styles.copy}>Open offers are first-accept-wins. Accepted requests become active trips and make the vehicle busy.</Text>
+    <Screen contentStyle={styles.ownerOffersContent}>
+      <View style={styles.ownerOffersHero}>
+        <View style={styles.flex}>
+          <Text style={styles.ownerOffersEyebrow}>Driver inbox</Text>
+          <Text style={styles.ownerOffersTitle}>Offers</Text>
+          <Text style={styles.ownerOffersSubtitle}>Accept nearby requests before they expire.</Text>
+        </View>
+        <StatusBadge tone={onlineVehicle ? 'success' : approvedVehicleCount ? 'warning' : 'error'}>
+          {onlineVehicle ? 'Online' : approvedVehicleCount ? 'Offline' : 'Vehicle needed'}
+        </StatusBadge>
+      </View>
 
-        <ShellCard title="Offer inbox">
-          {offersQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(offersQuery.error)}</Text> : null}
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          {message ? <Text style={styles.noticeText}>{message}</Text> : null}
-          {offersQuery.isLoading ? <Text style={styles.muted}>Loading offers...</Text> : null}
-          {offers.length === 0 && !offersQuery.isLoading ? <Text style={styles.muted}>No open offers. Keep an approved vehicle online to receive requests.</Text> : null}
-          <View style={styles.roleGrid}>
-            {offers.map((offer) => (
-              <OwnerOfferCard
-                key={offer.id}
-                offer={offer}
-                pendingOfferId={pendingOfferId}
-                onAccept={(nextOffer) => runOfferAction(nextOffer, 'accept')}
-                onDecline={(nextOffer) => runOfferAction(nextOffer, 'decline')}
-                expanded={expandedOfferId === offer.id}
-                onToggleExpanded={toggleOfferDetails}
-              />
+      <View style={styles.ownerOfferStrategy}>
+        <MaterialCommunityIcons name="flash-outline" color={colors.card} size={24} />
+        <View style={styles.flex}>
+          <Text style={styles.ownerOfferStrategyTitle}>Fastest confirmed owner gets the job.</Text>
+          <Text style={styles.ownerOfferStrategyCopy}>Accept only when your active vehicle is ready to start the pickup.</Text>
+        </View>
+      </View>
+
+      <View style={styles.ownerOfferReadiness}>
+        <View style={styles.ownerOfferReadinessIcon}>
+          <MaterialCommunityIcons name={onlineVehicle ? 'truck-check-outline' : 'truck-alert-outline'} color={onlineVehicle ? colors.success : colors.warning} size={24} />
+        </View>
+        <View style={styles.flex}>
+          <Text style={styles.ownerOfferReadinessTitle}>{onlineVehicle ? `${onlineVehicle.licensePlate} is receiving offers` : approvedVehicleCount ? 'Go online from Home or Vehicles' : 'Complete vehicle verification'}</Text>
+          <Text style={styles.ownerOfferReadinessCopy}>{onlineVehicle ? `${onlineVehicle.vehicleClassSnapshot?.name || 'Approved vehicle'} / ${onlineVehicle.capacityKg ?? 0}kg` : 'Keep an approved truck online to receive nearby requests.'}</Text>
+        </View>
+      </View>
+
+      {offersQuery.isError ? <ErrorState title="Offers could not load" message={getErrorMessage(offersQuery.error)} action={<SecondaryButton label="Retry" onPress={() => offersQuery.refetch()} />} /> : null}
+      {ownerRequestsQuery.isError ? <ErrorState title="Active jobs could not load" message={getErrorMessage(ownerRequestsQuery.error)} /> : null}
+      {error ? <ErrorState title="Offer action failed" message={error} /> : null}
+      {message ? <Text style={styles.noticeText}>{message}</Text> : null}
+
+      <View style={styles.ownerSectionHeader}>
+        <View style={styles.flex}>
+          <Text style={styles.ownerSectionTitle}>Available requests</Text>
+          <Text style={styles.ownerSectionCopy}>{offers.length ? `${offers.length} open offer${offers.length === 1 ? '' : 's'} waiting.` : 'New nearby requests appear here.'}</Text>
+        </View>
+        <SecondaryButton label="Refresh" onPress={() => offersQuery.refetch()} style={styles.ownerSmallButton} />
+      </View>
+
+      {offersQuery.isLoading ? (
+        <View style={styles.ownerOfferList}>
+          {[0, 1].map((item) => (
+            <View key={item} style={styles.ownerOfferSkeleton}>
+              <View style={styles.notificationSkeletonLineWide} />
+              <View style={styles.notificationSkeletonLine} />
+              <View style={styles.notificationSkeletonLineShort} />
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {offers.length === 0 && !offersQuery.isLoading && !offersQuery.isError ? (
+        <View style={styles.ownerEmptyCard}>
+          <MaterialCommunityIcons name="radar" color={colors.black} size={46} />
+          <Text style={styles.ownerEmptyTitle}>No requests yet</Text>
+          <Text style={styles.ownerEmptyCopy}>Keep an approved vehicle online to receive nearby requests. KULI will notify you when a matching customer sends one.</Text>
+        </View>
+      ) : null}
+
+      <View style={styles.ownerOfferList}>
+        {offers.map((offer) => (
+          <OwnerOfferCard
+            key={offer.id}
+            offer={offer}
+            pendingOfferId={pendingOfferId}
+            onAccept={(nextOffer) => runOfferAction(nextOffer, 'accept')}
+            onDecline={(nextOffer) => runOfferAction(nextOffer, 'decline')}
+            expanded={expandedOfferId === offer.id}
+            onToggleExpanded={toggleOfferDetails}
+          />
+        ))}
+      </View>
+
+      {showAcceptedResult && acceptedRequest ? (
+        <View style={styles.ownerActiveJobCard}>
+          <View style={styles.ownerSectionHeader}>
+            <View style={styles.flex}>
+              <Text style={styles.ownerSectionTitle}>Accepted job</Text>
+              <Text style={styles.ownerSectionCopy}>Use the controls below to move the job forward.</Text>
+            </View>
+            <StatusBadge tone={badgeToneForStatus(acceptedRequest.status)}>{statusLabels[acceptedRequest.status]}</StatusBadge>
+          </View>
+          <ActiveTripWorkspace
+            request={acceptedRequest}
+            profile={profile}
+            ownerControls
+            onRequestUpdated={(request) => {
+              setAcceptedResult((current) => (current ? { ...current, request } : current));
+            }}
+          />
+        </View>
+      ) : null}
+
+      {acceptedTrips.length ? (
+        <View style={styles.ownerActiveJobsSection}>
+          <View style={styles.ownerSectionHeader}>
+            <View style={styles.flex}>
+              <Text style={styles.ownerSectionTitle}>Active jobs</Text>
+              <Text style={styles.ownerSectionCopy}>Accepted and cash-pending work stays here until closed.</Text>
+            </View>
+            <StatusBadge tone="success">{`${acceptedTrips.length}`}</StatusBadge>
+          </View>
+          <View style={styles.ownerActiveJobList}>
+            {acceptedTrips.map((request) => (
+              <View key={request.id} style={styles.ownerActiveJobCard}>
+                <ActiveTripWorkspace request={request} profile={profile} ownerControls />
+              </View>
             ))}
           </View>
-        </ShellCard>
-
-        {showAcceptedResult && acceptedRequest ? (
-          <ShellCard title="Accepted trip">
-            <View style={styles.cardHeader}>
-              <View style={styles.flex}>
-                <Text style={styles.cardTitle}>{acceptedRequest.requestCode}</Text>
-                <Text style={styles.muted}>{acceptedRequest.pickupLocation?.addressText} to {acceptedRequest.destinationLocation?.addressText}</Text>
-              </View>
-              <StatusPill tone={statusTone(acceptedRequest.status)}>{statusLabels[acceptedRequest.status]}</StatusPill>
-            </View>
-            <ActiveTripWorkspace
-              request={acceptedRequest}
-              profile={profile}
-              ownerControls
-              onRequestUpdated={(request) => {
-                setAcceptedResult((current) => (current ? { ...current, request } : current));
-              }}
-            />
-          </ShellCard>
-        ) : null}
-
-        {acceptedTrips.length ? (
-          <ShellCard title="Active trips">
-            <View style={styles.roleGrid}>
-              {acceptedTrips.map((request) => (
-                <View key={request.id} style={styles.card}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.flex}>
-                      <Text style={styles.cardTitle}>{request.requestCode}</Text>
-                      <Text style={styles.muted}>{request.pickupLocation?.addressText} to {request.destinationLocation?.addressText}</Text>
-                    </View>
-                    <StatusPill tone={statusTone(request.status)}>{statusLabels[request.status]}</StatusPill>
-                  </View>
-                  <ActiveTripWorkspace request={request} profile={profile} ownerControls />
-                </View>
-              ))}
-            </View>
-          </ShellCard>
-        ) : null}
-      </ScrollView>
-    </SafeAreaView>
+        </View>
+      ) : null}
+    </Screen>
   );
 }
 
@@ -5094,19 +5275,34 @@ function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
           {message ? <Text style={styles.noticeText}>{message}</Text> : null}
           <Field label="Override amount ETB" value={amountConfirmed} onChangeText={setAmountConfirmed} placeholder="Leave blank for estimate" keyboardType="numeric" />
           {completedRequests.length === 0 ? <Text style={styles.muted}>No completed trips are waiting for cash confirmation.</Text> : null}
-          <View style={styles.roleGrid}>
+          <View style={styles.ownerPaymentList}>
             {completedRequests.map((request) => (
-              <View key={request.id} style={styles.card}>
-                <View style={styles.cardHeader}>
+              <View key={request.id} style={styles.ownerPaymentCard}>
+                <View style={styles.ownerPaymentHeader}>
                   <View style={styles.flex}>
-                    <Text style={styles.cardTitle}>{request.requestCode}</Text>
-                    <Text style={styles.muted}>{request.quoteSnapshot?.currency ?? 'ETB'} {Number(request.quoteSnapshot?.totalEstimate ?? 0).toFixed(2)}</Text>
+                    <Text style={styles.ownerPaymentEyebrow}>Cash payment</Text>
+                    <Text style={styles.ownerPaymentAmount}>{request.quoteSnapshot?.currency ?? 'ETB'} {Number(request.quoteSnapshot?.totalEstimate ?? 0).toFixed(2)}</Text>
+                    <Text style={styles.ownerPaymentRoute}>{request.pickupLocation?.addressText} to {request.destinationLocation?.addressText}</Text>
                   </View>
-                  <StatusPill tone={request.payment?.status === 'disputed' ? 'warn' : 'ready'}>{request.payment ? paymentStatusLabels[request.payment.status] : 'Payment pending'}</StatusPill>
+                  <StatusBadge tone={request.payment?.status === 'disputed' ? 'warning' : request.payment?.status === 'confirmed_by_owner' ? 'success' : 'warning'}>
+                    {request.payment ? paymentStatusLabels[request.payment.status] : 'Payment pending'}
+                  </StatusBadge>
                 </View>
-                <Pressable accessibilityRole="button" disabled={pendingRequestId === request.id} onPress={() => confirmPayment(request)} style={[styles.primaryButton, pendingRequestId === request.id && styles.buttonDisabled]}>
-                  <Text style={styles.primaryButtonText}>{pendingRequestId === request.id ? 'Confirming...' : 'Confirm cash payment'}</Text>
-                </Pressable>
+                <View style={styles.ownerPaymentMethodRow}>
+                  <View style={styles.ownerPaymentMethodIcon}>
+                    <MaterialCommunityIcons name="cash" color={colors.black} size={24} />
+                  </View>
+                  <View style={styles.flex}>
+                    <Text style={styles.ownerPaymentMethodTitle}>Cash after delivery</Text>
+                    <Text style={styles.ownerPaymentMethodCopy}>Confirm only after you have received the cash amount.</Text>
+                  </View>
+                </View>
+                <PrimaryButton
+                  disabled={pendingRequestId === request.id}
+                  label={pendingRequestId === request.id ? 'Confirming...' : 'Confirm cash received'}
+                  loading={pendingRequestId === request.id}
+                  onPress={() => confirmPayment(request)}
+                />
               </View>
             ))}
           </View>
@@ -6979,6 +7175,415 @@ const styles = StyleSheet.create({
   ownerDocumentRejectedSummary: {
     backgroundColor: colors.errorTint,
     borderColor: colors.error
+  },
+  ownerOffersContent: {
+    gap: spacing.lg,
+    paddingBottom: spacing.xxl
+  },
+  ownerOffersHero: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.black,
+    borderRadius: radii.xl,
+    flexDirection: 'row',
+    gap: spacing.lg,
+    justifyContent: 'space-between',
+    padding: spacing.xl
+  },
+  ownerOffersEyebrow: {
+    color: '#D1D5DB',
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  ownerOffersTitle: {
+    color: colors.card,
+    fontSize: 36,
+    fontWeight: '900',
+    lineHeight: 40
+  },
+  ownerOffersSubtitle: {
+    color: '#E5E7EB',
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: spacing.sm
+  },
+  ownerOfferStrategy: {
+    alignItems: 'center',
+    backgroundColor: colors.black,
+    borderRadius: radii.lg,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  ownerOfferStrategyTitle: {
+    color: colors.card,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  ownerOfferStrategyCopy: {
+    color: '#D1D5DB',
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 2
+  },
+  ownerOfferReadiness: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  ownerOfferReadinessIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    height: 48,
+    justifyContent: 'center',
+    width: 48
+  },
+  ownerOfferReadinessTitle: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '900'
+  },
+  ownerOfferReadinessCopy: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 2
+  },
+  ownerOfferList: {
+    gap: spacing.md
+  },
+  ownerOfferSkeleton: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.sm,
+    minHeight: 180,
+    padding: spacing.lg
+  },
+  ownerOfferCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    overflow: 'hidden',
+    padding: spacing.lg,
+    paddingTop: spacing.xl
+  },
+  ownerOfferTimerBar: {
+    backgroundColor: colors.subtle,
+    height: 6,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0
+  },
+  ownerOfferTimerFill: {
+    backgroundColor: colors.warning,
+    height: '100%',
+    width: '72%'
+  },
+  ownerOfferHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  ownerOfferHeaderBadges: {
+    alignItems: 'flex-end',
+    gap: spacing.xs
+  },
+  ownerOfferEyebrow: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  ownerOfferPrice: {
+    color: colors.textPrimary,
+    fontSize: 32,
+    fontWeight: '900',
+    lineHeight: 36
+  },
+  ownerOfferExpiry: {
+    alignItems: 'center',
+    backgroundColor: colors.warningTint,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    minHeight: 38,
+    paddingHorizontal: spacing.md
+  },
+  ownerOfferExpiryText: {
+    color: colors.warning,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  ownerOfferRouteBox: {
+    alignItems: 'stretch',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.lg,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ownerOfferRouteRail: {
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+    width: 18
+  },
+  ownerOfferRouteDotStart: {
+    backgroundColor: colors.black,
+    borderRadius: 6,
+    height: 12,
+    width: 12
+  },
+  ownerOfferRouteLine: {
+    backgroundColor: colors.border,
+    flex: 1,
+    marginVertical: spacing.xs,
+    width: 2
+  },
+  ownerOfferRouteDotEnd: {
+    backgroundColor: colors.success,
+    borderRadius: 6,
+    height: 12,
+    width: 12
+  },
+  ownerOfferRouteLabel: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '900'
+  },
+  ownerOfferRouteValue: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '900',
+    marginBottom: spacing.sm
+  },
+  ownerOfferDistanceBox: {
+    alignItems: 'flex-end',
+    justifyContent: 'center'
+  },
+  ownerOfferDistanceValue: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '900'
+  },
+  ownerOfferDistanceLabel: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '900'
+  },
+  ownerOfferInfoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm
+  },
+  ownerOfferInfoCard: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexBasis: '48%',
+    flexDirection: 'row',
+    flexGrow: 1,
+    gap: spacing.sm,
+    minHeight: 66,
+    padding: spacing.sm
+  },
+  ownerOfferInfoLabel: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    fontWeight: '900'
+  },
+  ownerOfferInfoValue: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '900',
+    lineHeight: 16,
+    marginTop: 2
+  },
+  ownerOfferDetailPanel: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.lg,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ownerOfferDetailGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  ownerOfferDetailItem: {
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    flex: 1,
+    gap: spacing.xs,
+    padding: spacing.md
+  },
+  ownerOfferActions: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  ownerOfferPrimaryAction: {
+    flex: 1.4
+  },
+  ownerOfferSecondaryAction: {
+    flex: 1
+  },
+  ownerActiveJobsSection: {
+    gap: spacing.md
+  },
+  ownerActiveJobList: {
+    gap: spacing.lg
+  },
+  ownerActiveJobCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ownerActiveJobSheet: {
+    marginTop: -spacing.lg
+  },
+  ownerJobHandle: {
+    alignSelf: 'center',
+    backgroundColor: colors.border,
+    borderRadius: 2,
+    height: 4,
+    width: 44
+  },
+  ownerActiveJobEyebrow: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '900'
+  },
+  ownerJobContactCard: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ownerJobContactIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    height: 46,
+    justifyContent: 'center',
+    width: 46
+  },
+  ownerJobContactTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  ownerJobContactCopy: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2
+  },
+  ownerControlPanel: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  ownerControlHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md
+  },
+  ownerControlIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.black,
+    borderRadius: radii.md,
+    height: 48,
+    justifyContent: 'center',
+    width: 48
+  },
+  ownerControlTitle: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '900'
+  },
+  ownerControlCopy: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 2
+  },
+  ownerPaymentList: {
+    gap: spacing.md
+  },
+  ownerPaymentCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  ownerPaymentHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  ownerPaymentEyebrow: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  ownerPaymentAmount: {
+    color: colors.textPrimary,
+    fontSize: 28,
+    fontWeight: '900',
+    lineHeight: 34
+  },
+  ownerPaymentRoute: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19
+  },
+  ownerPaymentMethodRow: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ownerPaymentMethodIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    height: 46,
+    justifyContent: 'center',
+    width: 46
+  },
+  ownerPaymentMethodTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  ownerPaymentMethodCopy: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2
   },
   reasonOption: {
     backgroundColor: colors.card,
