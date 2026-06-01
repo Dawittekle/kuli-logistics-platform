@@ -302,12 +302,42 @@ const roleLabels: Record<Role, string> = {
 
 const isBlockedStatus = (status: AccountStatus) => ['suspended', 'banned', 'deleted'].includes(status);
 
-const documentTypes: Array<{ type: VehicleDocumentType; label: string; detail: string }> = [
-  { type: 'identity', label: 'Identity', detail: 'Owner identification document.' },
-  { type: 'driver_license', label: 'Driver license', detail: 'Valid license for the driver/owner.' },
-  { type: 'vehicle_registration', label: 'Registration certificate', detail: 'Vehicle registration document.' },
-  { type: 'ownership_proof', label: 'Ownership proof', detail: 'Proof that the owner can operate this truck.' },
-  { type: 'insurance', label: 'Insurance', detail: 'Insurance where available.' }
+const documentTypes: Array<{ type: VehicleDocumentType; label: string; detail: string; required: boolean; tips: string[] }> = [
+  {
+    type: 'identity',
+    label: 'Identity',
+    detail: 'Owner identification document.',
+    required: true,
+    tips: ['Full name and ID number visible', 'No cropped edges']
+  },
+  {
+    type: 'driver_license',
+    label: 'Driver license',
+    detail: 'Valid license for the driver/owner.',
+    required: true,
+    tips: ['License number and expiry visible', 'Upload the current valid card']
+  },
+  {
+    type: 'vehicle_registration',
+    label: 'Registration certificate',
+    detail: 'Vehicle registration document.',
+    required: true,
+    tips: ['Plate number must match this vehicle', 'All registration fields readable']
+  },
+  {
+    type: 'ownership_proof',
+    label: 'Ownership proof',
+    detail: 'Proof that the owner can operate this truck.',
+    required: true,
+    tips: ['Owner/operator name visible', 'Attach authorization if not the registered owner']
+  },
+  {
+    type: 'insurance',
+    label: 'Insurance',
+    detail: 'Insurance where available.',
+    required: false,
+    tips: ['Policy must be current', 'Plate or vehicle details should match']
+  }
 ];
 
 const statusTone = (status: string): 'ready' | 'warn' | 'blocked' => {
@@ -456,11 +486,19 @@ function RoleOption({
 function FilePickerField({
   label,
   value,
-  onChange
+  onChange,
+  emptyText = 'Attach a clear photo when it helps support review the issue.',
+  emptyTone = 'warn',
+  uploadLabel = 'Upload photo',
+  takeLabel = 'Take picture'
 }: {
   label: string;
   value: PickedFile | null;
   onChange: (file: PickedFile | null) => void;
+  emptyText?: string;
+  emptyTone?: 'ready' | 'warn' | 'blocked';
+  uploadLabel?: string;
+  takeLabel?: string;
 }) {
   const [error, setError] = useState('');
 
@@ -504,7 +542,7 @@ function FilePickerField({
     <View style={styles.subsection}>
       <View style={styles.cardHeader}>
         <Text style={styles.fieldLabel}>{label}</Text>
-        {value ? <StatusPill tone="ready">{value.source === 'camera' ? 'Camera' : 'Upload'}</StatusPill> : <StatusPill tone="warn">Optional</StatusPill>}
+        {value ? <StatusPill tone="ready">{value.source === 'camera' ? 'Camera' : 'Upload'}</StatusPill> : <StatusPill tone={emptyTone}>Pending</StatusPill>}
       </View>
       {value ? (
         <View style={styles.fileSummary}>
@@ -512,15 +550,15 @@ function FilePickerField({
           <Text style={styles.muted}>{value.mimeType} / {Math.max(1, Math.round(value.sizeBytes / 1024))} KB</Text>
         </View>
       ) : (
-        <Text style={styles.muted}>Attach a clear photo when it helps support review the issue.</Text>
+        <Text style={styles.muted}>{emptyText}</Text>
       )}
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
       <View style={styles.actionRow}>
         <Pressable accessibilityRole="button" onPress={() => pickFile('library')} style={[styles.secondaryButton, styles.actionButton]}>
-          <Text style={styles.secondaryButtonText}>Upload photo</Text>
+          <Text style={styles.secondaryButtonText}>{uploadLabel}</Text>
         </Pressable>
         <Pressable accessibilityRole="button" onPress={() => pickFile('camera')} style={[styles.secondaryButton, styles.actionButton]}>
-          <Text style={styles.secondaryButtonText}>Take picture</Text>
+          <Text style={styles.secondaryButtonText}>{takeLabel}</Text>
         </Pressable>
         {value ? (
           <Pressable accessibilityRole="button" onPress={() => onChange(null)} style={[styles.secondaryButton, styles.actionButton]}>
@@ -1075,103 +1113,231 @@ function VehicleCard({
   );
 }
 
+const emptyDocumentDrafts = () =>
+  Object.fromEntries(documentTypes.map((documentType) => [documentType.type, null])) as Record<VehicleDocumentType, PickedFile | null>;
+
 function DocumentUploadField({
-  vehicleId,
+  vehicle,
   onUploaded
 }: {
-  vehicleId: string;
+  vehicle: Vehicle;
   onUploaded: () => void;
 }) {
-  const [type, setType] = useState<VehicleDocumentType>('identity');
-  const [pickedFile, setPickedFile] = useState<PickedFile | null>(null);
-  const [fileName, setFileName] = useState('identity.pdf');
-  const [mimeType, setMimeType] = useState('application/pdf');
-  const [sizeBytes, setSizeBytes] = useState('320000');
+  const [drafts, setDrafts] = useState<Record<VehicleDocumentType, PickedFile | null>>(emptyDocumentDrafts);
+  const [pendingType, setPendingType] = useState<VehicleDocumentType | 'all' | ''>('');
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const documents = vehicle.documents ?? [];
+  const latestDocumentByType = useMemo(
+    () =>
+      documentTypes.reduce(
+        (accumulator, documentType) => ({
+          ...accumulator,
+          [documentType.type]: documents.find((document) => document.type === documentType.type)
+        }),
+        {} as Partial<Record<VehicleDocumentType, VehicleDocument>>
+      ),
+    [documents]
+  );
+  const requiredTypes = documentTypes.filter((documentType) => documentType.required).map((documentType) => documentType.type);
+  const completedRequiredCount = requiredTypes.filter((documentType) => latestDocumentByType[documentType] || drafts[documentType]).length;
+  const readyDraftCount = documentTypes.filter((documentType) => drafts[documentType.type]).length;
 
-  const submit = async () => {
-    const selectedFileName = pickedFile?.name ?? fileName.trim();
-    const selectedMimeType = pickedFile?.mimeType ?? mimeType.trim();
-    const parsedSize = pickedFile?.sizeBytes ?? Number(sizeBytes);
+  const setDraft = (documentType: VehicleDocumentType, file: PickedFile | null) => {
+    setDrafts((current) => ({
+      ...current,
+      [documentType]: file
+    }));
+    setError('');
+    setMessage('');
+  };
 
-    if (!selectedFileName || !selectedMimeType || !Number.isFinite(parsedSize) || parsedSize <= 0) {
-      setError('Choose a document photo/file or enter valid file metadata.');
-      return;
+  const uploadDocument = async (documentType: VehicleDocumentType) => {
+    const file = drafts[documentType];
+
+    if (!file) {
+      throw new Error(`Choose a clear ${documentTypes.find((entry) => entry.type === documentType)?.label ?? 'document'} photo first.`);
     }
 
+    const intent = (await kuliApi.request('/files/upload-intent', {
+      method: 'POST',
+      body: {
+        vehicleId: vehicle.id,
+        type: documentType,
+        originalFileName: file.name,
+        mimeType: file.mimeType,
+        sizeBytes: file.sizeBytes
+      }
+    })) as ApiEnvelope<{ file: { id: string }; upload: { url: string; method?: string } }>;
+
+    if (intent.data.upload.url.startsWith('http')) {
+      const fileResponse = await fetch(file.uri);
+      const fileBlob = await fileResponse.blob();
+      const uploadResponse = await fetch(intent.data.upload.url, {
+        method: intent.data.upload.method ?? 'PUT',
+        headers: {
+          'content-type': file.mimeType
+        },
+        body: fileBlob
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Storage upload failed for ${file.name}.`);
+      }
+    }
+
+    await kuliApi.request(`/files/${intent.data.file.id}/complete`, {
+      method: 'POST',
+      body: {
+        uploadedSizeBytes: file.sizeBytes
+      }
+    });
+
+    await kuliApi.request(`/vehicles/${vehicle.id}/documents`, {
+      method: 'POST',
+      body: {
+        type: documentType,
+        fileId: intent.data.file.id
+      }
+    });
+
+    setDraft(documentType, null);
+  };
+
+  const submitOne = async (documentType: VehicleDocumentType) => {
     setPending(true);
+    setPendingType(documentType);
     setError('');
     setMessage('');
 
     try {
-      const intent = (await kuliApi.request('/files/upload-intent', {
-        method: 'POST',
-        body: {
-          vehicleId,
-          type,
-          originalFileName: selectedFileName,
-          mimeType: selectedMimeType,
-          sizeBytes: parsedSize
-        }
-      })) as ApiEnvelope<{ file: { id: string }; upload: { url: string } }>;
-
-      await kuliApi.request(`/files/${intent.data.file.id}/complete`, {
-        method: 'POST',
-        body: {
-          uploadedSizeBytes: parsedSize
-        }
-      });
-
-      await kuliApi.request(`/vehicles/${vehicleId}/documents`, {
-        method: 'POST',
-        body: {
-          type,
-          fileId: intent.data.file.id
-        }
-      });
-
-      setMessage(pickedFile ? 'Document selected and attached for review.' : 'Document metadata attached and marked uploaded.');
-      setPickedFile(null);
+      await uploadDocument(documentType);
+      const label = documentTypes.find((entry) => entry.type === documentType)?.label ?? 'Document';
+      setMessage(`${label} attached for admin review.`);
       onUploaded();
     } catch (uploadError) {
       setError(getErrorMessage(uploadError));
     } finally {
       setPending(false);
+      setPendingType('');
+    }
+  };
+
+  const submitReadyDocuments = async () => {
+    const missingRequiredTypes = requiredTypes.filter((documentType) => !latestDocumentByType[documentType] && !drafts[documentType]);
+    const readyTypes = documentTypes.map((documentType) => documentType.type).filter((documentType) => drafts[documentType]);
+
+    if (missingRequiredTypes.length > 0) {
+      setError(`Add ${missingRequiredTypes.map((documentType) => documentTypes.find((entry) => entry.type === documentType)?.label).join(', ')} before submitting for review.`);
+      return;
+    }
+
+    if (readyTypes.length === 0) {
+      setMessage('All required documents already have an uploaded record.');
+      return;
+    }
+
+    setPending(true);
+    setPendingType('all');
+    setError('');
+    setMessage('');
+
+    try {
+      for (const documentType of readyTypes) {
+        await uploadDocument(documentType);
+      }
+
+      setMessage(`${readyTypes.length} document${readyTypes.length === 1 ? '' : 's'} attached for admin review.`);
+      onUploaded();
+    } catch (uploadError) {
+      setError(getErrorMessage(uploadError));
+    } finally {
+      setPending(false);
+      setPendingType('');
     }
   };
 
   return (
     <ShellCard title="Document upload">
-      <Text style={styles.muted}>Choose an existing image/file or take a new picture. KULI stores protected file metadata for admin review in local development.</Text>
-      <View style={styles.roleGrid}>
-        {documentTypes.map((doc) => (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ selected: type === doc.type }}
-            key={doc.type}
-            onPress={() => setType(doc.type)}
-            style={[styles.documentOption, type === doc.type && styles.documentOptionSelected]}
-          >
-            <Text style={[styles.fieldLabel, type === doc.type && styles.documentOptionSelectedText]}>{doc.label}</Text>
-            <Text style={[styles.muted, type === doc.type && styles.documentOptionSelectedText]}>{doc.detail}</Text>
-          </Pressable>
-        ))}
-      </View>
-      <FilePickerField label="Document image" value={pickedFile} onChange={setPickedFile} />
-      {!pickedFile ? (
-        <View style={styles.detailPanel}>
-          <Text style={styles.muted}>Manual metadata is still available for PDF or local-dev testing.</Text>
-          <Field label="File name" value={fileName} onChangeText={setFileName} placeholder="insurance.pdf" />
-          <Field label="MIME type" value={mimeType} onChangeText={setMimeType} placeholder="application/pdf" />
-          <Field label="Size bytes" value={sizeBytes} onChangeText={setSizeBytes} placeholder="320000" keyboardType="phone-pad" />
+      <View style={styles.documentUploadHeader}>
+        <View style={styles.flex}>
+          <Text style={styles.muted}>Attach every required vehicle document with a clear image from your library or camera. KULI uses the selected file's real name, MIME type, and size for review metadata.</Text>
+          <Text style={styles.noticeText}>{completedRequiredCount}/{requiredTypes.length} required documents ready</Text>
         </View>
-      ) : null}
+        <StatusPill tone={completedRequiredCount === requiredTypes.length ? 'ready' : 'warn'}>
+          {completedRequiredCount === requiredTypes.length ? 'Ready' : 'Missing'}
+        </StatusPill>
+      </View>
+      <View style={styles.documentProgressTrack}>
+        <View style={[styles.documentProgressFill, { width: `${Math.round((completedRequiredCount / requiredTypes.length) * 100)}%` }]} />
+      </View>
+      <View style={styles.roleGrid}>
+        {documentTypes.map((doc) => {
+          const draft = drafts[doc.type];
+          const existingDocument = latestDocumentByType[doc.type];
+          const uploaded = Boolean(existingDocument);
+          const ready = Boolean(draft);
+          const pendingThis = pending && (pendingType === doc.type || pendingType === 'all');
+
+          return (
+            <View key={doc.type} style={[styles.documentUploadCard, uploaded && styles.documentUploadCardUploaded, ready && styles.documentUploadCardReady]}>
+              <View style={styles.cardHeader}>
+                <View style={styles.flex}>
+                  <Text style={styles.cardTitle}>{doc.label}</Text>
+                  <Text style={styles.muted}>{doc.detail}</Text>
+                </View>
+                <StatusPill tone={uploaded || ready ? 'ready' : doc.required ? 'blocked' : 'warn'}>
+                  {uploaded ? 'Uploaded' : ready ? 'Ready' : doc.required ? 'Required' : 'Optional'}
+                </StatusPill>
+              </View>
+              <View style={styles.documentGuidelineGrid}>
+                {doc.tips.map((tip) => (
+                  <Text key={tip} style={styles.documentGuideline}>- {tip}</Text>
+                ))}
+              </View>
+              {existingDocument ? (
+                <View style={styles.fileSummary}>
+                  <Text style={styles.fieldLabel}>Latest upload</Text>
+                  <Text style={styles.muted}>{existingDocument.status} / file {existingDocument.fileId.slice(-8)}</Text>
+                </View>
+              ) : null}
+              {draft ? (
+                <View style={styles.fileSummary}>
+                  <Text style={styles.fieldLabel}>{draft.name}</Text>
+                  <Text style={styles.muted}>{draft.mimeType} / {Math.max(1, Math.round(draft.sizeBytes / 1024))} KB / {draft.source === 'camera' ? 'Camera' : 'Library'}</Text>
+                </View>
+              ) : null}
+              <FilePickerField
+                label={`${doc.label} file`}
+                value={draft}
+                onChange={(file) => setDraft(doc.type, file)}
+                emptyText={doc.required ? 'Required for admin verification. Use a clear, original document image.' : 'Optional, but useful where an insurance policy is available.'}
+                emptyTone={doc.required ? 'blocked' : 'warn'}
+                uploadLabel="Upload"
+                takeLabel="Camera"
+              />
+              <Pressable
+                accessibilityRole="button"
+                disabled={!draft || pendingThis}
+                onPress={() => submitOne(doc.type)}
+                style={[styles.primaryButton, (!draft || pendingThis) && styles.buttonDisabled]}
+              >
+                <Text style={styles.primaryButtonText}>{pendingThis ? 'Attaching...' : uploaded ? 'Replace document' : 'Attach document'}</Text>
+              </Pressable>
+            </View>
+          );
+        })}
+      </View>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
       {message ? <Text style={styles.noticeText}>{message}</Text> : null}
-      <Pressable accessibilityRole="button" disabled={pending} onPress={submit} style={[styles.primaryButton, pending && styles.buttonDisabled]}>
-        <Text style={styles.primaryButtonText}>{pending ? 'Attaching...' : 'Attach document'}</Text>
+      <Pressable
+        accessibilityRole="button"
+        disabled={pending || readyDraftCount === 0}
+        onPress={submitReadyDocuments}
+        style={[styles.primaryButton, (pending || readyDraftCount === 0) && styles.buttonDisabled]}
+      >
+        <Text style={styles.primaryButtonText}>{pendingType === 'all' ? 'Submitting...' : `Submit ready documents (${readyDraftCount})`}</Text>
       </Pressable>
     </ShellCard>
   );
@@ -1332,7 +1498,7 @@ function OwnerVehiclesScreen() {
 
         {activeVehicle ? (
           <DocumentUploadField
-            vehicleId={activeVehicle.id}
+            vehicle={activeVehicle}
             onUploaded={() => {
               queryClient.invalidateQueries({ queryKey: ['vehicles', 'mine'] });
             }}
@@ -3769,6 +3935,44 @@ const styles = StyleSheet.create({
   },
   documentOptionSelectedText: {
     color: '#fffaf0'
+  },
+  documentUploadHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  documentProgressTrack: {
+    backgroundColor: '#f1eadf',
+    borderRadius: radii.sm,
+    height: 8,
+    overflow: 'hidden'
+  },
+  documentProgressFill: {
+    backgroundColor: colors.primary,
+    height: '100%'
+  },
+  documentUploadCard: {
+    backgroundColor: '#fffdf7',
+    borderColor: colors.line,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.sm
+  },
+  documentUploadCardUploaded: {
+    borderColor: colors.primary,
+    backgroundColor: '#eef5ef'
+  },
+  documentUploadCardReady: {
+    borderColor: colors.accent
+  },
+  documentGuidelineGrid: {
+    gap: 2
+  },
+  documentGuideline: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 17
   },
   reasonOption: {
     backgroundColor: '#fffdf7',

@@ -304,6 +304,7 @@ Notes:
 - Follow-up client correction pass on 2026-05-24 added a status-aware client cancellation confirmation with reason selection, simplified the post-trip review modal into Review/Issue/Payment modes with star ratings, and added Expo image picker support for upload-or-camera evidence/document capture.
 - Follow-up marketplace/trip pass on 2026-05-24 made first-accept-wins clearer in the client and owner UI, added notification detail actions, kept completed-trip chat visible while cash/manual payment is pending or disputed, closed chat after confirmed/resolved payment, added 15-20 second active-trip/inbox/notification polling, and replaced the schematic route preview with a static-map surface that uses `MOBILE_APP_GOOGLE_MAPS_API_KEY` when configured and an OpenStreetMap tile fallback for local development.
 - Owner trip correction pass on 2026-05-24 updates owner trip state immediately from status mutation responses, collapses request messages after cancellation/timeout, adds zoom/full-screen controls to the map preview, and improves candidate cards with compact star ratings for easier truck comparison.
+- Vehicle document upload pass on 2026-06-01 turns owner onboarding into a per-document checklist for identity, driver license, registration certificate, ownership proof, and optional insurance. Each slot can upload from library or camera, uses the picked file's real metadata, supports production signed-URL uploads when object storage returns HTTP URLs, and keeps the local-dev metadata completion flow.
 
 ## Commit Discipline
 
