@@ -31,6 +31,7 @@ import { EmptyState } from './components/ui/EmptyState';
 import { ErrorState } from './components/ui/ErrorState';
 import { LoadingState } from './components/ui/LoadingState';
 import { PrimaryButton } from './components/ui/PrimaryButton';
+import { Screen } from './components/ui/Screen';
 import { SecondaryButton } from './components/ui/SecondaryButton';
 import { SectionHeader } from './components/ui/SectionHeader';
 import { StatusBadge } from './components/ui/StatusBadge';
@@ -2135,6 +2136,102 @@ function RouteMapPreview({
   );
 }
 
+function RequestTruckTypeCards({
+  vehicleClasses,
+  selectedVehicleClassId,
+  onSelect
+}: {
+  vehicleClasses: VehicleClass[];
+  selectedVehicleClassId: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <View style={styles.requestTruckGrid}>
+      {vehicleClasses.map((vehicleClass) => {
+        const selected = vehicleClass.id === selectedVehicleClassId;
+        const capacity = vehicleClass.capacityKg ? `${vehicleClass.capacityKg}kg` : 'Class';
+        const volume = vehicleClass.capacityCubicMeters ? `${vehicleClass.capacityCubicMeters}m3` : 'Flexible volume';
+
+        return (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            key={vehicleClass.id}
+            onPress={() => onSelect(vehicleClass.id)}
+            style={[styles.requestTruckCard, selected && styles.requestTruckCardSelected]}
+          >
+            <View style={styles.cardHeader}>
+              <View style={styles.flex}>
+                <Text style={[styles.requestTruckTitle, selected && styles.requestTextOnDark]}>{vehicleClass.name}</Text>
+                <Text style={[styles.requestTruckDetail, selected && styles.requestMutedOnDark]}>{vehicleClass.description || 'Reliable truck class for your move.'}</Text>
+              </View>
+              <StatusBadge tone={selected ? 'neutral' : 'dark'} style={selected && styles.requestBadgeOnDark}>
+                {selected ? 'Selected' : capacity}
+              </StatusBadge>
+            </View>
+            <View style={styles.requestTruckMetaRow}>
+              <View style={[styles.requestTruckMeta, selected && styles.requestTruckMetaSelected]}>
+                <Text style={[styles.requestTruckMetaValue, selected && styles.requestTextOnDark]}>{capacity}</Text>
+                <Text style={[styles.requestTruckMetaLabel, selected && styles.requestMutedOnDark]}>capacity</Text>
+              </View>
+              <View style={[styles.requestTruckMeta, selected && styles.requestTruckMetaSelected]}>
+                <Text style={[styles.requestTruckMetaValue, selected && styles.requestTextOnDark]}>{volume}</Text>
+                <Text style={[styles.requestTruckMetaLabel, selected && styles.requestMutedOnDark]}>volume</Text>
+              </View>
+            </View>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function RequestCandidateOption({
+  candidate,
+  capacityLabel,
+  selected,
+  onPress
+}: {
+  candidate: QuoteCandidate;
+  capacityLabel: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={[styles.requestCandidateCard, selected && styles.requestCandidateCardSelected]}
+    >
+      <View style={styles.cardHeader}>
+        <View style={styles.flex}>
+          <Text style={[styles.requestCandidateTitle, selected && styles.requestTextOnDark]}>{candidate.licensePlate}</Text>
+          <Text style={[styles.requestCandidateSubtitle, selected && styles.requestMutedOnDark]}>{candidate.vehicleClassSnapshot?.name || 'Available vehicle'}</Text>
+          <StarRating value={candidate.rating} compact />
+        </View>
+        <StatusBadge tone={selected ? 'neutral' : 'success'} style={selected && styles.requestBadgeOnDark}>
+          {selected ? 'Selected' : `${candidate.distanceKm}km`}
+        </StatusBadge>
+      </View>
+      <View style={styles.requestCandidateMetricRow}>
+        <View style={[styles.requestCandidateMetric, selected && styles.requestCandidateMetricSelected]}>
+          <Text style={[styles.requestCandidateMetricValue, selected && styles.requestTextOnDark]}>{candidate.rating.toFixed(1)}</Text>
+          <Text style={[styles.requestCandidateMetricLabel, selected && styles.requestMutedOnDark]}>rating</Text>
+        </View>
+        <View style={[styles.requestCandidateMetric, selected && styles.requestCandidateMetricSelected]}>
+          <Text style={[styles.requestCandidateMetricValue, selected && styles.requestTextOnDark]}>{candidate.rankingScore.toFixed(1)}</Text>
+          <Text style={[styles.requestCandidateMetricLabel, selected && styles.requestMutedOnDark]}>match</Text>
+        </View>
+        <View style={[styles.requestCandidateMetric, selected && styles.requestCandidateMetricSelected]}>
+          <Text style={[styles.requestCandidateMetricValue, selected && styles.requestTextOnDark]}>{capacityLabel}</Text>
+          <Text style={[styles.requestCandidateMetricLabel, selected && styles.requestMutedOnDark]}>capacity</Text>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
 function ClientQuoteScreen() {
   const queryClient = useQueryClient();
   const [vehicleClassId, setVehicleClassId] = useState('');
@@ -2282,16 +2379,22 @@ function ClientQuoteScreen() {
   const snapshot = quote?.quoteSnapshot;
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>/client/request/new</Text>
-        <Text style={styles.title}>Set pickup, drop-off, and load.</Text>
-        <Text style={styles.copy}>Choose familiar Addis Ababa areas, then confirm the quote before owners receive the request.</Text>
+    <Screen contentStyle={styles.requestContent}>
+      <AppHeader
+        eyebrow="Request"
+        title="Book a truck."
+        subtitle="Choose a route, load, truck type, and quote before owners receive the request."
+      />
 
-        <ShellCard title="Route and load">
-          {vehicleClassesQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(vehicleClassesQuery.error)}</Text> : null}
-          <VehicleClassPicker vehicleClasses={vehicleClasses} selectedVehicleClassId={vehicleClassId} onSelect={setVehicleClassId} />
-          <RouteMapPreview pickup={pickupOption} destination={destinationOption} />
+      <UiCard style={styles.requestSection}>
+        <SectionHeader
+          eyebrow="Route"
+          title="Where should the truck go?"
+          description="Pick familiar Addis Ababa areas and add building or landmark notes for the owner."
+          action={<StatusBadge tone="dark">Addis Ababa</StatusBadge>}
+        />
+        <RouteMapPreview pickup={pickupOption} destination={destinationOption} />
+        <View style={styles.requestLocationStack}>
           <LocationDropdown
             label="Pickup area"
             selectedKey={pickupLocationKey}
@@ -2314,149 +2417,200 @@ function ClientQuoteScreen() {
             }}
           />
           <Field label="Drop-off note" value={destinationAddressNote} onChangeText={setDestinationAddressNote} placeholder="Building, gate, floor, or nearby landmark" />
-          <PickupSchedulePicker
-            dateKey={pickupDateKey}
-            time={pickupTime}
-            onChange={(next) => {
-              if (next.dateKey) {
-                setPickupDateKey(next.dateKey);
-              }
+        </View>
+        <SecondaryButton
+          label={showManualCoordinates ? 'Hide pin details' : 'Adjust map pin'}
+          onPress={() => setShowManualCoordinates((value) => !value)}
+        />
+        {showManualCoordinates ? (
+          <View style={styles.requestManualPanel}>
+            <Text style={styles.muted}>Fine tune generated coordinates only when the selected area is not close enough.</Text>
+            <View style={styles.inlineFields}>
+              <Field containerStyle={styles.inlineField} label="Pickup lon" value={pickupLon} onChangeText={setPickupLon} placeholder="38.7903" keyboardType="decimal-pad" />
+              <Field containerStyle={styles.inlineField} label="Pickup lat" value={pickupLat} onChangeText={setPickupLat} placeholder="8.9806" keyboardType="decimal-pad" />
+            </View>
+            <View style={styles.inlineFields}>
+              <Field containerStyle={styles.inlineField} label="Drop-off lon" value={destinationLon} onChangeText={setDestinationLon} placeholder="38.7578" keyboardType="decimal-pad" />
+              <Field containerStyle={styles.inlineField} label="Drop-off lat" value={destinationLat} onChangeText={setDestinationLat} placeholder="9.0350" keyboardType="decimal-pad" />
+            </View>
+          </View>
+        ) : null}
+      </UiCard>
 
-              if (next.time) {
-                setPickupTime(next.time);
-              }
-            }}
+      <UiCard style={styles.requestSection}>
+        <SectionHeader
+          eyebrow="Truck type"
+          title="Choose the right size."
+          description="Vehicle classes come from the backend, so pricing and matching stay consistent."
+        />
+        {vehicleClassesQuery.isLoading ? (
+          <LoadingState title="Loading truck types" message="Checking approved KULI vehicle classes." />
+        ) : vehicleClassesQuery.isError ? (
+          <ErrorState title="Could not load truck types" message={getErrorMessage(vehicleClassesQuery.error)} />
+        ) : vehicleClasses.length === 0 ? (
+          <EmptyState title="No truck types available" message="Ask an administrator to create vehicle classes before requesting a truck." />
+        ) : (
+          <RequestTruckTypeCards vehicleClasses={vehicleClasses} selectedVehicleClassId={vehicleClassId} onSelect={setVehicleClassId} />
+        )}
+      </UiCard>
+
+      <UiCard style={styles.requestSection}>
+        <SectionHeader
+          eyebrow="Load details"
+          title="What are you moving?"
+          description="These details help KULI calculate a fair quote and rank nearby trucks."
+        />
+        <View style={styles.requestLoadGrid}>
+          {loadTypeOptions.map((option) => {
+            const selected = itemType === option.key;
+
+            return (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                key={option.key}
+                onPress={() => setItemType(option.key)}
+                style={[styles.requestLoadOption, selected && styles.requestLoadOptionSelected]}
+              >
+                <Text style={[styles.requestLoadTitle, selected && styles.requestTextOnDark]}>{option.label}</Text>
+                <Text style={[styles.requestLoadDetail, selected && styles.requestMutedOnDark]}>{option.detail}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={styles.inlineFields}>
+          <Field containerStyle={styles.inlineField} label="Weight kg" value={estimatedWeightKg} onChangeText={setEstimatedWeightKg} placeholder="800" keyboardType="numeric" />
+          <Field containerStyle={styles.inlineField} label="Volume m3" value={estimatedVolumeCubicMeters} onChangeText={setEstimatedVolumeCubicMeters} placeholder="8" keyboardType="decimal-pad" />
+        </View>
+        <Pressable
+          accessibilityRole="switch"
+          accessibilityState={{ checked: loadingAssistanceRequested }}
+          onPress={() => setLoadingAssistanceRequested((value) => !value)}
+          style={[styles.requestSwitchRow, loadingAssistanceRequested && styles.requestSwitchRowActive]}
+        >
+          <View style={styles.flex}>
+            <Text style={[styles.requestSwitchText, loadingAssistanceRequested && styles.requestSwitchTextActive]}>Loading help</Text>
+            <Text style={styles.muted}>Owner should expect help loading or unloading.</Text>
+          </View>
+          <StatusBadge tone={loadingAssistanceRequested ? 'success' : 'warning'}>{loadingAssistanceRequested ? 'Yes' : 'No'}</StatusBadge>
+        </Pressable>
+        <Field label="Special handling" value={specialHandlingInstructions} onChangeText={setSpecialHandlingInstructions} placeholder="Fragile wardrobe, narrow stairs" />
+        <Field label="Tip ETB" value={tip} onChangeText={setTip} placeholder="0" keyboardType="numeric" />
+      </UiCard>
+
+      <UiCard style={styles.requestSection}>
+        <SectionHeader
+          eyebrow="Schedule"
+          title="When should pickup happen?"
+          description="Choose a pickup window owners can plan around."
+          action={<StatusBadge tone="warning">{formatPickupWindow(pickupDateKey, pickupTime)}</StatusBadge>}
+        />
+        <PickupSchedulePicker
+          dateKey={pickupDateKey}
+          time={pickupTime}
+          onChange={(next) => {
+            if (next.dateKey) {
+              setPickupDateKey(next.dateKey);
+            }
+
+            if (next.time) {
+              setPickupTime(next.time);
+            }
+          }}
+        />
+      </UiCard>
+
+      {error ? <ErrorState title="Request needs attention" message={error} /> : null}
+      <PrimaryButton label="Get quote" loading={pending} disabled={vehicleClasses.length === 0} onPress={submitQuote} />
+      {pending ? <LoadingState title="Calculating quote" message="Checking route distance, pricing, and nearby approved trucks." /> : null}
+
+      {quote && snapshot ? (
+        <UiCard style={styles.requestSection}>
+          <SectionHeader
+            eyebrow="Quote"
+            title="Review your estimate."
+            description="Confirm the estimate before selected owners receive the request."
+            action={<StatusBadge tone={quote.search.noResults ? 'warning' : 'success'}>{`${quote.search.radiusKmUsed}km radius`}</StatusBadge>}
           />
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setShowManualCoordinates((value) => !value)}
-            style={styles.secondaryButton}
-          >
-            <Text style={styles.secondaryButtonText}>{showManualCoordinates ? 'Hide pin details' : 'Adjust map pin'}</Text>
-          </Pressable>
-          {showManualCoordinates ? (
-            <View style={styles.detailPanel}>
-              <Text style={styles.muted}>Fine tune the generated coordinates only when the selected area is not close enough.</Text>
-              <View style={styles.inlineFields}>
-                <Field containerStyle={styles.inlineField} label="Pickup lon" value={pickupLon} onChangeText={setPickupLon} placeholder="38.7903" keyboardType="decimal-pad" />
-                <Field containerStyle={styles.inlineField} label="Pickup lat" value={pickupLat} onChangeText={setPickupLat} placeholder="8.9806" keyboardType="decimal-pad" />
-              </View>
-              <View style={styles.inlineFields}>
-                <Field containerStyle={styles.inlineField} label="Drop-off lon" value={destinationLon} onChangeText={setDestinationLon} placeholder="38.7578" keyboardType="decimal-pad" />
-                <Field containerStyle={styles.inlineField} label="Drop-off lat" value={destinationLat} onChangeText={setDestinationLat} placeholder="9.0350" keyboardType="decimal-pad" />
-              </View>
-            </View>
-          ) : null}
-          <View style={styles.roleGrid}>
-            {loadTypeOptions.map((option) => {
-              const selected = itemType === option.key;
-
-              return (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  key={option.key}
-                  onPress={() => setItemType(option.key)}
-                  style={[styles.documentOption, selected && styles.documentOptionSelected]}
-                >
-                  <Text style={[styles.fieldLabel, selected && styles.documentOptionSelectedText]}>{option.label}</Text>
-                  <Text style={[styles.muted, selected && styles.documentOptionSelectedText]}>{option.detail}</Text>
-                </Pressable>
-              );
-            })}
+          <View style={styles.requestQuoteHero}>
+            <Text style={styles.requestQuoteLabel}>Total estimate</Text>
+            <Text style={styles.requestQuoteTotal}>{snapshot.currency} {snapshot.totalEstimate.toFixed(2)}</Text>
+            <Text style={styles.requestQuoteMeta}>{quote.route.distanceKm.toFixed(2)}km / about {Math.round(quote.route.etaMinutes)} min / pricing v{snapshot.pricingRuleVersion}</Text>
           </View>
-          <View style={styles.inlineFields}>
-            <Field containerStyle={styles.inlineField} label="Weight kg" value={estimatedWeightKg} onChangeText={setEstimatedWeightKg} placeholder="800" keyboardType="numeric" />
-            <Field containerStyle={styles.inlineField} label="Volume m3" value={estimatedVolumeCubicMeters} onChangeText={setEstimatedVolumeCubicMeters} placeholder="8" keyboardType="decimal-pad" />
+          {quote.search.expanded ? <StatusBadge tone="warning">Search expanded</StatusBadge> : null}
+          <View style={styles.priceBox}>
+            <PriceLine label="Base fare" value={snapshot.baseFare} currency={snapshot.currency} />
+            <PriceLine label="Distance" value={snapshot.distanceCharge} currency={snapshot.currency} />
+            <PriceLine label="Time" value={snapshot.durationCharge} currency={snapshot.currency} />
+            <PriceLine label="Load adjustment" value={snapshot.loadAdjustment} currency={snapshot.currency} />
+            <PriceLine label="Fuel surcharge" value={snapshot.fuelSurcharge} currency={snapshot.currency} />
+            <PriceLine label="Tip" value={snapshot.tip} currency={snapshot.currency} />
           </View>
-          <Pressable
-            accessibilityRole="switch"
-            accessibilityState={{ checked: loadingAssistanceRequested }}
-            onPress={() => setLoadingAssistanceRequested((value) => !value)}
-            style={[styles.switchRow, loadingAssistanceRequested && styles.switchRowActive]}
-          >
-            <Text style={[styles.switchText, loadingAssistanceRequested && styles.switchTextActive]}>Loading help</Text>
-            <StatusPill tone={loadingAssistanceRequested ? 'ready' : 'warn'}>{loadingAssistanceRequested ? 'Yes' : 'No'}</StatusPill>
-          </Pressable>
-          <Field label="Special handling" value={specialHandlingInstructions} onChangeText={setSpecialHandlingInstructions} placeholder="Fragile wardrobe, narrow stairs" />
-          <Field label="Tip ETB" value={tip} onChangeText={setTip} placeholder="0" keyboardType="numeric" />
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          <Pressable accessibilityRole="button" disabled={pending || vehicleClasses.length === 0} onPress={submitQuote} style={[styles.primaryButton, (pending || vehicleClasses.length === 0) && styles.buttonDisabled]}>
-            <Text style={styles.primaryButtonText}>{pending ? 'Calculating...' : 'Get quote'}</Text>
-          </Pressable>
-        </ShellCard>
+          <View style={styles.requestPaymentNote}>
+            <Text style={styles.noticeText}>Payment is handled after delivery in the current KULI flow. Keep final payment coordination inside the trip chat.</Text>
+          </View>
+        </UiCard>
+      ) : null}
 
-        {quote && snapshot ? (
-          <ShellCard title="Quote result">
-            <View style={styles.cardHeader}>
-              <View style={styles.flex}>
-                <Text style={styles.cardTitle}>{snapshot.currency} {snapshot.totalEstimate.toFixed(2)}</Text>
-                <Text style={styles.muted}>{quote.route.distanceKm.toFixed(2)}km / {Math.round(quote.route.etaMinutes)} min / rule v{snapshot.pricingRuleVersion}</Text>
-              </View>
-              <StatusPill tone={quote.search.noResults ? 'warn' : 'ready'}>{quote.search.radiusKmUsed}km radius</StatusPill>
-            </View>
-            {quote.search.expanded ? <Text style={styles.noticeText}>Search expanded because the first radius did not return approved available trucks.</Text> : null}
-            <View style={styles.priceBox}>
-              <PriceLine label="Base fare" value={snapshot.baseFare} currency={snapshot.currency} />
-              <PriceLine label="Distance" value={snapshot.distanceCharge} currency={snapshot.currency} />
-              <PriceLine label="Time" value={snapshot.durationCharge} currency={snapshot.currency} />
-              <PriceLine label="Load adjustment" value={snapshot.loadAdjustment} currency={snapshot.currency} />
-              <PriceLine label="Fuel surcharge" value={snapshot.fuelSurcharge} currency={snapshot.currency} />
-              <PriceLine label="Tip" value={snapshot.tip} currency={snapshot.currency} />
-            </View>
-            {quote.candidates.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Text style={styles.cardTitle}>No nearby approved trucks yet.</Text>
-                <Text style={styles.muted}>Try a smaller load, another vehicle class, or a wider pickup area after more owners come online.</Text>
-              </View>
-            ) : (
-              <View style={styles.roleGrid}>
+      {quote && snapshot ? (
+        <UiCard style={styles.requestSection}>
+          <SectionHeader
+            eyebrow="Dispatch"
+            title="Nearby candidates."
+            description="Select one or more trucks. The first owner to accept gets the trip and other offers close automatically."
+          />
+          {quote.candidates.length === 0 ? (
+            <EmptyState
+              title="No nearby approved trucks yet"
+              message="Try a smaller load, another truck type, or a different pickup area after more owners come online."
+              action={<SecondaryButton label="Adjust request" onPress={() => setQuote(null)} />}
+            />
+          ) : (
+            <>
+              <View style={styles.requestCandidateList}>
                 {quote.candidates.map((candidate) => (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: selectedVehicleIds.includes(candidate.vehicleId) }}
+                  <RequestCandidateOption
                     key={candidate.vehicleId}
+                    candidate={candidate}
+                    capacityLabel={selectedCapacityLabel}
+                    selected={selectedVehicleIds.includes(candidate.vehicleId)}
                     onPress={() => toggleCandidateSelection(candidate.vehicleId)}
-                    style={[styles.selectableSurface, selectedVehicleIds.includes(candidate.vehicleId) && styles.selectableSurfaceActive]}
-                  >
-                    <CandidateCard candidate={candidate} capacityLabel={selectedCapacityLabel} />
-                  </Pressable>
+                  />
                 ))}
               </View>
-            )}
-            {quote.candidates.length > 0 ? (
-              <>
-                <Text style={styles.muted}>{selectedVehicleIds.length} selected for dispatch. When one owner accepts, KULI automatically closes the other offers.</Text>
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={requestPending || selectedVehicleIds.length === 0}
-                  onPress={createRequest}
-                  style={[styles.primaryButton, (requestPending || selectedVehicleIds.length === 0) && styles.buttonDisabled]}
-                >
-                  <Text style={styles.primaryButtonText}>{requestPending ? 'Sending...' : 'Send KULI request'}</Text>
-                </Pressable>
-              </>
-            ) : null}
-          </ShellCard>
-        ) : null}
+              <Text style={styles.muted}>{selectedVehicleIds.length} selected for dispatch. Owners receive first-accept-wins offers.</Text>
+              <PrimaryButton
+                label="Send KULI request"
+                loading={requestPending}
+                disabled={selectedVehicleIds.length === 0}
+                onPress={createRequest}
+              />
+            </>
+          )}
+        </UiCard>
+      ) : null}
 
-        {requestResult ? (
-          <ShellCard title="Waiting for owner">
-            <View style={styles.cardHeader}>
-              <View style={styles.flex}>
-                <Text style={styles.cardTitle}>{requestResult.request.requestCode}</Text>
-                <Text style={styles.muted}>{requestResult.offers.length} offer{requestResult.offers.length === 1 ? '' : 's'} sent</Text>
-              </View>
-              <StatusPill tone={statusTone(requestResult.request.status)}>{requestResult.request.status}</StatusPill>
+      {requestResult ? (
+        <UiCard style={styles.requestSection}>
+          <SectionHeader
+            eyebrow="Waiting for owner"
+            title={requestResult.request.requestCode}
+            description={`${requestResult.offers.length} offer${requestResult.offers.length === 1 ? '' : 's'} sent`}
+            action={<StatusBadge tone={statusTone(requestResult.request.status) === 'ready' ? 'success' : statusTone(requestResult.request.status) === 'blocked' ? 'error' : 'warning'}>{requestResult.request.status}</StatusBadge>}
+          />
+          <View style={styles.requestWaitingPanel}>
+            <View style={styles.flex}>
+              <Text style={styles.fieldLabel}>Offer expiry</Text>
+              <Text style={styles.muted}>
+                {requestResult.waitingState?.expiresAt ? new Date(requestResult.waitingState.expiresAt).toLocaleTimeString() : 'Soon'}
+              </Text>
             </View>
-            <Text style={styles.muted}>
-              Offers expire {requestResult.waitingState?.expiresAt ? new Date(requestResult.waitingState.expiresAt).toLocaleTimeString() : 'soon'} if no owner accepts.
-            </Text>
-            <Text style={styles.noticeText}>You can follow or cancel this request from Home while it is still cancellable. Once a truck accepts, other offers are released automatically.</Text>
-          </ShellCard>
-        ) : null}
-      </ScrollView>
-    </SafeAreaView>
+            <StatusBadge tone="warning">Pending</StatusBadge>
+          </View>
+          <Text style={styles.noticeText}>Follow or cancel this request from Home while it is still cancellable. Once a truck accepts, other offers are released automatically.</Text>
+        </UiCard>
+      ) : null}
+    </Screen>
   );
 }
 
@@ -4163,6 +4317,234 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
     padding: spacing.lg,
     paddingBottom: spacing.xxl
+  },
+  requestContent: {
+    gap: spacing.lg,
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl
+  },
+  requestSection: {
+    gap: spacing.lg
+  },
+  requestLocationStack: {
+    gap: spacing.md
+  },
+  requestManualPanel: {
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  requestTruckGrid: {
+    gap: spacing.md
+  },
+  requestTruckCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    minHeight: 132,
+    padding: spacing.lg
+  },
+  requestTruckCardSelected: {
+    backgroundColor: colors.black,
+    borderColor: colors.black
+  },
+  requestTruckTitle: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '900',
+    lineHeight: 24
+  },
+  requestTruckDetail: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20
+  },
+  requestTruckMetaRow: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  requestTruckMeta: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flex: 1,
+    gap: 2,
+    minHeight: 58,
+    justifyContent: 'center',
+    padding: spacing.md
+  },
+  requestTruckMetaSelected: {
+    backgroundColor: colors.darkSurface
+  },
+  requestTruckMetaValue: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '900'
+  },
+  requestTruckMetaLabel: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase'
+  },
+  requestBadgeOnDark: {
+    backgroundColor: colors.card
+  },
+  requestTextOnDark: {
+    color: colors.card
+  },
+  requestMutedOnDark: {
+    color: '#D1D5DB'
+  },
+  requestLoadGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md
+  },
+  requestLoadOption: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    gap: spacing.xs,
+    minHeight: 106,
+    padding: spacing.md,
+    width: '47.8%'
+  },
+  requestLoadOptionSelected: {
+    backgroundColor: colors.black,
+    borderColor: colors.black
+  },
+  requestLoadTitle: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '900',
+    lineHeight: 20
+  },
+  requestLoadDetail: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 17
+  },
+  requestSwitchRow: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between',
+    minHeight: 72,
+    padding: spacing.md
+  },
+  requestSwitchRowActive: {
+    backgroundColor: colors.successTint,
+    borderColor: colors.success
+  },
+  requestSwitchText: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  requestSwitchTextActive: {
+    color: colors.success
+  },
+  requestQuoteHero: {
+    backgroundColor: colors.black,
+    borderRadius: radii.lg,
+    gap: spacing.xs,
+    padding: spacing.lg
+  },
+  requestQuoteLabel: {
+    color: '#D1D5DB',
+    fontSize: 12,
+    fontWeight: '900',
+    textTransform: 'uppercase'
+  },
+  requestQuoteTotal: {
+    color: colors.card,
+    fontSize: 30,
+    fontWeight: '900',
+    lineHeight: 36
+  },
+  requestQuoteMeta: {
+    color: '#D1D5DB',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 19
+  },
+  requestPaymentNote: {
+    backgroundColor: colors.warningTint,
+    borderColor: colors.warning,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    padding: spacing.md
+  },
+  requestCandidateList: {
+    gap: spacing.md
+  },
+  requestCandidateCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  requestCandidateCardSelected: {
+    backgroundColor: colors.black,
+    borderColor: colors.black
+  },
+  requestCandidateTitle: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '900',
+    lineHeight: 23
+  },
+  requestCandidateSubtitle: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20
+  },
+  requestCandidateMetricRow: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  requestCandidateMetric: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flex: 1,
+    gap: 2,
+    minHeight: 62,
+    justifyContent: 'center',
+    padding: spacing.sm
+  },
+  requestCandidateMetricSelected: {
+    backgroundColor: colors.darkSurface
+  },
+  requestCandidateMetricValue: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '900'
+  },
+  requestCandidateMetricLabel: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase'
+  },
+  requestWaitingPanel: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md
   },
   clientHomeContent: {
     gap: spacing.xl,
