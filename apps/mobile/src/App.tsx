@@ -4869,13 +4869,22 @@ function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
   );
 }
 
-function RatingReportPanel({ request, onRatingSaved }: { request: KuliRequest; onRatingSaved?: () => void }) {
+const ratingTags = ['On time', 'Careful handling', 'Fair price', 'Good communication', 'Professional'];
+const trustIssueOptions = [
+  { key: 'damage', label: 'Item damaged', icon: 'package-variant-remove' },
+  { key: 'no_show', label: 'Delayed pickup', icon: 'clock-alert-outline' },
+  { key: 'overcharge', label: 'Price dispute', icon: 'cash-alert' },
+  { key: 'misconduct', label: 'Driver/client behavior', icon: 'account-alert-outline' },
+  { key: 'other', label: 'Other', icon: 'dots-horizontal-circle-outline' }
+];
+
+function RatingReportPanel({ request, onRatingSaved, onDismiss }: { request: KuliRequest; onRatingSaved?: () => void; onDismiss?: () => void }) {
   const queryClient = useQueryClient();
   const [rating, setRating] = useState('5');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [reviewText, setReviewText] = useState('');
   const [mode, setMode] = useState<'review' | 'issue' | 'payment'>('review');
   const [category, setCategory] = useState('damage');
-  const [categoryOpen, setCategoryOpen] = useState(false);
   const [description, setDescription] = useState('');
   const [evidenceFile, setEvidenceFile] = useState<PickedFile | null>(null);
   const [pendingAction, setPendingAction] = useState('');
@@ -4907,7 +4916,7 @@ function RatingReportPanel({ request, onRatingSaved }: { request: KuliRequest; o
         method: 'POST',
         body: {
           rating: parsedRating,
-          reviewText: reviewText.trim() || undefined
+          reviewText: [selectedTags.join(', '), reviewText.trim()].filter(Boolean).join(' - ') || undefined
         }
       })) as ApiEnvelope<RatingRecord>;
 
@@ -5008,13 +5017,23 @@ function RatingReportPanel({ request, onRatingSaved }: { request: KuliRequest; o
     }
   };
 
+  const toggleRatingTag = (tag: string) => {
+    setSelectedTags((current) => (current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]));
+  };
+
   return (
-    <View style={styles.subsection}>
-      <View style={styles.cardHeader}>
-        <Text style={styles.fieldLabel}>After-trip actions</Text>
-        <StatusPill tone={terminal ? 'ready' : 'warn'}>{terminal ? 'Ready' : 'Trip active'}</StatusPill>
+    <View style={styles.trustPanel}>
+      <View style={styles.trustHero}>
+        <View style={styles.trustHeroIcon}>
+          <MaterialCommunityIcons name="shield-check-outline" color={colors.card} size={30} />
+        </View>
+        <View style={styles.flex}>
+          <Text style={styles.trustHeroTitle}>{mode === 'review' ? 'Rate your KULI move' : mode === 'issue' ? 'Report an issue' : 'Cash payment review'}</Text>
+          <Text style={styles.trustHeroCopy}>{request.requestCode} / {shortAreaLabel(request.pickupLocation?.addressText)} to {shortAreaLabel(request.destinationLocation?.addressText)}</Text>
+        </View>
+        <StatusBadge tone={terminal ? 'success' : 'warning'}>{terminal ? 'Ready' : 'Trip active'}</StatusBadge>
       </View>
-      <View style={styles.segmentedCompact}>
+      <View style={styles.trustModeTabs}>
         {[
           { key: 'review', label: 'Review' },
           { key: 'issue', label: 'Issue' },
@@ -5025,17 +5044,25 @@ function RatingReportPanel({ request, onRatingSaved }: { request: KuliRequest; o
             accessibilityState={{ selected: mode === option.key }}
             key={option.key}
             onPress={() => setMode(option.key as 'review' | 'issue' | 'payment')}
-            style={[styles.segmentButton, mode === option.key && styles.segmentButtonActive]}
+            style={[styles.trustModeTab, mode === option.key && styles.trustModeTabActive]}
           >
-            <Text style={[styles.segmentText, mode === option.key && styles.segmentTextActive]}>{option.label}</Text>
+            <Text style={[styles.trustModeTabText, mode === option.key && styles.trustModeTabTextActive]}>{option.label}</Text>
           </Pressable>
         ))}
       </View>
 
       {mode === 'review' ? (
         <View style={styles.trustSection}>
-          <Text style={styles.muted}>Rate the completed move. Five stars means everything went smoothly.</Text>
-          <View style={styles.starRow}>
+          <View style={styles.ratingOwnerCard}>
+            <View style={styles.ratingOwnerAvatar}>
+              <MaterialCommunityIcons name="truck-check-outline" color={colors.black} size={26} />
+            </View>
+            <View style={styles.flex}>
+              <Text style={styles.ratingOwnerTitle}>{request.selectedVehicleId ? `Vehicle ${request.selectedVehicleId.slice(-6).toUpperCase()}` : 'KULI truck owner'}</Text>
+              <Text style={styles.ratingOwnerCopy}>Your public review helps future customers choose verified trucks.</Text>
+            </View>
+          </View>
+          <View style={styles.trustStars}>
             {[1, 2, 3, 4, 5].map((star) => {
               const selected = Number(rating) >= star;
 
@@ -5045,85 +5072,173 @@ function RatingReportPanel({ request, onRatingSaved }: { request: KuliRequest; o
                   accessibilityState={{ selected }}
                   key={star}
                   onPress={() => setRating(String(star))}
-                  style={styles.starButton}
+                  style={styles.trustStarButton}
                 >
-                  <Text style={[styles.starText, selected && styles.starTextSelected]}>{selected ? '★' : '☆'}</Text>
+                  <MaterialCommunityIcons name={selected ? 'star' : 'star-outline'} color={selected ? colors.warning : colors.border} size={42} />
                 </Pressable>
               );
             })}
           </View>
-          <Text style={styles.ratingSummary}>{rating}/5 selected</Text>
+          <Text style={styles.trustRatingSummary}>{rating}/5 selected</Text>
+          <View style={styles.trustTagGrid}>
+            {ratingTags.map((tag) => {
+              const selected = selectedTags.includes(tag);
+
+              return (
+                <Pressable key={tag} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => toggleRatingTag(tag)} style={[styles.trustTag, selected && styles.trustTagSelected]}>
+                  <Text style={[styles.trustTagText, selected && styles.trustTagTextSelected]}>{tag}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
           <Field label="Review note" value={reviewText} onChangeText={setReviewText} placeholder="Optional: what went well?" />
         </View>
       ) : null}
 
       {mode === 'issue' ? (
         <View style={styles.trustSection}>
-          <Text style={styles.muted}>Report safety, damage, no-show, or app issues. Add a photo when it helps explain what happened.</Text>
-          <Pressable accessibilityRole="button" onPress={() => setCategoryOpen((value) => !value)} style={styles.locationSelectButton}>
-            <View style={styles.flex}>
-              <Text style={styles.locationSelectTitle}>{reportCategoryLabels[category]}</Text>
-              <Text style={styles.muted}>Issue category</Text>
-            </View>
-            <Text style={styles.locationChevron}>{categoryOpen ? 'Close' : 'Change'}</Text>
-          </Pressable>
-          {categoryOpen ? (
-            <View style={styles.locationMenuContent}>
-              {reportCategories.map((option) => {
-                const selected = category === option;
+          <Text style={styles.trustSectionCopy}>Choose the closest category. Evidence is optional, but useful for damage or price questions.</Text>
+          <View style={styles.issueTileGrid}>
+            {trustIssueOptions.map((option) => {
+              const selected = category === option.key;
 
-                return (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    key={option}
-                    onPress={() => {
-                      setCategory(option);
-                      setCategoryOpen(false);
-                    }}
-                    style={[styles.locationOption, selected && styles.locationOptionSelected]}
-                  >
-                    <Text style={[styles.fieldLabel, selected && styles.documentOptionSelectedText]}>{reportCategoryLabels[option]}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          ) : null}
+              return (
+                <Pressable accessibilityRole="button" accessibilityState={{ selected }} key={option.key} onPress={() => setCategory(option.key)} style={[styles.issueTile, selected && styles.issueTileSelected]}>
+                  <MaterialCommunityIcons name={option.icon as never} color={selected ? colors.card : colors.black} size={25} />
+                  <Text style={[styles.issueTileText, selected && styles.issueTileTextSelected]}>{option.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
           <Field label="What happened?" value={description} onChangeText={setDescription} placeholder="Add a short, clear description" />
-          <FilePickerField label="Evidence photo" value={evidenceFile} onChange={setEvidenceFile} />
+          <View style={styles.evidenceCard}>
+            <MaterialCommunityIcons name={evidenceFile ? 'file-check-outline' : 'camera-plus-outline'} color={evidenceFile ? colors.success : colors.textSecondary} size={28} />
+            <View style={styles.flex}>
+              <Text style={styles.evidenceTitle}>{evidenceFile ? 'Evidence attached' : 'Add evidence'}</Text>
+              <Text style={styles.evidenceCopy}>{evidenceFile ? evidenceFile.name : 'Upload a photo or take a new picture when it helps.'}</Text>
+            </View>
+          </View>
+          <FilePickerField label="Evidence photo" value={evidenceFile} onChange={setEvidenceFile} emptyText="Optional. Add a clear image when it supports the issue." uploadLabel="Upload" takeLabel="Camera" />
         </View>
       ) : null}
 
       {mode === 'payment' ? (
         <View style={styles.trustSection}>
-          <Text style={styles.muted}>Use this only if the cash/manual payment amount or status needs review.</Text>
+          <View style={styles.paymentDisputeCard}>
+            <Text style={styles.ownerPaymentEyebrow}>Manual cash estimate</Text>
+            <Text style={styles.ownerPaymentAmount}>{requestEstimateLabel(request)}</Text>
+            <StatusBadge tone={request.payment?.status === 'disputed' ? 'warning' : request.payment?.status === 'confirmed_by_owner' ? 'success' : 'warning'}>
+              {request.payment ? paymentStatusLabels[request.payment.status] : 'Payment pending'}
+            </StatusBadge>
+          </View>
+          <Text style={styles.trustSectionCopy}>Use this only for pay-after-delivery cash amount or payment status issues.</Text>
           <Field label="Payment issue" value={description} onChangeText={setDescription} placeholder="Describe the payment problem" />
         </View>
       ) : null}
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-      {message ? <Text style={styles.noticeText}>{message}</Text> : null}
+      {error ? <ErrorState title="Action failed" message={error} /> : null}
+      {message ? <Text style={styles.trustSuccessText}>{message}</Text> : null}
       {mode === 'review' ? (
-        <Pressable accessibilityRole="button" disabled={!canRate || Boolean(pendingAction)} onPress={submitRating} style={[styles.primaryButton, (!canRate || Boolean(pendingAction)) && styles.buttonDisabled]}>
-          <Text style={styles.primaryButtonText}>{pendingAction === 'rating' ? 'Saving...' : 'Submit review'}</Text>
-        </Pressable>
+        <>
+          <PrimaryButton disabled={!canRate || Boolean(pendingAction)} loading={pendingAction === 'rating'} label={pendingAction === 'rating' ? 'Saving...' : 'Submit review'} onPress={submitRating} />
+          {onDismiss ? <SecondaryButton label="Not now" onPress={onDismiss} /> : null}
+        </>
       ) : null}
       {mode === 'issue' ? (
-        <Pressable accessibilityRole="button" disabled={Boolean(pendingAction)} onPress={createReport} style={[styles.primaryButton, Boolean(pendingAction) && styles.buttonDisabled]}>
-          <Text style={styles.primaryButtonText}>{pendingAction === 'report' ? 'Submitting...' : 'Submit issue'}</Text>
-        </Pressable>
+        <PrimaryButton disabled={Boolean(pendingAction)} loading={pendingAction === 'report'} label={pendingAction === 'report' ? 'Submitting...' : 'Submit issue'} onPress={createReport} />
       ) : null}
       {mode === 'payment' ? (
-        <Pressable accessibilityRole="button" disabled={!canDisputePayment || Boolean(pendingAction)} onPress={disputePayment} style={[styles.primaryButton, (!canDisputePayment || Boolean(pendingAction)) && styles.buttonDisabled]}>
-          <Text style={styles.primaryButtonText}>{pendingAction === 'dispute' ? 'Submitting...' : 'Dispute payment'}</Text>
-        </Pressable>
+        <PrimaryButton disabled={!canDisputePayment || Boolean(pendingAction)} loading={pendingAction === 'dispute'} label={pendingAction === 'dispute' ? 'Submitting...' : 'Submit payment dispute'} onPress={disputePayment} />
+      ) : null}
+    </View>
+  );
+}
+
+type ClientHistoryFilter = 'all' | 'completed' | 'cancelled' | 'issues' | 'payment';
+
+const clientHistoryFilters: Array<{ key: ClientHistoryFilter; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'completed', label: 'Completed' },
+  { key: 'cancelled', label: 'Cancelled' },
+  { key: 'issues', label: 'Issues' },
+  { key: 'payment', label: 'Payment' }
+];
+
+const historyFilterMatches = (request: KuliRequest, filter: ClientHistoryFilter) => {
+  if (filter === 'all') {
+    return true;
+  }
+
+  if (filter === 'completed') {
+    return request.status === 'completed';
+  }
+
+  if (filter === 'cancelled') {
+    return request.status === 'cancelled' || request.status === 'timed_out';
+  }
+
+  if (filter === 'issues') {
+    return request.status === 'cancelled' || request.payment?.status === 'disputed';
+  }
+
+  return Boolean(request.payment) || request.status === 'completed';
+};
+
+function ClientHistoryTripCard({
+  request,
+  expanded,
+  onToggle
+}: {
+  request: KuliRequest;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <View style={styles.activityTripCard}>
+      <View style={styles.activityTripHeader}>
+        <View style={styles.flex}>
+          <Text style={styles.activityTripCode}>{request.requestCode}</Text>
+          <Text style={styles.activityTripDate}>{formatRequestSchedule(request)}</Text>
+        </View>
+        <StatusBadge tone={badgeToneForStatus(request.status)}>{statusLabels[request.status]}</StatusBadge>
+      </View>
+      <View style={styles.activityRouteRow}>
+        <View style={styles.activityRouteRail}>
+          <View style={styles.activityRouteDotStart} />
+          <View style={styles.activityRouteLine} />
+          <View style={styles.activityRouteDotEnd} />
+        </View>
+        <View style={styles.flex}>
+          <Text style={styles.activityRouteText}>{request.pickupLocation?.addressText}</Text>
+          <Text style={styles.activityRouteText}>{request.destinationLocation?.addressText}</Text>
+        </View>
+      </View>
+      <View style={styles.activityTripFooter}>
+        <View>
+          <Text style={styles.activityTripAmount}>{requestEstimateLabel(request)}</Text>
+          <Text style={styles.activityTripMeta}>{request.requestedVehicleClassId ? `Truck ${request.requestedVehicleClassId.slice(-6).toUpperCase()}` : 'KULI truck'}</Text>
+        </View>
+        <SecondaryButton label={expanded ? 'Hide' : 'Details'} onPress={onToggle} style={styles.ownerSmallButton} />
+      </View>
+      {expanded ? (
+        <View style={styles.activityDetailPanel}>
+          <RoutePill pickup={request.pickupLocation?.addressText ?? 'Pickup'} destination={request.destinationLocation?.addressText ?? 'Destination'} />
+          <View style={styles.activityDetailGrid}>
+            <MetricCard label="Payment" value={request.payment ? paymentStatusLabels[request.payment.status] : 'Pending'} tone={request.payment?.status === 'disputed' ? 'warning' : request.payment?.status === 'confirmed_by_owner' ? 'success' : 'default'} />
+            <MetricCard label="Rating" value={request.selectedOwnerId ? 'Available' : 'Unavailable'} detail="After completed owner-linked trip" />
+          </View>
+          <TripTimeline requestId={request.id} />
+          <RatingReportPanel request={request} />
+        </View>
       ) : null}
     </View>
   );
 }
 
 function ClientHistoryScreen({ profile }: { profile: UserProfile }) {
+  const navigation = useNavigation<any>();
   const [expandedRequestId, setExpandedRequestId] = useState('');
+  const [activeFilter, setActiveFilter] = useState<ClientHistoryFilter>('all');
   const [dismissedRatingRequestIds, setDismissedRatingRequestIds] = useState<string[]>([]);
   const requestsQuery = useQuery({
     queryKey: ['kuli-requests', 'mine', 'history'],
@@ -5132,6 +5247,7 @@ function ClientHistoryScreen({ profile }: { profile: UserProfile }) {
 
   const requests = requestsQuery.data ?? [];
   const terminalRequests = requests.filter((request) => terminalRequestStatuses.includes(request.status));
+  const filteredRequests = terminalRequests.filter((request) => historyFilterMatches(request, activeFilter));
   const ratingPromptRequest = terminalRequests.find((request) => request.status === 'completed' && request.selectedOwnerId && !dismissedRatingRequestIds.includes(request.id));
 
   const dismissRatingPrompt = (requestId: string) => {
@@ -5139,41 +5255,54 @@ function ClientHistoryScreen({ profile }: { profile: UserProfile }) {
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>Activity</Text>
-        <Text style={styles.title}>Past moves</Text>
-        <Text style={styles.copy}>Reviews, issues, and payment questions stay attached to each completed move.</Text>
-        <ShellCard title="Completed and cancelled moves">
-          {requestsQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(requestsQuery.error)}</Text> : null}
-          {terminalRequests.length === 0 ? <Text style={styles.muted}>No past moves yet. Completed and cancelled moves will appear here.</Text> : null}
-          <View style={styles.roleGrid}>
-            {terminalRequests.map((request) => (
-              <View key={request.id} style={styles.requestRowStack}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.flex}>
-                    <Text style={styles.cardTitle}>{request.requestCode}</Text>
-                    <Text style={styles.muted}>{request.pickupLocation?.addressText} to {request.destinationLocation?.addressText}</Text>
-                  </View>
-                  <StatusPill tone={statusTone(request.status)}>{statusLabels[request.status]}</StatusPill>
-                </View>
-                <View style={styles.cardHeader}>
-                  <Text style={styles.muted}>{request.quoteSnapshot?.currency ?? 'ETB'} {Number(request.quoteSnapshot?.totalEstimate ?? 0).toFixed(2)}</Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => setExpandedRequestId((current) => (current === request.id ? '' : request.id))}
-                    style={styles.compactButton}
-                  >
-                    <Text style={styles.compactButtonText}>{expandedRequestId === request.id ? 'Hide' : 'Details'}</Text>
-                  </Pressable>
-                </View>
-                {expandedRequestId === request.id ? <RatingReportPanel request={request} /> : null}
-              </View>
-            ))}
+    <>
+      <Screen contentStyle={styles.activityContent}>
+        <View style={styles.activityHero}>
+          <View style={styles.flex}>
+            <Text style={styles.activityEyebrow}>KULI Activity</Text>
+            <Text style={styles.activityTitle}>Trip history</Text>
+            <Text style={styles.activitySubtitle}>Reviews, reports, and manual payment questions stay attached to each trip.</Text>
           </View>
-        </ShellCard>
+          <StatusBadge tone="dark">{`${terminalRequests.length} trips`}</StatusBadge>
+        </View>
+
+        <View style={styles.activityFilterRow}>
+          {clientHistoryFilters.map((filter) => {
+            const selected = activeFilter === filter.key;
+
+            return (
+              <Pressable key={filter.key} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => setActiveFilter(filter.key)} style={[styles.activityFilterChip, selected && styles.activityFilterChipActive]}>
+                <Text style={[styles.activityFilterText, selected && styles.activityFilterTextActive]}>{filter.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {requestsQuery.isLoading ? <LoadingState title="Loading activity" message="Checking your completed and cancelled moves." /> : null}
+        {requestsQuery.isError ? <ErrorState title="Activity could not load" message={getErrorMessage(requestsQuery.error)} /> : null}
+        {!requestsQuery.isLoading && terminalRequests.length === 0 ? (
+          <View style={styles.ownerEmptyCard}>
+            <MaterialCommunityIcons name="history" color={colors.black} size={44} />
+            <Text style={styles.ownerEmptyTitle}>No trips yet</Text>
+            <Text style={styles.ownerEmptyCopy}>Completed and cancelled KULI moves will appear here.</Text>
+            <PrimaryButton label="Request a truck" onPress={() => navigation.navigate('Request')} />
+          </View>
+        ) : null}
+        {!requestsQuery.isLoading && terminalRequests.length > 0 && filteredRequests.length === 0 ? (
+          <EmptyState title="Nothing in this filter" message="Try All to see every completed, cancelled, or payment-related trip." />
+        ) : null}
+        <View style={styles.activityTripList}>
+          {filteredRequests.map((request) => (
+            <ClientHistoryTripCard
+              key={request.id}
+              request={request}
+              expanded={expandedRequestId === request.id}
+              onToggle={() => setExpandedRequestId((current) => (current === request.id ? '' : request.id))}
+            />
+          ))}
+        </View>
         <Text style={styles.muted}>Signed in as {profile.fullName || profile.email}.</Text>
-      </ScrollView>
+      </Screen>
       <Modal animationType="fade" transparent visible={Boolean(ratingPromptRequest)} onRequestClose={() => ratingPromptRequest && dismissRatingPrompt(ratingPromptRequest.id)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.pickerDialog}>
@@ -5183,17 +5312,14 @@ function ClientHistoryScreen({ profile }: { profile: UserProfile }) {
               {ratingPromptRequest ? (
                 <>
                   <Text style={styles.muted}>{ratingPromptRequest.requestCode} / {ratingPromptRequest.pickupLocation?.addressText} to {ratingPromptRequest.destinationLocation?.addressText}</Text>
-                  <RatingReportPanel request={ratingPromptRequest} onRatingSaved={() => dismissRatingPrompt(ratingPromptRequest.id)} />
-                  <Pressable accessibilityRole="button" onPress={() => dismissRatingPrompt(ratingPromptRequest.id)} style={styles.secondaryButton}>
-                    <Text style={styles.secondaryButtonText}>Not now</Text>
-                  </Pressable>
+                  <RatingReportPanel request={ratingPromptRequest} onRatingSaved={() => dismissRatingPrompt(ratingPromptRequest.id)} onDismiss={() => dismissRatingPrompt(ratingPromptRequest.id)} />
                 </>
               ) : null}
             </ScrollView>
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </>
   );
 }
 
@@ -5214,9 +5340,16 @@ function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
     queryFn: async () => ((await kuliApi.request(`/owners/${profile.id}/ratings`)) as ApiEnvelope<RatingRecord[]>).data
   });
 
-  const completedRequests = (requestsQuery.data ?? []).filter((request) => request.status === 'completed' && !isPaymentClosedRequest(request));
+  const allOwnerRequests = requestsQuery.data ?? [];
+  const allCompletedRequests = allOwnerRequests.filter((request) => request.status === 'completed');
+  const completedRequests = allCompletedRequests.filter((request) => !isPaymentClosedRequest(request));
   const ratings = ratingsQuery.data ?? [];
   const averageRating = ratings.length ? ratings.reduce((sum, rating) => sum + rating.rating, 0) / ratings.length : 0;
+  const totalEarnings = allCompletedRequests.reduce((sum, request) => sum + Number(request.payment?.amountConfirmed ?? request.quoteSnapshot?.totalEstimate ?? 0), 0);
+  const cashCollected = allCompletedRequests
+    .filter((request) => request.payment?.status === 'confirmed_by_owner' || request.payment?.status === 'resolved')
+    .reduce((sum, request) => sum + Number(request.payment?.amountConfirmed ?? request.quoteSnapshot?.totalEstimate ?? 0), 0);
+  const pendingConfirmations = allCompletedRequests.filter((request) => !isPaymentClosedRequest(request)).length;
 
   const confirmPayment = async (request: KuliRequest) => {
     setPendingRequestId(request.id);
@@ -5244,71 +5377,99 @@ function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>Earnings</Text>
-        <Text style={styles.title}>Payments and ratings</Text>
-        <ShellCard title="Rating summary">
-          <View style={styles.metricGrid}>
-            <View style={styles.metricBox}>
-              <Text style={styles.metricValue}>{averageRating.toFixed(1)}</Text>
-              <Text style={styles.metricLabel}>average</Text>
-            </View>
-            <View style={styles.metricBox}>
-              <Text style={styles.metricValue}>{ratings.length}</Text>
-              <Text style={styles.metricLabel}>ratings</Text>
-            </View>
+    <Screen contentStyle={styles.earningsContent}>
+      <View style={styles.earningsHero}>
+        <Text style={styles.earningsHeroLabel}>Total completed earnings</Text>
+        <Text style={styles.earningsHeroAmount}>ETB {totalEarnings.toFixed(2)}</Text>
+        <Text style={styles.earningsHeroCopy}>Manual cash/pay-after-delivery records confirmed by KULI trips.</Text>
+      </View>
+
+      <View style={styles.ownerMetricGrid}>
+        <MetricCard label="Completed jobs" value={String(allCompletedRequests.length)} tone="dark" />
+        <MetricCard label="Cash collected" value={`ETB ${cashCollected.toFixed(0)}`} tone="success" />
+        <MetricCard label="Pending confirmations" value={String(pendingConfirmations)} tone={pendingConfirmations ? 'warning' : 'default'} />
+        <MetricCard label="Average rating" value={averageRating ? averageRating.toFixed(1) : '-'} detail={`${ratings.length} review${ratings.length === 1 ? '' : 's'}`} />
+      </View>
+
+      {requestsQuery.isLoading ? <LoadingState title="Loading earnings" message="Checking completed jobs and cash confirmations." /> : null}
+      {requestsQuery.isError ? <ErrorState title="Earnings could not load" message={getErrorMessage(requestsQuery.error)} /> : null}
+      {error ? <ErrorState title="Payment action failed" message={error} /> : null}
+      {message ? <Text style={styles.trustSuccessText}>{message}</Text> : null}
+
+      <View style={styles.earningsSection}>
+        <View style={styles.ownerSectionHeader}>
+          <View style={styles.flex}>
+            <Text style={styles.ownerSectionTitle}>Cash confirmations</Text>
+            <Text style={styles.ownerSectionCopy}>Confirm only after receiving manual cash from the customer.</Text>
           </View>
-          {ratingsQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(ratingsQuery.error)}</Text> : null}
-          {ratings.slice(0, 3).map((rating) => (
-            <View key={rating.id} style={styles.requestRow}>
-              <View style={styles.flex}>
-                <Text style={styles.fieldLabel}>{rating.rating}/5</Text>
-                <Text style={styles.muted}>{rating.reviewText || 'No written review.'}</Text>
+          <StatusBadge tone={pendingConfirmations ? 'warning' : 'success'}>{`${pendingConfirmations} pending`}</StatusBadge>
+        </View>
+        <Field label="Override amount ETB" value={amountConfirmed} onChangeText={setAmountConfirmed} placeholder="Leave blank for estimate" keyboardType="numeric" />
+        {allCompletedRequests.length === 0 ? (
+          <View style={styles.ownerEmptyCard}>
+            <MaterialCommunityIcons name="cash-clock" color={colors.black} size={44} />
+            <Text style={styles.ownerEmptyTitle}>No earnings yet</Text>
+            <Text style={styles.ownerEmptyCopy}>Complete trips and confirm cash payments to build your earnings history.</Text>
+          </View>
+        ) : null}
+        {completedRequests.length === 0 && allCompletedRequests.length > 0 ? <EmptyState title="No pending cash confirmations" message="Completed payments are already confirmed, resolved, or closed." /> : null}
+        <View style={styles.ownerPaymentList}>
+          {completedRequests.map((request) => (
+            <View key={request.id} style={styles.ownerPaymentCard}>
+              <View style={styles.ownerPaymentHeader}>
+                <View style={styles.flex}>
+                  <Text style={styles.ownerPaymentEyebrow}>Cash payment</Text>
+                  <Text style={styles.ownerPaymentAmount}>{request.quoteSnapshot?.currency ?? 'ETB'} {Number(request.quoteSnapshot?.totalEstimate ?? 0).toFixed(2)}</Text>
+                  <Text style={styles.ownerPaymentRoute}>{request.pickupLocation?.addressText} to {request.destinationLocation?.addressText}</Text>
+                </View>
+                <StatusBadge tone={request.payment?.status === 'disputed' ? 'warning' : request.payment?.status === 'confirmed_by_owner' ? 'success' : 'warning'}>
+                  {request.payment ? paymentStatusLabels[request.payment.status] : 'Payment pending'}
+                </StatusBadge>
               </View>
+              <View style={styles.ownerPaymentMethodRow}>
+                <View style={styles.ownerPaymentMethodIcon}>
+                  <MaterialCommunityIcons name="cash" color={colors.black} size={24} />
+                </View>
+                <View style={styles.flex}>
+                  <Text style={styles.ownerPaymentMethodTitle}>Cash after delivery</Text>
+                  <Text style={styles.ownerPaymentMethodCopy}>Confirm only after you have received the cash amount.</Text>
+                </View>
+              </View>
+              <PrimaryButton
+                disabled={pendingRequestId === request.id}
+                label={pendingRequestId === request.id ? 'Confirming...' : 'Confirm cash received'}
+                loading={pendingRequestId === request.id}
+                onPress={() => confirmPayment(request)}
+              />
             </View>
           ))}
-        </ShellCard>
-        <ShellCard title="Cash confirmations">
-          {requestsQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(requestsQuery.error)}</Text> : null}
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          {message ? <Text style={styles.noticeText}>{message}</Text> : null}
-          <Field label="Override amount ETB" value={amountConfirmed} onChangeText={setAmountConfirmed} placeholder="Leave blank for estimate" keyboardType="numeric" />
-          {completedRequests.length === 0 ? <Text style={styles.muted}>No completed trips are waiting for cash confirmation.</Text> : null}
-          <View style={styles.ownerPaymentList}>
-            {completedRequests.map((request) => (
-              <View key={request.id} style={styles.ownerPaymentCard}>
-                <View style={styles.ownerPaymentHeader}>
-                  <View style={styles.flex}>
-                    <Text style={styles.ownerPaymentEyebrow}>Cash payment</Text>
-                    <Text style={styles.ownerPaymentAmount}>{request.quoteSnapshot?.currency ?? 'ETB'} {Number(request.quoteSnapshot?.totalEstimate ?? 0).toFixed(2)}</Text>
-                    <Text style={styles.ownerPaymentRoute}>{request.pickupLocation?.addressText} to {request.destinationLocation?.addressText}</Text>
-                  </View>
-                  <StatusBadge tone={request.payment?.status === 'disputed' ? 'warning' : request.payment?.status === 'confirmed_by_owner' ? 'success' : 'warning'}>
-                    {request.payment ? paymentStatusLabels[request.payment.status] : 'Payment pending'}
-                  </StatusBadge>
-                </View>
-                <View style={styles.ownerPaymentMethodRow}>
-                  <View style={styles.ownerPaymentMethodIcon}>
-                    <MaterialCommunityIcons name="cash" color={colors.black} size={24} />
-                  </View>
-                  <View style={styles.flex}>
-                    <Text style={styles.ownerPaymentMethodTitle}>Cash after delivery</Text>
-                    <Text style={styles.ownerPaymentMethodCopy}>Confirm only after you have received the cash amount.</Text>
-                  </View>
-                </View>
-                <PrimaryButton
-                  disabled={pendingRequestId === request.id}
-                  label={pendingRequestId === request.id ? 'Confirming...' : 'Confirm cash received'}
-                  loading={pendingRequestId === request.id}
-                  onPress={() => confirmPayment(request)}
-                />
-              </View>
-            ))}
+        </View>
+      </View>
+
+      <View style={styles.earningsSection}>
+        <View style={styles.ownerSectionHeader}>
+          <View style={styles.flex}>
+            <Text style={styles.ownerSectionTitle}>Rating summary</Text>
+            <Text style={styles.ownerSectionCopy}>Recent customer feedback from completed KULI trips.</Text>
           </View>
-        </ShellCard>
-      </ScrollView>
-    </SafeAreaView>
+          <View style={styles.earningsRatingBadge}>
+            <MaterialCommunityIcons name="star" color={colors.warning} size={18} />
+            <Text style={styles.earningsRatingText}>{averageRating ? averageRating.toFixed(1) : '-'}</Text>
+          </View>
+        </View>
+        {ratingsQuery.isError ? <ErrorState title="Ratings could not load" message={getErrorMessage(ratingsQuery.error)} /> : null}
+        {ratings.length === 0 && !ratingsQuery.isLoading ? <EmptyState title="No reviews yet" message="Customer reviews appear here after completed trips." /> : null}
+        <View style={styles.earningsReviewList}>
+          {ratings.slice(0, 4).map((ratingRecord) => (
+            <View key={ratingRecord.id} style={styles.earningsReviewCard}>
+              <StarRating value={ratingRecord.rating} compact />
+              <Text style={styles.earningsReviewText}>{ratingRecord.reviewText || 'No written review.'}</Text>
+              {ratingRecord.createdAt ? <Text style={styles.muted}>{new Date(ratingRecord.createdAt).toLocaleDateString()}</Text> : null}
+            </View>
+          ))}
+        </View>
+      </View>
+    </Screen>
   );
 }
 
@@ -7524,6 +7685,408 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     marginTop: 2
+  },
+  activityContent: {
+    gap: spacing.lg,
+    paddingBottom: spacing.xxl
+  },
+  activityHero: {
+    backgroundColor: colors.black,
+    borderRadius: radii.xl,
+    gap: spacing.md,
+    padding: spacing.xl
+  },
+  activityEyebrow: {
+    color: '#D1D5DB',
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  activityTitle: {
+    color: colors.card,
+    fontSize: 34,
+    fontWeight: '900',
+    lineHeight: 39
+  },
+  activitySubtitle: {
+    color: '#E5E7EB',
+    fontSize: 15,
+    lineHeight: 22
+  },
+  activityFilterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm
+  },
+  activityFilterChip: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 42,
+    paddingHorizontal: spacing.lg
+  },
+  activityFilterChipActive: {
+    backgroundColor: colors.black,
+    borderColor: colors.black
+  },
+  activityFilterText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '900'
+  },
+  activityFilterTextActive: {
+    color: colors.card
+  },
+  activityTripList: {
+    gap: spacing.md
+  },
+  activityTripCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  activityTripHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  activityTripCode: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '900'
+  },
+  activityTripDate: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    marginTop: 2
+  },
+  activityRouteRow: {
+    alignItems: 'stretch',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  activityRouteRail: {
+    alignItems: 'center',
+    paddingVertical: 3,
+    width: 16
+  },
+  activityRouteDotStart: {
+    backgroundColor: colors.black,
+    borderRadius: 6,
+    height: 12,
+    width: 12
+  },
+  activityRouteLine: {
+    backgroundColor: colors.border,
+    flex: 1,
+    marginVertical: spacing.xs,
+    width: 2
+  },
+  activityRouteDotEnd: {
+    backgroundColor: colors.success,
+    borderRadius: 6,
+    height: 12,
+    width: 12
+  },
+  activityRouteText: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '800',
+    lineHeight: 20,
+    marginBottom: spacing.sm
+  },
+  activityTripFooter: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  activityTripAmount: {
+    color: colors.textPrimary,
+    fontSize: 22,
+    fontWeight: '900'
+  },
+  activityTripMeta: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '800'
+  },
+  activityDetailPanel: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.lg,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  activityDetailGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  trustPanel: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  trustHero: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md
+  },
+  trustHeroIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.black,
+    borderRadius: radii.md,
+    height: 52,
+    justifyContent: 'center',
+    width: 52
+  },
+  trustHeroTitle: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '900',
+    lineHeight: 26
+  },
+  trustHeroCopy: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 2
+  },
+  trustModeTabs: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    padding: spacing.xs
+  },
+  trustModeTab: {
+    alignItems: 'center',
+    borderRadius: radii.sm,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 44
+  },
+  trustModeTabActive: {
+    backgroundColor: colors.black
+  },
+  trustModeTabText: {
+    color: colors.black,
+    fontSize: 13,
+    fontWeight: '900'
+  },
+  trustModeTabTextActive: {
+    color: colors.card
+  },
+  ratingOwnerCard: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ratingOwnerAvatar: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    height: 48,
+    justifyContent: 'center',
+    width: 48
+  },
+  ratingOwnerTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  ratingOwnerCopy: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2
+  },
+  trustStars: {
+    flexDirection: 'row',
+    justifyContent: 'space-between'
+  },
+  trustStarButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+    minWidth: 52
+  },
+  trustRatingSummary: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '900',
+    textAlign: 'center'
+  },
+  trustTagGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm
+  },
+  trustTag: {
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 40,
+    paddingHorizontal: spacing.md
+  },
+  trustTagSelected: {
+    backgroundColor: colors.black,
+    borderColor: colors.black
+  },
+  trustTagText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '900'
+  },
+  trustTagTextSelected: {
+    color: colors.card
+  },
+  trustSectionCopy: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20
+  },
+  issueTileGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm
+  },
+  issueTile: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexBasis: '48%',
+    flexGrow: 1,
+    gap: spacing.sm,
+    justifyContent: 'center',
+    minHeight: 104,
+    padding: spacing.md
+  },
+  issueTileSelected: {
+    backgroundColor: colors.black,
+    borderColor: colors.black
+  },
+  issueTileText: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '900',
+    textAlign: 'center'
+  },
+  issueTileTextSelected: {
+    color: colors.card
+  },
+  evidenceCard: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  evidenceTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  evidenceCopy: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2
+  },
+  paymentDisputeCard: {
+    backgroundColor: colors.warningTint,
+    borderColor: colors.warning,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  trustSuccessText: {
+    color: colors.success,
+    fontSize: 14,
+    fontWeight: '900',
+    lineHeight: 20
+  },
+  earningsContent: {
+    gap: spacing.lg,
+    paddingBottom: spacing.xxl
+  },
+  earningsHero: {
+    backgroundColor: colors.black,
+    borderRadius: radii.xl,
+    gap: spacing.sm,
+    padding: spacing.xl
+  },
+  earningsHeroLabel: {
+    color: '#D1D5DB',
+    fontSize: 13,
+    fontWeight: '900'
+  },
+  earningsHeroAmount: {
+    color: colors.card,
+    fontSize: 34,
+    fontWeight: '900',
+    lineHeight: 40
+  },
+  earningsHeroCopy: {
+    color: '#E5E7EB',
+    fontSize: 14,
+    lineHeight: 20
+  },
+  earningsSection: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  earningsRatingBadge: {
+    alignItems: 'center',
+    backgroundColor: colors.warningTint,
+    borderRadius: radii.xl,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    minHeight: 36,
+    paddingHorizontal: spacing.md
+  },
+  earningsRatingText: {
+    color: colors.warning,
+    fontSize: 14,
+    fontWeight: '900'
+  },
+  earningsReviewList: {
+    gap: spacing.sm
+  },
+  earningsReviewCard: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  earningsReviewText: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    lineHeight: 20
   },
   ownerPaymentList: {
     gap: spacing.md
