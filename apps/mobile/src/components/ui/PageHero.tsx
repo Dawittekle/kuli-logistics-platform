@@ -4,59 +4,48 @@ import type { StyleProp, ViewStyle } from 'react-native';
 
 import { colors, radii, spacing, typography } from '../../theme';
 
-type AppHeaderProps = {
+type PageHeroProps = {
   title: string;
   eyebrow?: string;
   subtitle?: string;
-  leading?: ReactNode;
-  trailing?: ReactNode;
-  style?: StyleProp<ViewStyle>;
+  action?: ReactNode;
   dark?: boolean;
-  boxed?: boolean;
+  style?: StyleProp<ViewStyle>;
 };
 
-export function AppHeader({ title, eyebrow, subtitle, leading, trailing, style, dark = false, boxed = false }: AppHeaderProps) {
+export function PageHero({ title, eyebrow, subtitle, action, dark = false, style }: PageHeroProps) {
   return (
-    <View style={[styles.header, boxed && styles.boxed, dark && styles.dark, style]}>
-      {leading}
+    <View style={[styles.hero, dark && styles.darkHero, style]}>
       <View style={styles.copy}>
         {eyebrow ? <Text style={[styles.eyebrow, dark && styles.darkMuted]}>{eyebrow}</Text> : null}
         <Text style={[styles.title, dark && styles.darkText]}>{title}</Text>
         {subtitle ? <Text style={[styles.subtitle, dark && styles.darkMuted]}>{subtitle}</Text> : null}
       </View>
-      {trailing}
+      {action}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: spacing.md,
-    justifyContent: 'space-between'
-  },
-  boxed: {
+  hero: {
     backgroundColor: colors.card,
     borderColor: colors.border,
     borderRadius: radii.xl,
     borderWidth: 1,
-    padding: spacing.lg
+    gap: spacing.lg,
+    padding: spacing.xl
   },
-  dark: {
+  darkHero: {
     backgroundColor: colors.black,
     borderColor: colors.black
   },
   copy: {
-    flex: 1,
-    gap: spacing.xs
+    gap: spacing.sm
   },
   eyebrow: {
     color: colors.textSecondary,
     fontSize: typography.caption.fontSize,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: typography.caption.lineHeight,
+    fontWeight: '900',
     textTransform: 'uppercase'
   },
   title: {

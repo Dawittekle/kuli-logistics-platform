@@ -25,6 +25,7 @@ import { clearDemoAccessToken, kuliApi, setDemoAccessToken } from './lib/api';
 import { supabase } from './lib/supabase';
 import { runtimeConfig, runtimeReadiness } from './config/runtime';
 import { colors, radii, spacing } from './theme';
+import { BottomTabIcon } from './components/navigation/BottomTabIcon';
 import { AppHeader } from './components/ui/AppHeader';
 import { Card as UiCard } from './components/ui/Card';
 import { EmptyState } from './components/ui/EmptyState';
@@ -4288,7 +4289,7 @@ function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
 
 function ClientTabs({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
   return (
-    <Tab.Navigator screenOptions={tabScreenOptions}>
+    <Tab.Navigator screenOptions={createTabScreenOptions(clientTabIcons)}>
       <Tab.Screen name="Home">{() => <ClientHomeScreen profile={profile} onSignOut={onSignOut} />}</Tab.Screen>
       <Tab.Screen name="Request" component={ClientQuoteScreen} />
       <Tab.Screen name="History">{() => <ClientHistoryScreen profile={profile} />}</Tab.Screen>
@@ -4299,7 +4300,7 @@ function ClientTabs({ profile, onSignOut }: { profile: UserProfile; onSignOut: (
 
 function OwnerTabs({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
   return (
-    <Tab.Navigator screenOptions={tabScreenOptions}>
+    <Tab.Navigator screenOptions={createTabScreenOptions(ownerTabIcons)}>
       <Tab.Screen name="Home">{() => <HomeOverview profile={profile} onSignOut={onSignOut} />}</Tab.Screen>
       <Tab.Screen name="Vehicles" component={OwnerVehiclesScreen} />
       <Tab.Screen name="Offers">{() => <OwnerOffersScreen profile={profile} />}</Tab.Screen>
@@ -4442,26 +4443,59 @@ export default function App() {
   );
 }
 
-const tabScreenOptions = {
-  headerStyle: { backgroundColor: colors.black },
-  headerTintColor: colors.card,
-  headerTitleStyle: {
-    fontSize: 18,
-    fontWeight: '800' as const
-  },
-  tabBarActiveTintColor: colors.black,
-  tabBarInactiveTintColor: colors.textSecondary,
-  tabBarStyle: {
-    backgroundColor: colors.card,
-    borderTopColor: colors.border,
-    minHeight: 68,
-    paddingBottom: 10,
-    paddingTop: 8
-  },
-  tabBarLabelStyle: {
-    fontSize: 11,
-    fontWeight: '800' as const
-  }
+type TabIconConfig = Record<string, { name: string; label: string; iconSet?: 'ion' | 'material' }>;
+type TabBarIconProps = { focused: boolean; color: string; size: number };
+
+const clientTabIcons: TabIconConfig = {
+  Home: { name: 'home-outline', label: 'Home' },
+  Request: { name: 'map-marker-path', label: 'Request', iconSet: 'material' },
+  History: { name: 'receipt-outline', label: 'History' },
+  Alerts: { name: 'notifications-outline', label: 'Alerts' }
+};
+
+const ownerTabIcons: TabIconConfig = {
+  Home: { name: 'speedometer-outline', label: 'Home', iconSet: 'material' },
+  Vehicles: { name: 'truck-outline', label: 'Vehicles', iconSet: 'material' },
+  Offers: { name: 'clipboard-list-outline', label: 'Offers', iconSet: 'material' },
+  Alerts: { name: 'notifications-outline', label: 'Alerts' },
+  Earnings: { name: 'cash-multiple', label: 'Earnings', iconSet: 'material' }
+};
+
+const createTabScreenOptions = (icons: TabIconConfig) => ({ route }: { route: { name: string } }) => {
+  const icon = icons[route.name] ?? { name: 'ellipse-outline', label: route.name };
+
+  return {
+    headerShown: false,
+    tabBarHideOnKeyboard: true,
+    tabBarShowLabel: false,
+    tabBarStyle: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.xl,
+      borderTopWidth: 1,
+      borderWidth: 1,
+      elevation: 16,
+      height: 82,
+      left: spacing.md,
+      paddingBottom: spacing.sm,
+      paddingHorizontal: spacing.sm,
+      paddingTop: spacing.sm,
+      position: 'absolute' as const,
+      right: spacing.md,
+      shadowColor: colors.black,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.1,
+      shadowRadius: 24
+    },
+    tabBarItemStyle: {
+      borderRadius: radii.xl,
+      minHeight: 58,
+      paddingVertical: 0
+    },
+    tabBarIcon: ({ focused }: TabBarIconProps) => (
+      <BottomTabIcon focused={focused} iconSet={icon.iconSet} label={icon.label} name={icon.name} />
+    )
+  };
 };
 
 const styles = StyleSheet.create({
@@ -4481,7 +4515,8 @@ const styles = StyleSheet.create({
   },
   content: {
     gap: spacing.lg,
-    padding: spacing.xl
+    padding: spacing.xl,
+    paddingBottom: 128
   },
   authContent: {
     gap: spacing.lg,
@@ -4491,7 +4526,7 @@ const styles = StyleSheet.create({
   requestContent: {
     gap: spacing.lg,
     padding: spacing.lg,
-    paddingBottom: spacing.xxl
+    paddingBottom: 128
   },
   requestSection: {
     gap: spacing.lg
@@ -4831,7 +4866,7 @@ const styles = StyleSheet.create({
   clientHomeContent: {
     gap: spacing.xl,
     padding: spacing.lg,
-    paddingBottom: spacing.xxl
+    paddingBottom: 128
   },
   clientHero: {
     backgroundColor: colors.card,

@@ -18,7 +18,11 @@ export function Screen({ children, scroll = true, padded = true, style, contentS
 
   return (
     <SafeAreaView style={[styles.screen, style]}>
-      {scroll ? <ScrollView contentContainerStyle={styles.scrollContent}>{content}</ScrollView> : content}
+      {scroll ? (
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          {content}
+        </ScrollView>
+      ) : content}
     </SafeAreaView>
   );
 }
@@ -36,7 +40,7 @@ const styles = StyleSheet.create({
     gap: spacing.lg
   },
   padded: {
-    padding: spacing.xl
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl
   }
 });
-
