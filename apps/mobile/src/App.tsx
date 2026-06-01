@@ -794,9 +794,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
   const isLogin = mode === 'login';
   const isRegister = mode === 'register';
   const normalizedEmail = email.trim().toLowerCase();
-  const canSubmit = runtimeConfig.demoAuthEnabled
-    ? Boolean(normalizedEmail) && (isLogin || (isRegister && Boolean(fullName.trim())))
-    : Boolean(normalizedEmail) && password.length >= 6 && (isLogin || (isRegister && Boolean(fullName.trim())));
+  const canSubmit = Boolean(normalizedEmail) && password.length >= 6 && (isLogin || (isRegister && Boolean(fullName.trim())));
   const canResetPassword = !resetPending;
 
   const changeMode = (nextMode: AuthMode) => {
@@ -949,6 +947,10 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
       const { data: currentData } = await supabase.auth.getSession();
       let nextSession = currentData.session;
 
+      if (nextSession?.user.email?.toLowerCase() !== verificationDraft.email) {
+        nextSession = null;
+      }
+
       if (!nextSession && password.length >= 6) {
         const { data, error: signInError } = await supabase.auth.signInWithPassword({
           email: verificationDraft.email,
@@ -1021,13 +1023,6 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
 
   const submit = async () => {
     if (!canSubmit || pending) {
-      return;
-    }
-
-    if (runtimeConfig.demoAuthEnabled) {
-      await startDemoProfile(mode === 'register' ? role : 'client', {
-        preserveExistingRole: mode === 'login'
-      });
       return;
     }
 
@@ -1213,7 +1208,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
                   <SectionHeader
                     eyebrow="Development only"
                     title="Local demo access"
-                    description="Explore KULI without Supabase email verification. Demo profiles use local dev tokens."
+                    description="Use these buttons to explore KULI with local dev tokens. The main login and create-account buttons still use Supabase."
                   />
                   <View style={styles.actionRow}>
                     <SecondaryButton disabled={pending} label="Demo client" onPress={() => startDemoProfile('client')} style={styles.actionButton} />
