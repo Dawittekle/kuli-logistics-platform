@@ -3913,12 +3913,266 @@ function OwnerOffersScreen({ profile }: { profile: UserProfile }) {
   );
 }
 
+type NotificationFilter = 'all' | 'trips' | 'offers' | 'payments' | 'system';
+
+const notificationFilters: Array<{ key: NotificationFilter; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'trips', label: 'Trips' },
+  { key: 'offers', label: 'Offers' },
+  { key: 'payments', label: 'Payments' },
+  { key: 'system', label: 'System' }
+];
+
+const notificationCategoryForType = (type: string): NotificationFilter => {
+  const normalized = type.toLowerCase();
+
+  if (normalized.includes('offer')) {
+    return 'offers';
+  }
+
+  if (normalized.includes('payment') || normalized.includes('earning') || normalized.includes('payout')) {
+    return 'payments';
+  }
+
+  if (normalized.includes('message') || normalized.includes('trip') || normalized.includes('request') || normalized.includes('status') || normalized.includes('cancel')) {
+    return 'trips';
+  }
+
+  return 'system';
+};
+
+const notificationVisual = (notification: NotificationRecord): {
+  icon: string;
+  accent: string;
+  background: string;
+  foreground: string;
+  label: string;
+} => {
+  const type = notification.type.toLowerCase();
+
+  if (type.includes('offer')) {
+    return {
+      icon: 'truck-fast-outline',
+      accent: colors.warning,
+      background: colors.warningTint,
+      foreground: colors.warning,
+      label: 'Offer'
+    };
+  }
+
+  if (type.includes('payment') || type.includes('earning') || type.includes('payout')) {
+    return {
+      icon: 'cash-multiple',
+      accent: colors.success,
+      background: colors.successTint,
+      foreground: colors.success,
+      label: 'Payment'
+    };
+  }
+
+  if (type.includes('cancel') || type.includes('failed') || type.includes('dispute') || notification.deliveryStatus === 'failed') {
+    return {
+      icon: 'alert-circle-outline',
+      accent: colors.error,
+      background: colors.errorTint,
+      foreground: colors.error,
+      label: type.includes('dispute') ? 'Review' : 'Alert'
+    };
+  }
+
+  if (type.includes('message')) {
+    return {
+      icon: 'message-text-outline',
+      accent: colors.black,
+      background: colors.subtle,
+      foreground: colors.black,
+      label: 'Message'
+    };
+  }
+
+  if (type.includes('status') || type.includes('trip') || type.includes('request')) {
+    return {
+      icon: 'map-marker-path',
+      accent: colors.success,
+      background: colors.successTint,
+      foreground: colors.success,
+      label: 'Trip'
+    };
+  }
+
+  return {
+    icon: 'bell-outline',
+    accent: colors.black,
+    background: colors.subtle,
+    foreground: colors.black,
+    label: 'System'
+  };
+};
+
+const formatNotificationTime = (createdAt?: string) => {
+  if (!createdAt) {
+    return 'Just now';
+  }
+
+  const created = new Date(createdAt);
+  const timestamp = created.getTime();
+
+  if (Number.isNaN(timestamp)) {
+    return 'Just now';
+  }
+
+  const diffMs = Date.now() - timestamp;
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (diffMs < minute) {
+    return 'Just now';
+  }
+
+  if (diffMs < hour) {
+    return `${Math.max(1, Math.floor(diffMs / minute))}m ago`;
+  }
+
+  if (diffMs < day) {
+    return `${Math.floor(diffMs / hour)}h ago`;
+  }
+
+  if (diffMs < 7 * day) {
+    return `${Math.floor(diffMs / day)}d ago`;
+  }
+
+  return created.toLocaleDateString();
+};
+
+function PreferenceToggle({
+  label,
+  detail,
+  enabled,
+  onPress,
+  disabled = false
+}: {
+  label: string;
+  detail: string;
+  enabled: boolean;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityState={{ checked: enabled, disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={[styles.notificationPreferenceRow, enabled && styles.notificationPreferenceRowActive, disabled && styles.notificationPreferenceRowDisabled]}
+    >
+      <View style={styles.flex}>
+        <Text style={styles.notificationPreferenceTitle}>{label}</Text>
+        <Text style={styles.notificationPreferenceDetail}>{detail}</Text>
+      </View>
+      <View style={[styles.notificationToggleTrack, enabled && styles.notificationToggleTrackActive, disabled && styles.notificationToggleTrackDisabled]}>
+        <View style={[styles.notificationToggleKnob, enabled && styles.notificationToggleKnobActive]} />
+      </View>
+    </Pressable>
+  );
+}
+
+function NotificationCard({
+  notification,
+  pending,
+  profile,
+  onMarkRead,
+  onOpenDetail
+}: {
+  notification: NotificationRecord;
+  pending: boolean;
+  profile: UserProfile;
+  onMarkRead: (notification: NotificationRecord) => void;
+  onOpenDetail: (notification: NotificationRecord) => void;
+}) {
+  const unread = notification.deliveryStatus !== 'read';
+  const visual = notificationVisual(notification);
+  const canOpen = Boolean(notification.data?.requestId);
+
+  return (
+    <View style={[styles.notificationCard, unread && styles.notificationCardUnread]}>
+      <View style={[styles.notificationAccent, { backgroundColor: visual.accent }]} />
+      <View style={[styles.notificationIconWrap, { backgroundColor: visual.background }]}>
+        <MaterialCommunityIcons name={visual.icon as never} color={visual.foreground} size={24} />
+      </View>
+      <View style={styles.notificationCardBody}>
+        <View style={styles.notificationCardHeader}>
+          <Text style={styles.notificationCardLabel}>{visual.label}</Text>
+          <View style={styles.notificationMetaRow}>
+            <Text style={styles.notificationTime}>{formatNotificationTime(notification.createdAt)}</Text>
+            {unread ? <View style={styles.notificationUnreadDot} /> : null}
+          </View>
+        </View>
+        <Text style={styles.notificationTitle}>{notification.title}</Text>
+        <Text style={styles.notificationBody}>{notification.body}</Text>
+        {profile.role === 'truck_owner' && notification.type === 'offer.sent' ? (
+          <Text style={styles.notificationHint}>Review the route, load, and estimate before accepting.</Text>
+        ) : null}
+        <View style={styles.notificationActionRow}>
+          {canOpen ? (
+            <Pressable accessibilityRole="button" disabled={pending} onPress={() => onOpenDetail(notification)} style={[styles.notificationPrimaryAction, pending && styles.buttonDisabled]}>
+              <Text style={styles.notificationPrimaryActionText}>{profile.role === 'truck_owner' && notification.type === 'offer.sent' ? 'View offer' : 'View details'}</Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            disabled={!unread || pending}
+            onPress={() => onMarkRead(notification)}
+            style={[styles.notificationSecondaryAction, (!unread || pending) && styles.notificationSecondaryActionDisabled]}
+          >
+            <Text style={[styles.notificationSecondaryActionText, (!unread || pending) && styles.notificationSecondaryActionTextDisabled]}>{unread ? 'Mark read' : 'Read'}</Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function NotificationLoadingList() {
+  return (
+    <View style={styles.notificationList}>
+      {[0, 1, 2].map((item) => (
+        <View key={item} style={styles.notificationSkeletonCard}>
+          <View style={styles.notificationSkeletonIcon} />
+          <View style={styles.flex}>
+            <View style={styles.notificationSkeletonLineWide} />
+            <View style={styles.notificationSkeletonLine} />
+            <View style={styles.notificationSkeletonLineShort} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function NotificationEmptyState({ profile }: { profile: UserProfile }) {
+  return (
+    <View style={styles.notificationEmptyCard}>
+      <View style={styles.notificationEmptyIcon}>
+        <MaterialCommunityIcons name="bell-sleep-outline" color={colors.black} size={42} />
+      </View>
+      <Text style={styles.notificationEmptyTitle}>No updates yet</Text>
+      <Text style={styles.notificationEmptyCopy}>
+        {profile.role === 'truck_owner'
+          ? 'Offer alerts, vehicle decisions, trip changes, and payment updates will appear here.'
+          : 'Trip updates, messages, payment notes, and account alerts will appear here.'}
+      </Text>
+    </View>
+  );
+}
+
 function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
   const navigation = useNavigation<any>();
   const queryClient = useQueryClient();
   const [pushEnabled, setPushEnabled] = useState(true);
   const [smsEnabled, setSmsEnabled] = useState(false);
   const [emailEnabled, setEmailEnabled] = useState(true);
+  const [activeFilter, setActiveFilter] = useState<NotificationFilter>('all');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [pendingId, setPendingId] = useState('');
@@ -3932,6 +4186,9 @@ function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
 
   const notifications = notificationsQuery.data ?? [];
   const unreadCount = notifications.filter((notification) => notification.deliveryStatus !== 'read').length;
+  const availableFilters = notificationFilters.filter((filter) => filter.key === 'all' || notifications.some((notification) => notificationCategoryForType(notification.type) === filter.key));
+  const filteredNotifications = activeFilter === 'all' ? notifications : notifications.filter((notification) => notificationCategoryForType(notification.type) === activeFilter);
+  const unreadLabel = unreadCount === 1 ? '1 unread' : `${unreadCount} unread`;
 
   const markRead = async (notification: NotificationRecord) => {
     setPendingId(notification.id);
@@ -4001,79 +4258,101 @@ function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.cardHeader}>
+    <Screen contentStyle={styles.notificationsContent}>
+      <View style={styles.notificationsHeader}>
+        <View style={styles.notificationsHeaderTop}>
           <View style={styles.flex}>
-            <Text style={styles.eyebrow}>Notifications</Text>
-            <Text style={styles.title}>Your updates</Text>
+            <Text style={styles.notificationsEyebrow}>{profile.role === 'truck_owner' ? 'Owner updates' : 'Your updates'}</Text>
+            <Text style={styles.notificationsTitle}>Notifications</Text>
           </View>
-          <StatusPill tone={unreadCount ? 'warn' : 'ready'}>{unreadCount} unread</StatusPill>
+          <StatusBadge tone={unreadCount ? 'warning' : 'success'}>{unreadLabel}</StatusBadge>
         </View>
+        <Text style={styles.notificationsSubtitle}>
+          {profile.role === 'truck_owner'
+            ? 'Offer, trip, vehicle, and payment alerts stay organized here.'
+            : 'Trip progress, messages, payments, and account updates stay organized here.'}
+        </Text>
+      </View>
 
-        <ShellCard title="Alert preferences">
-          <Text style={styles.muted}>Important in-app updates stay on. Choose any extra channels you want to receive.</Text>
-          {[
-            { label: 'Push', value: pushEnabled, onPress: () => setPushEnabled((value) => !value) },
-            { label: 'SMS', value: smsEnabled, onPress: () => setSmsEnabled((value) => !value) },
-            { label: 'Email', value: emailEnabled, onPress: () => setEmailEnabled((value) => !value) }
-          ].map((option) => (
-            <Pressable
-              accessibilityRole="switch"
-              accessibilityState={{ checked: option.value }}
-              key={option.label}
-              onPress={option.onPress}
-              style={[styles.switchRow, option.value && styles.switchRowActive]}
-            >
-              <Text style={[styles.switchText, option.value && styles.switchTextActive]}>{option.label}</Text>
-              <StatusPill tone={option.value ? 'ready' : 'warn'}>{option.value ? 'On' : 'Off'}</StatusPill>
-            </Pressable>
-          ))}
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          {message ? <Text style={styles.noticeText}>{message}</Text> : null}
-          <Pressable accessibilityRole="button" disabled={preferencesPending} onPress={savePreferences} style={[styles.primaryButton, preferencesPending && styles.buttonDisabled]}>
-            <Text style={styles.primaryButtonText}>{preferencesPending ? 'Saving...' : 'Save preferences'}</Text>
-          </Pressable>
-        </ShellCard>
-
-        <ShellCard title="Latest updates">
-          {notificationsQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(notificationsQuery.error)}</Text> : null}
-          <Pressable accessibilityRole="button" onPress={() => notificationsQuery.refetch()} style={styles.secondaryButton}>
-            <Text style={styles.secondaryButtonText}>Refresh notifications</Text>
-          </Pressable>
-          {notifications.length === 0 ? <Text style={styles.muted}>No updates yet. Requests, messages, and trip changes will appear here.</Text> : null}
-          <View style={styles.roleGrid}>
-            {notifications.map((notification) => (
-              <View key={notification.id} style={styles.notificationRow}>
-                <View style={styles.flex}>
-                  <Text style={styles.cardTitle}>{notification.title}</Text>
-                  <Text style={styles.muted}>{notification.body}</Text>
-                  <Text style={styles.muted}>{notification.createdAt ? new Date(notification.createdAt).toLocaleString() : 'Just now'}</Text>
-                  {profile.role === 'truck_owner' && notification.type === 'offer.sent' ? (
-                    <Text style={styles.noticeText}>Open Offers to review the route, load, and estimate before accepting.</Text>
-                  ) : null}
-                </View>
-                <View style={styles.notificationActions}>
-                  {notification.data?.requestId ? (
-                    <Pressable accessibilityRole="button" disabled={pendingId === notification.id} onPress={() => openNotificationDetail(notification)} style={[styles.compactButton, pendingId === notification.id && styles.buttonDisabled]}>
-                      <Text style={styles.compactButtonText}>{profile.role === 'truck_owner' && notification.type === 'offer.sent' ? 'View offer' : 'View details'}</Text>
-                    </Pressable>
-                  ) : null}
-                  <Pressable
-                    accessibilityRole="button"
-                    disabled={notification.deliveryStatus === 'read' || pendingId === notification.id}
-                    onPress={() => markRead(notification)}
-                    style={[styles.compactButton, (notification.deliveryStatus === 'read' || pendingId === notification.id) && styles.buttonDisabled]}
-                  >
-                    <Text style={styles.compactButtonText}>{notification.deliveryStatus === 'read' ? 'Read' : 'Mark read'}</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ))}
+      <View style={styles.notificationPreferencesCard}>
+        <View style={styles.notificationSectionHeader}>
+          <View style={styles.flex}>
+            <Text style={styles.notificationSectionTitle}>Alert preferences</Text>
+            <Text style={styles.notificationSectionCopy}>Important in-app updates stay on. Choose extra channels when you want them.</Text>
           </View>
-        </ShellCard>
-      </ScrollView>
-    </SafeAreaView>
+          <View style={styles.notificationInAppPill}>
+            <MaterialCommunityIcons name="check" color={colors.success} size={15} />
+            <Text style={styles.notificationInAppPillText}>In-app on</Text>
+          </View>
+        </View>
+        <PreferenceToggle label="Push" detail="Instant alerts on this device." enabled={pushEnabled} onPress={() => setPushEnabled((value) => !value)} />
+        <PreferenceToggle label="SMS" detail="Optional text updates when provider is configured." enabled={smsEnabled} onPress={() => setSmsEnabled((value) => !value)} />
+        <PreferenceToggle label="Email" detail="Receipts and important account updates." enabled={emailEnabled} onPress={() => setEmailEnabled((value) => !value)} />
+        {error ? <ErrorState title="Could not update notifications" message={error} /> : null}
+        {message ? <Text style={styles.notificationSuccessText}>{message}</Text> : null}
+        <PrimaryButton disabled={preferencesPending} label={preferencesPending ? 'Saving...' : 'Save preferences'} loading={preferencesPending} onPress={savePreferences} />
+      </View>
+
+      <View style={styles.notificationFilterRow}>
+        {availableFilters.map((filter) => {
+          const selected = activeFilter === filter.key;
+
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              key={filter.key}
+              onPress={() => setActiveFilter(filter.key)}
+              style={[styles.notificationFilterChip, selected && styles.notificationFilterChipActive]}
+            >
+              <Text style={[styles.notificationFilterText, selected && styles.notificationFilterTextActive]}>{filter.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <View style={styles.notificationListHeader}>
+        <Text style={styles.notificationSectionTitle}>{activeFilter === 'all' ? 'Latest updates' : `${notificationFilters.find((filter) => filter.key === activeFilter)?.label ?? 'Updates'} updates`}</Text>
+        <SecondaryButton label="Refresh" onPress={() => notificationsQuery.refetch()} style={styles.notificationRefreshButton} />
+      </View>
+
+      {notificationsQuery.isLoading ? <NotificationLoadingList /> : null}
+
+      {notificationsQuery.isError ? (
+        <ErrorState
+          title="Updates could not load"
+          message={getErrorMessage(notificationsQuery.error)}
+          action={<SecondaryButton label="Try again" onPress={() => notificationsQuery.refetch()} />}
+        />
+      ) : null}
+
+      {!notificationsQuery.isLoading && !notificationsQuery.isError && notifications.length === 0 ? <NotificationEmptyState profile={profile} /> : null}
+
+      {!notificationsQuery.isLoading && !notificationsQuery.isError && notifications.length > 0 && filteredNotifications.length === 0 ? (
+        <View style={styles.notificationEmptyCard}>
+          <View style={styles.notificationEmptyIcon}>
+            <MaterialCommunityIcons name="filter-variant-remove" color={colors.black} size={38} />
+          </View>
+          <Text style={styles.notificationEmptyTitle}>Nothing in this category</Text>
+          <Text style={styles.notificationEmptyCopy}>Try All to see every update.</Text>
+        </View>
+      ) : null}
+
+      {!notificationsQuery.isLoading && !notificationsQuery.isError && filteredNotifications.length > 0 ? (
+        <View style={styles.notificationList}>
+          {filteredNotifications.map((notification) => (
+            <NotificationCard
+              key={notification.id}
+              notification={notification}
+              pending={pendingId === notification.id}
+              profile={profile}
+              onMarkRead={markRead}
+              onOpenDetail={openNotificationDetail}
+            />
+          ))}
+        </View>
+      ) : null}
+    </Screen>
   );
 }
 
@@ -6533,21 +6812,359 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800'
   },
-  notificationRow: {
+  notificationsContent: {
+    gap: spacing.lg,
+    paddingBottom: spacing.xxl
+  },
+  notificationsHeader: {
+    backgroundColor: colors.black,
+    borderRadius: radii.xl,
+    gap: spacing.md,
+    padding: spacing.xl
+  },
+  notificationsHeaderTop: {
     alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  notificationsEyebrow: {
+    color: '#D1D5DB',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0,
+    marginBottom: spacing.xs
+  },
+  notificationsTitle: {
+    color: colors.card,
+    fontSize: 34,
+    fontWeight: '900',
+    lineHeight: 39
+  },
+  notificationsSubtitle: {
+    color: '#E5E7EB',
+    fontSize: 15,
+    lineHeight: 22
+  },
+  notificationPreferencesCard: {
     backgroundColor: colors.card,
-    borderColor: colors.line,
-    borderRadius: radii.sm,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  notificationSectionHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  notificationSectionTitle: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '900',
+    lineHeight: 26
+  },
+  notificationSectionCopy: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: spacing.xs
+  },
+  notificationInAppPill: {
+    alignItems: 'center',
+    backgroundColor: colors.successTint,
+    borderRadius: radii.xl,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    minHeight: 34,
+    paddingHorizontal: spacing.md
+  },
+  notificationInAppPillText: {
+    color: colors.success,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  notificationPreferenceRow: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: radii.md,
     borderWidth: 1,
     flexDirection: 'row',
-    gap: spacing.sm,
-    justifyContent: 'space-between',
-    minHeight: 76,
-    padding: spacing.sm
+    gap: spacing.md,
+    minHeight: 72,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
   },
-  notificationActions: {
-    gap: spacing.xs,
-    minWidth: 92
+  notificationPreferenceRowActive: {
+    backgroundColor: colors.card,
+    borderColor: colors.black
+  },
+  notificationPreferenceRowDisabled: {
+    opacity: 0.55
+  },
+  notificationPreferenceTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  notificationPreferenceDetail: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2
+  },
+  notificationToggleTrack: {
+    backgroundColor: colors.border,
+    borderRadius: 999,
+    height: 32,
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    width: 54
+  },
+  notificationToggleTrackActive: {
+    backgroundColor: colors.black
+  },
+  notificationToggleTrackDisabled: {
+    backgroundColor: colors.muted
+  },
+  notificationToggleKnob: {
+    backgroundColor: colors.card,
+    borderRadius: 13,
+    height: 26,
+    width: 26
+  },
+  notificationToggleKnobActive: {
+    alignSelf: 'flex-end'
+  },
+  notificationSuccessText: {
+    color: colors.success,
+    fontSize: 14,
+    fontWeight: '800'
+  },
+  notificationFilterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm
+  },
+  notificationFilterChip: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg
+  },
+  notificationFilterChipActive: {
+    backgroundColor: colors.black,
+    borderColor: colors.black
+  },
+  notificationFilterText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '900'
+  },
+  notificationFilterTextActive: {
+    color: colors.card
+  },
+  notificationListHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  notificationRefreshButton: {
+    minHeight: 42,
+    paddingHorizontal: spacing.md
+  },
+  notificationList: {
+    gap: spacing.md
+  },
+  notificationCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    overflow: 'hidden',
+    padding: spacing.md,
+    paddingLeft: spacing.lg
+  },
+  notificationCardUnread: {
+    borderColor: colors.warning
+  },
+  notificationAccent: {
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    top: 0,
+    width: 5
+  },
+  notificationIconWrap: {
+    alignItems: 'center',
+    borderRadius: radii.md,
+    height: 48,
+    justifyContent: 'center',
+    width: 48
+  },
+  notificationCardBody: {
+    flex: 1,
+    gap: spacing.xs
+  },
+  notificationCardHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'space-between'
+  },
+  notificationCardLabel: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  notificationMetaRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs
+  },
+  notificationTime: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '800'
+  },
+  notificationUnreadDot: {
+    backgroundColor: colors.warning,
+    borderRadius: 5,
+    height: 10,
+    width: 10
+  },
+  notificationTitle: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '900',
+    lineHeight: 23
+  },
+  notificationBody: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20
+  },
+  notificationHint: {
+    color: colors.warning,
+    fontSize: 13,
+    fontWeight: '800',
+    lineHeight: 18
+  },
+  notificationActionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.sm
+  },
+  notificationPrimaryAction: {
+    alignItems: 'center',
+    backgroundColor: colors.black,
+    borderRadius: radii.md,
+    minHeight: 42,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg
+  },
+  notificationPrimaryActionText: {
+    color: colors.card,
+    fontSize: 14,
+    fontWeight: '900'
+  },
+  notificationSecondaryAction: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    minHeight: 42,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg
+  },
+  notificationSecondaryActionDisabled: {
+    backgroundColor: colors.subtle
+  },
+  notificationSecondaryActionText: {
+    color: colors.black,
+    fontSize: 14,
+    fontWeight: '900'
+  },
+  notificationSecondaryActionTextDisabled: {
+    color: colors.textSecondary
+  },
+  notificationSkeletonCard: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    minHeight: 104,
+    padding: spacing.md
+  },
+  notificationSkeletonIcon: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    height: 48,
+    width: 48
+  },
+  notificationSkeletonLineWide: {
+    backgroundColor: colors.subtle,
+    borderRadius: 999,
+    height: 16,
+    width: '75%'
+  },
+  notificationSkeletonLine: {
+    backgroundColor: colors.subtle,
+    borderRadius: 999,
+    height: 12,
+    marginTop: spacing.sm,
+    width: '95%'
+  },
+  notificationSkeletonLineShort: {
+    backgroundColor: colors.subtle,
+    borderRadius: 999,
+    height: 12,
+    marginTop: spacing.sm,
+    width: '45%'
+  },
+  notificationEmptyCard: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.xl
+  },
+  notificationEmptyIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: 32,
+    height: 64,
+    justifyContent: 'center',
+    width: 64
+  },
+  notificationEmptyTitle: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '900',
+    textAlign: 'center'
+  },
+  notificationEmptyCopy: {
+    color: colors.textSecondary,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center'
   },
   metricGrid: {
     flexDirection: 'row',
