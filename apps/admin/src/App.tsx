@@ -2,13 +2,17 @@ import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from 
 import type { Session } from '@supabase/supabase-js';
 import {
   AlertTriangle,
+  Bell,
   CheckCircle2,
+  CircleDollarSign,
   ClipboardList,
   CreditCard,
+  FileText,
   FileWarning,
   Gauge,
   LockKeyhole,
   LogOut,
+  MapPin,
   RefreshCw,
   ShieldCheck,
   Truck,
@@ -329,6 +333,16 @@ const isBlockedStatus = (status: AccountStatus) => ['suspended', 'banned', 'dele
 
 const createIdempotencyKey = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
+const humanize = (value?: string) => {
+  if (!value) {
+    return 'Not set';
+  }
+
+  return value
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+};
+
 const getErrorMessage = (error: unknown) => {
   if (error instanceof Error) {
     return error.message;
@@ -356,6 +370,58 @@ const createDemoSession = ({ accessToken, email }: { accessToken: string; email?
 
 function StatusBadge({ tone, children }: { tone: 'ready' | 'warn' | 'blocked' | 'muted'; children: ReactNode }) {
   return <span className={`status-badge status-badge--${tone}`}>{children}</span>;
+}
+
+function MetricCard({ icon: Icon, label, value, tone, helper }: { icon: typeof Gauge; label: string; value: ReactNode; tone: 'ready' | 'warn' | 'blocked' | 'muted'; helper: string }) {
+  return (
+    <div className={`metric-card metric-card--${tone}`}>
+      <div className="metric-card__icon">
+        <Icon aria-hidden="true" size={18} />
+      </div>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <p>{helper}</p>
+    </div>
+  );
+}
+
+function InfoPill({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <span className="info-pill">
+      {label}
+      <strong>{value}</strong>
+    </span>
+  );
+}
+
+function DocumentReviewCard({ document, onPreview }: { document: VehicleDocument; onPreview: (fileId: string) => void }) {
+  const tone = document.status === 'approved' ? 'ready' : document.status === 'rejected' ? 'blocked' : 'warn';
+
+  return (
+    <button className="document-review-card" onClick={() => onPreview(document.fileId)} type="button">
+      <span className="document-review-card__icon">
+        <FileText aria-hidden="true" size={20} />
+      </span>
+      <span>
+        <strong>{humanize(document.type)}</strong>
+        <small>Submitted file ready for signed preview</small>
+      </span>
+      <StatusBadge tone={tone}>{humanize(document.status)}</StatusBadge>
+    </button>
+  );
+}
+
+function TimelineEventRow({ event }: { event: StatusEvent }) {
+  return (
+    <div className="timeline-row">
+      <span className="timeline-row__dot" aria-hidden="true" />
+      <div>
+        <strong>{event.fromStatus ? `${humanize(event.fromStatus)} to ${humanize(event.toStatus)}` : humanize(event.toStatus)}</strong>
+        <small>{humanize(event.actorRole)}{event.actorUserId ? ` / ${event.actorUserId}` : ''}{event.reason ? ` / ${event.reason}` : ''}</small>
+      </div>
+      <time>{event.createdAt ? new Date(event.createdAt).toLocaleString() : 'Pending time'}</time>
+    </div>
+  );
 }
 
 function Panel({ title, eyebrow, children }: { title: string; eyebrow?: string; children: ReactNode }) {
@@ -588,13 +654,13 @@ function AdminDashboardPanel({ enabled }: { enabled: boolean }) {
 
   const metrics = metricsQuery.data;
   const metricRows = [
-    { label: 'Users', value: metrics?.usersTotal ?? 0, tone: 'ready' as const },
-    { label: 'Active trips', value: metrics?.activeRequests ?? 0, tone: metrics?.activeRequests ? 'warn' as const : 'ready' as const },
-    { label: 'Pending vehicles', value: metrics?.pendingVehicles ?? 0, tone: metrics?.pendingVehicles ? 'warn' as const : 'ready' as const },
-    { label: 'Open reports', value: metrics?.openReports ?? 0, tone: metrics?.openReports ? 'blocked' as const : 'ready' as const },
-    { label: 'Disputed payments', value: metrics?.disputedPayments ?? 0, tone: metrics?.disputedPayments ? 'blocked' as const : 'ready' as const },
-    { label: 'Open tickets', value: metrics?.openTickets ?? 0, tone: metrics?.openTickets ? 'warn' as const : 'ready' as const },
-    { label: 'Unread alerts', value: metrics?.unreadNotifications ?? 0, tone: metrics?.unreadNotifications ? 'warn' as const : 'ready' as const }
+    { label: 'Users', value: metrics?.usersTotal ?? 0, tone: 'ready' as const, icon: UsersRound, helper: 'Registered profiles' },
+    { label: 'Active trips', value: metrics?.activeRequests ?? 0, tone: metrics?.activeRequests ? 'warn' as const : 'ready' as const, icon: MapPin, helper: 'Moving or waiting' },
+    { label: 'Pending vehicles', value: metrics?.pendingVehicles ?? 0, tone: metrics?.pendingVehicles ? 'warn' as const : 'ready' as const, icon: Truck, helper: 'Need document review' },
+    { label: 'Open reports', value: metrics?.openReports ?? 0, tone: metrics?.openReports ? 'blocked' as const : 'ready' as const, icon: FileWarning, helper: 'Trust queue' },
+    { label: 'Disputed payments', value: metrics?.disputedPayments ?? 0, tone: metrics?.disputedPayments ? 'blocked' as const : 'ready' as const, icon: CircleDollarSign, helper: 'Manual cash review' },
+    { label: 'Open tickets', value: metrics?.openTickets ?? 0, tone: metrics?.openTickets ? 'warn' as const : 'ready' as const, icon: ClipboardList, helper: 'Assistant follow-up' },
+    { label: 'Unread alerts', value: metrics?.unreadNotifications ?? 0, tone: metrics?.unreadNotifications ? 'warn' as const : 'ready' as const, icon: Bell, helper: 'Operational updates' }
   ];
   const readiness = readinessQuery.data;
   const hardeningChecks = readiness ? Object.entries(readiness.checks) : [];
@@ -616,13 +682,20 @@ function AdminDashboardPanel({ enabled }: { enabled: boolean }) {
       </div>
       {metricsQuery.isError ? <p className="field-error">{getErrorMessage(metricsQuery.error)}</p> : null}
       {readinessQuery.isError ? <p className="field-error">{getErrorMessage(readinessQuery.error)}</p> : null}
+      <div className="dashboard-hero">
+        <div>
+          <p className="eyebrow">Today at a glance</p>
+          <h3>Operational queues that need attention</h3>
+          <p className="muted">Metrics are pulled from the admin dashboard API and reflect live system state.</p>
+        </div>
+        <div className="hero-status-stack">
+          <StatusBadge tone={readiness?.runtime.ok ? 'ready' : 'blocked'}>{readiness?.runtime.ok ? 'Runtime ready' : 'Runtime review'}</StatusBadge>
+          <StatusBadge tone={metricsQuery.isFetching || readinessQuery.isFetching ? 'warn' : 'ready'}>{metricsQuery.isFetching || readinessQuery.isFetching ? 'Refreshing' : 'Current'}</StatusBadge>
+        </div>
+      </div>
       <div className="metric-board" aria-label="Admin dashboard metrics">
         {metricRows.map((metric) => (
-          <div className="metric-card" key={metric.label}>
-            <span>{metric.label}</span>
-            <strong>{metric.value}</strong>
-            <StatusBadge tone={metric.tone}>{metric.tone === 'ready' ? 'Clear' : metric.tone === 'blocked' ? 'Review' : 'Watch'}</StatusBadge>
-          </div>
+          <MetricCard icon={metric.icon} key={metric.label} label={metric.label} value={metric.value} tone={metric.tone} helper={metric.helper} />
         ))}
       </div>
       <div className="readiness-grid">
@@ -783,57 +856,67 @@ function AdminUsersPanel({ enabled }: { enabled: boolean }) {
           <input onChange={(event) => setSearch(event.target.value)} placeholder="Name, email, phone, id" value={search} />
         </label>
       </div>
-      <div className="data-table" role="table" aria-label="Admin users">
-        <div className="data-row data-row--head" role="row">
-          <span>Name</span>
-          <span>Role</span>
-          <span>Status</span>
-          <span>Contact</span>
-        </div>
-        {filteredUsers.map((user) => (
-          <button
-            className={`data-row data-row--button ${selectedUser?.id === user.id ? 'is-selected' : ''}`}
-            key={user.id}
-            onClick={() => {
-              setSelectedUserId(user.id);
-              setNextStatus(user.accountStatus);
-              setError('');
-              setMessage('');
-            }}
-            role="row"
-            type="button"
-          >
-            <strong>{user.fullName || 'Unnamed profile'}</strong>
-            <span>{roleLabels[user.role]}</span>
-            <StatusBadge tone={user.accountStatus === 'active' ? 'ready' : isBlockedStatus(user.accountStatus) ? 'blocked' : 'warn'}>{user.accountStatus}</StatusBadge>
-            <span>{user.email || user.phone || 'No contact'}</span>
-          </button>
-        ))}
-      </div>
-      <div className="decision-panel">
-        <div className="detail-heading">
-          <div>
-            <h3>{detailQuery.data?.fullName || selectedUser?.fullName || 'Select a user'}</h3>
-            <p className="muted">{detailQuery.data?.email || detailQuery.data?.phone || selectedUser?.id || 'Open a row to inspect account state.'}</p>
+      <div className="management-layout">
+        <div className="data-table" role="table" aria-label="Admin users">
+          <div className="data-row data-row--head" role="row">
+            <span>Name</span>
+            <span>Role</span>
+            <span>Status</span>
+            <span>Contact</span>
           </div>
-          {selectedUser ? <StatusBadge tone={selectedUser.accountStatus === 'active' ? 'ready' : isBlockedStatus(selectedUser.accountStatus) ? 'blocked' : 'warn'}>{selectedUser.accountStatus}</StatusBadge> : null}
-        </div>
-        {detailQuery.isError ? <p className="field-error">{getErrorMessage(detailQuery.error)}</p> : null}
-        {selectedUser ? (
-          <div className="support-toolbar">
-            <label>
-              Account status
-              <select onChange={(event) => setNextStatus(event.target.value as AccountStatus)} value={nextStatus}>
-                {accountStatusOptions.map((status) => (
-                  <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>
-                ))}
-              </select>
-            </label>
-            <button className="icon-button" disabled={pendingStatus || selectedUser.accountStatus === nextStatus} onClick={updateStatus} type="button">
-              {pendingStatus ? 'Updating...' : 'Update status'}
+          {filteredUsers.map((user) => (
+            <button
+              className={`data-row data-row--button ${selectedUser?.id === user.id ? 'is-selected' : ''}`}
+              key={user.id}
+              onClick={() => {
+                setSelectedUserId(user.id);
+                setNextStatus(user.accountStatus);
+                setError('');
+                setMessage('');
+              }}
+              role="row"
+              type="button"
+            >
+              <strong>{user.fullName || 'Unnamed profile'}</strong>
+              <span>{roleLabels[user.role]}</span>
+              <StatusBadge tone={user.accountStatus === 'active' ? 'ready' : isBlockedStatus(user.accountStatus) ? 'blocked' : 'warn'}>{humanize(user.accountStatus)}</StatusBadge>
+              <span>{user.email || user.phone || 'No contact'}</span>
             </button>
+          ))}
+        </div>
+
+        <aside className="inspector-panel" aria-label="Selected user details">
+          <div className="detail-heading">
+            <div>
+              <p className="eyebrow">Account inspector</p>
+              <h3>{detailQuery.data?.fullName || selectedUser?.fullName || 'Select a user'}</h3>
+              <p className="muted">{detailQuery.data?.email || detailQuery.data?.phone || selectedUser?.id || 'Open a row to inspect account state.'}</p>
+            </div>
+            {selectedUser ? <StatusBadge tone={selectedUser.accountStatus === 'active' ? 'ready' : isBlockedStatus(selectedUser.accountStatus) ? 'blocked' : 'warn'}>{humanize(selectedUser.accountStatus)}</StatusBadge> : null}
           </div>
-        ) : null}
+          {detailQuery.isError ? <p className="field-error">{getErrorMessage(detailQuery.error)}</p> : null}
+          {selectedUser ? (
+            <>
+              <div className="info-strip">
+                <InfoPill label="Role" value={roleLabels[selectedUser.role]} />
+                <InfoPill label="Created" value={selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : 'Unknown'} />
+              </div>
+              <div className="support-toolbar">
+                <label>
+                  Account status
+                  <select onChange={(event) => setNextStatus(event.target.value as AccountStatus)} value={nextStatus}>
+                    {accountStatusOptions.map((status) => (
+                      <option key={status} value={status}>{humanize(status)}</option>
+                    ))}
+                  </select>
+                </label>
+                <button className="icon-button" disabled={pendingStatus || selectedUser.accountStatus === nextStatus} onClick={updateStatus} type="button">
+                  {pendingStatus ? 'Updating...' : 'Update status'}
+                </button>
+              </div>
+            </>
+          ) : null}
+        </aside>
       </div>
     </section>
   );
@@ -922,8 +1005,9 @@ function AdminVerificationPanel({ enabled }: { enabled: boolean }) {
         </StatusBadge>
       </div>
       {pendingVehiclesQuery.isError ? <p className="field-error">{getErrorMessage(pendingVehiclesQuery.error)}</p> : null}
-      <div className="split-panel">
-        <div className="queue-list" aria-label="Pending vehicle queue">
+      <div className="review-workbench">
+        <div className="queue-list queue-list--sticky" aria-label="Pending vehicle queue">
+          <p className="eyebrow">Review queue</p>
           {pendingVehicles.length === 0 ? <p className="muted">No pending vehicles.</p> : null}
           {pendingVehicles.map((vehicle) => (
             <button
@@ -937,54 +1021,66 @@ function AdminVerificationPanel({ enabled }: { enabled: boolean }) {
               type="button"
             >
               <strong>{vehicle.licensePlate}</strong>
-              <span>{vehicle.vehicleClassSnapshot?.name || 'Vehicle class'}</span>
-              <StatusBadge tone="warn">{vehicle.verificationStatus}</StatusBadge>
+              <span>{vehicle.vehicleClassSnapshot?.name || 'Vehicle class'} / {vehicle.capacityKg ?? 0}kg</span>
+              <StatusBadge tone="warn">{humanize(vehicle.verificationStatus)}</StatusBadge>
             </button>
           ))}
         </div>
 
-        <div className="decision-panel">
+        <div className="verification-detail">
           {detail ? (
             <>
-              <div className="detail-heading">
+              <div className="vehicle-summary-card">
                 <div>
+                  <p className="eyebrow">Vehicle detail</p>
                   <h3>{detail.licensePlate}</h3>
-                  <p className="muted">{detail.vehicleClassSnapshot?.name} / {detail.capacityKg ?? 0}kg / {detail.capacityCubicMeters ?? 0}m3</p>
+                  <p className="muted">{detail.description || 'No owner notes submitted.'}</p>
                 </div>
                 <StatusBadge tone={detail.verificationStatus === 'pending' ? 'warn' : detail.verificationStatus === 'approved' ? 'ready' : 'blocked'}>
-                  {detail.verificationStatus}
+                  {humanize(detail.verificationStatus)}
                 </StatusBadge>
+                <div className="info-strip info-strip--three">
+                  <InfoPill label="Class" value={detail.vehicleClassSnapshot?.name || 'Vehicle'} />
+                  <InfoPill label="Capacity" value={`${detail.capacityKg ?? 0}kg`} />
+                  <InfoPill label="Volume" value={`${detail.capacityCubicMeters ?? 0}m3`} />
+                </div>
               </div>
-              <p className="muted">{detail.description || 'No owner notes submitted.'}</p>
-              <div className="document-list">
-                {(detail.documents ?? []).length === 0 ? <p className="muted">No documents attached yet.</p> : null}
+              <div className="document-review-grid">
+                <div className="document-review-grid__header">
+                  <div>
+                    <p className="eyebrow">Documents</p>
+                    <h3>Verification evidence</h3>
+                  </div>
+                  <StatusBadge tone={(detail.documents ?? []).length ? 'warn' : 'blocked'}>{(detail.documents ?? []).length} files</StatusBadge>
+                </div>
+                {(detail.documents ?? []).length === 0 ? <p className="muted">No documents attached yet. Ask the owner to upload identity, license, registration, ownership proof, and insurance when available.</p> : null}
                 {(detail.documents ?? []).map((doc) => (
-                  <button className="document-row" key={doc.id} onClick={() => previewDocument(doc.fileId)} type="button">
-                    <span>
-                      <strong>{doc.type}</strong>
-                      <small>{doc.status}</small>
-                    </span>
-                    <em>Preview signed URL</em>
-                  </button>
+                  <DocumentReviewCard document={doc} key={doc.id} onPreview={previewDocument} />
                 ))}
               </div>
               {signedUrlMessage ? <p className="muted">{signedUrlMessage}</p> : null}
-              <label className="decision-label">
-                Decision reason
-                <textarea
-                  onChange={(event) => setDecisionReason(event.target.value)}
-                  placeholder="Required for rejection; useful for approval notes."
-                  value={decisionReason}
-                />
-              </label>
-              {decisionError ? <p className="field-error" role="alert">{decisionError}</p> : null}
-              <div className="decision-actions">
-                <button className="icon-button" disabled={pendingDecision} onClick={() => decide('approved')} type="button">
-                  Approve
-                </button>
-                <button className="danger-button" disabled={pendingDecision} onClick={() => decide('rejected')} type="button">
-                  Reject
-                </button>
+              <div className="decision-card">
+                <div>
+                  <p className="eyebrow">Decision</p>
+                  <h3>Record admin outcome</h3>
+                </div>
+                <label className="decision-label">
+                  Decision note
+                  <textarea
+                    onChange={(event) => setDecisionReason(event.target.value)}
+                    placeholder="Required for rejection; useful for approval notes."
+                    value={decisionReason}
+                  />
+                </label>
+                {decisionError ? <p className="field-error" role="alert">{decisionError}</p> : null}
+                <div className="decision-actions">
+                  <button className="icon-button" disabled={pendingDecision} onClick={() => decide('approved')} type="button">
+                    Approve vehicle
+                  </button>
+                  <button className="danger-button" disabled={pendingDecision} onClick={() => decide('rejected')} type="button">
+                    Reject vehicle
+                  </button>
+                </div>
               </div>
             </>
           ) : (
@@ -1138,8 +1234,9 @@ function AdminVehicleClassesPanel({ enabled }: { enabled: boolean }) {
       {vehicleClassesQuery.isError ? <p className="field-error">{getErrorMessage(vehicleClassesQuery.error)}</p> : null}
       {error ? <p className="field-error" role="alert">{error}</p> : null}
       {message ? <p className="muted">{message}</p> : null}
-      <div className="split-panel">
+      <div className="class-workbench">
         <div className="queue-list">
+          <p className="eyebrow">Class library</p>
           <button
             className={`queue-item ${!selectedClassId ? 'is-selected' : ''}`}
             onClick={() => {
@@ -1169,51 +1266,68 @@ function AdminVehicleClassesPanel({ enabled }: { enabled: boolean }) {
             >
               <strong>{vehicleClass.name}</strong>
               <span>{vehicleClass.capacityKg ?? 0}kg / {vehicleClass.capacityCubicMeters ?? 0}m3 / {vehicleClass.slug}</span>
-              <StatusBadge tone="ready">Active</StatusBadge>
+              <StatusBadge tone={vehicleClass.active === false ? 'muted' : 'ready'}>{vehicleClass.active === false ? 'Inactive' : 'Active'}</StatusBadge>
             </button>
           ))}
         </div>
-        <div className="decision-panel">
+        <div className="class-editor">
           <div className="detail-heading">
             <div>
+              <p className="eyebrow">Class editor</p>
               <h3>{selectedClass ? selectedClass.name : 'New class'}</h3>
               <p className="muted">Vehicle classes feed owner onboarding, load validation, matching, and pricing rules.</p>
             </div>
             {selectedClass ? <StatusBadge tone="ready">Active</StatusBadge> : <StatusBadge tone="muted">Draft</StatusBadge>}
           </div>
-          <div className="support-form-grid">
-            <label>
-              Name
-              <input onChange={(event) => setName(event.target.value)} value={name} />
-            </label>
-            <label>
-              Slug
-              <input onChange={(event) => setSlug(event.target.value)} value={slug} />
-            </label>
-            <label>
-              Display order
-              <input onChange={(event) => setDisplayOrder(event.target.value)} type="number" value={displayOrder} />
-            </label>
-            <label>
-              Capacity kg
-              <input onChange={(event) => setCapacityKg(event.target.value)} type="number" value={capacityKg} />
-            </label>
-            <label>
-              Volume m3
-              <input onChange={(event) => setCapacityCubicMeters(event.target.value)} type="number" value={capacityCubicMeters} />
-            </label>
-            <label>
-              Base fare
-              <input onChange={(event) => setBaseFare(event.target.value)} type="number" value={baseFare} />
-            </label>
-            <label>
-              Per km
-              <input onChange={(event) => setPerKmRate(event.target.value)} type="number" value={perKmRate} />
-            </label>
-            <label>
-              Minimum fare
-              <input onChange={(event) => setMinimumFare(event.target.value)} type="number" value={minimumFare} />
-            </label>
+          <div className="class-editor__sections">
+            <div className="form-section">
+              <div>
+                <h4>Identity</h4>
+                <p className="muted">Name and display order used across onboarding and quotes.</p>
+              </div>
+              <div className="support-form-grid">
+                <label>
+                  Name
+                  <input onChange={(event) => setName(event.target.value)} value={name} />
+                </label>
+                <label>
+                  Slug
+                  <input onChange={(event) => setSlug(event.target.value)} value={slug} />
+                </label>
+                <label>
+                  Display order
+                  <input onChange={(event) => setDisplayOrder(event.target.value)} type="number" value={displayOrder} />
+                </label>
+              </div>
+            </div>
+            <div className="form-section">
+              <div>
+                <h4>Capacity and defaults</h4>
+                <p className="muted">These values guide owner eligibility and the quote engine.</p>
+              </div>
+              <div className="support-form-grid">
+                <label>
+                  Capacity kg
+                  <input onChange={(event) => setCapacityKg(event.target.value)} type="number" value={capacityKg} />
+                </label>
+                <label>
+                  Volume m3
+                  <input onChange={(event) => setCapacityCubicMeters(event.target.value)} type="number" value={capacityCubicMeters} />
+                </label>
+                <label>
+                  Base fare
+                  <input onChange={(event) => setBaseFare(event.target.value)} type="number" value={baseFare} />
+                </label>
+                <label>
+                  Per km
+                  <input onChange={(event) => setPerKmRate(event.target.value)} type="number" value={perKmRate} />
+                </label>
+                <label>
+                  Minimum fare
+                  <input onChange={(event) => setMinimumFare(event.target.value)} type="number" value={minimumFare} />
+                </label>
+              </div>
+            </div>
           </div>
           <label className="decision-label">
             Description
@@ -1368,10 +1482,11 @@ function AdminPricingPanel({ enabled }: { enabled: boolean }) {
       </div>
       {pricingRulesQuery.isError ? <p className="field-error">{getErrorMessage(pricingRulesQuery.error)}</p> : null}
       {vehicleClassesQuery.isError ? <p className="field-error">{getErrorMessage(vehicleClassesQuery.error)}</p> : null}
-      <div className="pricing-layout">
-        <div className="pricing-editor">
+      <div className="pricing-workbench">
+        <div className="pricing-editor pricing-editor--primary">
           <div className="detail-heading">
             <div>
+              <p className="eyebrow">Pricing workbench</p>
               <h3>New rule draft</h3>
               <p className="muted">Rules are versioned. Activating a new rule retires the previous active version.</p>
             </div>
@@ -1379,10 +1494,14 @@ function AdminPricingPanel({ enabled }: { enabled: boolean }) {
               {createActive ? 'Create active' : 'Create draft'}
             </button>
           </div>
-          <label className="rate-label">
-            Fuel surcharge %
-            <input onChange={(event) => setFuelSurchargePercent(event.target.value)} type="number" value={fuelSurchargePercent} />
-          </label>
+          <div className="pricing-summary-strip">
+            <InfoPill label="Active rule" value={activeRule ? `v${activeRule.version}` : 'None'} />
+            <InfoPill label="Vehicle classes" value={vehicleClasses.length} />
+            <label className="rate-label rate-label--inline">
+              Fuel surcharge %
+              <input onChange={(event) => setFuelSurchargePercent(event.target.value)} type="number" value={fuelSurchargePercent} />
+            </label>
+          </div>
           <div className="pricing-class-list">
             {vehicleClasses.length === 0 ? <p className="muted">No active vehicle classes available.</p> : null}
             {vehicleClasses.map((vehicleClass) => {
@@ -1390,7 +1509,13 @@ function AdminPricingPanel({ enabled }: { enabled: boolean }) {
 
               return (
                 <div className="pricing-class-row" key={vehicleClass.id}>
-                  <strong>{vehicleClass.name}</strong>
+                  <div className="pricing-class-row__title">
+                    <Truck aria-hidden="true" size={20} />
+                    <span>
+                      <strong>{vehicleClass.name}</strong>
+                      <small>{vehicleClass.capacityKg ?? 0}kg / {vehicleClass.capacityCubicMeters ?? 0}m3</small>
+                    </span>
+                  </div>
                   <label>
                     Base
                     <input onChange={(event) => updateDraft(vehicleClass.id, 'baseFare', event.target.value)} type="number" value={rates.baseFare} />
@@ -1422,7 +1547,13 @@ function AdminPricingPanel({ enabled }: { enabled: boolean }) {
           </button>
         </div>
 
-        <div className="pricing-history">
+        <aside className="pricing-history">
+          <div className="detail-heading">
+            <div>
+              <p className="eyebrow">Rule history</p>
+              <h3>Version control</h3>
+            </div>
+          </div>
           {pricingRules.length === 0 ? <p className="muted">No pricing rules yet.</p> : null}
           {pricingRules.map((rule) => (
             <div className="pricing-rule-card" key={rule.id}>
@@ -1434,6 +1565,10 @@ function AdminPricingPanel({ enabled }: { enabled: boolean }) {
                 <StatusBadge tone={rule.status === 'active' ? 'ready' : rule.status === 'draft' ? 'warn' : 'muted'}>{rule.status}</StatusBadge>
               </div>
               <p className="muted">Effective {new Date(rule.effectiveFrom).toLocaleString()}</p>
+              <div className="info-strip">
+                <InfoPill label="Currency" value={rule.currency} />
+                <InfoPill label="Fuel" value={`${rule.fuelSurchargePercent}%`} />
+              </div>
               {rule.status !== 'active' ? (
                 <button className="icon-button" disabled={pendingActivationId === rule.id} onClick={() => activateRule(rule.id)} type="button">
                   {pendingActivationId === rule.id ? 'Activating...' : 'Activate'}
@@ -1441,7 +1576,7 @@ function AdminPricingPanel({ enabled }: { enabled: boolean }) {
               ) : null}
             </div>
           ))}
-        </div>
+        </aside>
       </div>
     </section>
   );
@@ -1865,49 +2000,55 @@ function AdminTripOversightPanel({ enabled }: { enabled: boolean }) {
           <input onChange={(event) => setSearch(event.target.value)} placeholder="Request, client, owner, address" value={search} />
         </label>
       </div>
-      <div className="split-panel">
-        <div className="queue-list">
+      <div className="request-oversight-layout">
+        <div className="queue-list queue-list--sticky">
+          <p className="eyebrow">Request list</p>
           {filteredRequests.length === 0 ? <p className="muted">No requests match the current filters.</p> : null}
           {filteredRequests.map((request) => (
             <button
-              className={`queue-item ${selectedRequest?.id === request.id ? 'is-selected' : ''}`}
+              className={`queue-item request-card-row ${selectedRequest?.id === request.id ? 'is-selected' : ''}`}
               key={request.id}
               onClick={() => setSelectedRequestId(request.id)}
               type="button"
             >
-              <strong>{request.requestCode}</strong>
+              <span className="request-card-row__top">
+                <strong>{request.requestCode}</strong>
+                <StatusBadge tone={request.status === 'completed' ? 'ready' : ['cancelled', 'timed_out'].includes(request.status) ? 'blocked' : 'warn'}>{humanize(request.status)}</StatusBadge>
+              </span>
               <span>{request.pickupLocation?.addressText || 'Pickup'} to {request.destinationLocation?.addressText || 'Destination'}</span>
-              <StatusBadge tone={request.status === 'completed' ? 'ready' : ['cancelled', 'timed_out'].includes(request.status) ? 'blocked' : 'warn'}>{request.status.replaceAll('_', ' ')}</StatusBadge>
+              <small>{formatMoney(request.quoteSnapshot?.currency, request.quoteSnapshot?.totalEstimate)}</small>
             </button>
           ))}
         </div>
-        <div className="decision-panel">
+        <div className="request-inspector">
           {selectedRequest ? (
             <>
-              <div className="detail-heading">
+              <div className="vehicle-summary-card">
                 <div>
+                  <p className="eyebrow">Request detail</p>
                   <h3>{selectedRequest.requestCode}</h3>
-                  <p className="muted">{selectedRequest.id}</p>
+                  <p className="muted">{selectedRequest.pickupLocation?.addressText || 'Pickup'} to {selectedRequest.destinationLocation?.addressText || 'Destination'}</p>
                 </div>
-                <StatusBadge tone={selectedRequest.status === 'completed' ? 'ready' : ['cancelled', 'timed_out'].includes(selectedRequest.status) ? 'blocked' : 'warn'}>{selectedRequest.status.replaceAll('_', ' ')}</StatusBadge>
+                <StatusBadge tone={selectedRequest.status === 'completed' ? 'ready' : ['cancelled', 'timed_out'].includes(selectedRequest.status) ? 'blocked' : 'warn'}>{humanize(selectedRequest.status)}</StatusBadge>
+                <div className="info-strip info-strip--four">
+                  <InfoPill label="Client" value={selectedRequest.clientId} />
+                  <InfoPill label="Owner" value={selectedRequest.selectedOwnerId || 'Not assigned'} />
+                  <InfoPill label="Vehicle" value={selectedRequest.selectedVehicleId || 'Not assigned'} />
+                  <InfoPill label="Estimate" value={formatMoney(selectedRequest.quoteSnapshot?.currency, selectedRequest.quoteSnapshot?.totalEstimate)} />
+                </div>
               </div>
-              <div className="detail-grid">
-                <span>Client <strong>{selectedRequest.clientId}</strong></span>
-                <span>Owner <strong>{selectedRequest.selectedOwnerId || 'not assigned'}</strong></span>
-                <span>Vehicle <strong>{selectedRequest.selectedVehicleId || 'not assigned'}</strong></span>
-                <span>Estimate <strong>{formatMoney(selectedRequest.quoteSnapshot?.currency, selectedRequest.quoteSnapshot?.totalEstimate)}</strong></span>
-              </div>
-              <div className="document-list">
+              <div className="timeline-panel">
+                <div className="detail-heading">
+                  <div>
+                    <p className="eyebrow">Timeline</p>
+                    <h3>Status events</h3>
+                  </div>
+                  <StatusBadge tone={eventsQuery.isFetching ? 'warn' : 'ready'}>{eventsQuery.isFetching ? 'Refreshing' : `${eventsQuery.data?.length ?? 0} events`}</StatusBadge>
+                </div>
                 {eventsQuery.isError ? <p className="field-error">{getErrorMessage(eventsQuery.error)}</p> : null}
                 {(eventsQuery.data ?? []).length === 0 ? <p className="muted">No status events returned yet.</p> : null}
                 {(eventsQuery.data ?? []).map((event) => (
-                  <div className="document-row document-row--static" key={event.id}>
-                    <span>
-                      <strong>{event.fromStatus ? `${event.fromStatus} to ${event.toStatus}` : event.toStatus}</strong>
-                      <small>{event.actorRole || 'system'} / {event.actorUserId || 'no actor'}{event.reason ? ` / ${event.reason}` : ''}</small>
-                    </span>
-                    <em>{event.createdAt ? new Date(event.createdAt).toLocaleString() : 'pending time'}</em>
-                  </div>
+                  <TimelineEventRow event={event} key={event.id} />
                 ))}
               </div>
             </>
