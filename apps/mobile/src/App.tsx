@@ -315,6 +315,46 @@ const roleLabels: Record<Role, string> = {
   admin: 'Admin'
 };
 
+const accountStatusLabels: Record<AccountStatus, string> = {
+  active: 'Active',
+  pending_verification: 'Pending',
+  suspended: 'Suspended',
+  banned: 'Blocked',
+  deleted: 'Closed'
+};
+
+const paymentStatusLabels: Record<PaymentRecord['status'], string> = {
+  pending: 'Payment pending',
+  confirmed_by_owner: 'Payment confirmed',
+  disputed: 'In review',
+  resolved: 'Resolved',
+  cancelled: 'Cancelled'
+};
+
+const vehicleVerificationLabels: Record<Vehicle['verificationStatus'], string> = {
+  draft: 'Draft',
+  pending: 'Pending',
+  approved: 'Approved',
+  rejected: 'Rejected'
+};
+
+const vehicleAvailabilityLabels: Record<Vehicle['availabilityStatus'], string> = {
+  offline: 'Offline',
+  online_available: 'Online',
+  busy_on_job: 'Busy',
+  under_maintenance: 'Maintenance',
+  suspended: 'Paused'
+};
+
+const offerStatusLabels: Record<TripOffer['status'], string> = {
+  sent: 'New',
+  viewed: 'Viewed',
+  accepted: 'Accepted',
+  declined: 'Declined',
+  expired: 'Expired',
+  cancelled: 'Cancelled'
+};
+
 const isBlockedStatus = (status: AccountStatus) => ['suspended', 'banned', 'deleted'].includes(status);
 
 const documentTypes: Array<{ type: VehicleDocumentType; label: string; detail: string; required: boolean; tips: string[] }> = [
@@ -508,7 +548,7 @@ function AuthBrandPanel({ mode }: { mode: AuthMode }) {
       <Text style={styles.authHeroCopy}>
         {mode === 'forgot'
           ? 'Enter your email and Supabase will send a secure password reset link.'
-          : 'Book, verify, accept, and track logistics work with backend-confirmed KULI profiles.'}
+          : 'Book, verify, accept, and track logistics work with your KULI account.'}
       </Text>
       {runtimeConfig.demoAuthEnabled ? <StatusBadge tone="warning">Local demo mode</StatusBadge> : null}
     </View>
@@ -940,12 +980,12 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
 
               <UiCard style={styles.authCard}>
                 <SectionHeader
-                  eyebrow={mode === 'login' ? 'Secure sign in' : 'Public registration'}
+                  eyebrow={mode === 'login' ? 'Secure sign in' : 'Create account'}
                   title={mode === 'login' ? 'Use your KULI account.' : 'Tell us who is moving.'}
                   description={
                     mode === 'login'
-                      ? 'Your role and dashboard are loaded from the backend profile after authentication.'
-                      : 'Clients and truck owners can self-register. Staff accounts stay on the admin dashboard.'
+                      ? 'Sign in to continue to your KULI workspace.'
+                      : 'Create a customer or truck-owner account for the KULI marketplace.'
                   }
                 />
                 {mode === 'register' ? <Field label="Full name" value={fullName} onChangeText={setFullName} placeholder="Abebe Bekele" /> : null}
@@ -1005,8 +1045,12 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
             </>
           )}
 
-          <HealthCard />
-          <RuntimeReadiness />
+          {runtimeConfig.demoAuthEnabled ? (
+            <>
+              <HealthCard />
+              <RuntimeReadiness />
+            </>
+          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -1018,8 +1062,8 @@ function SessionLoadingScreen() {
     <SafeAreaView style={styles.screen}>
       <View style={styles.centered}>
         <ActivityIndicator color={colors.primary} size="large" />
-        <Text style={styles.cardTitle}>Checking your KULI session</Text>
-        <Text style={styles.muted}>Supabase session first, backend profile second.</Text>
+        <Text style={styles.cardTitle}>Opening KULI</Text>
+        <Text style={styles.muted}>Checking your account details.</Text>
       </View>
     </SafeAreaView>
   );
@@ -1032,9 +1076,7 @@ function ForbiddenScreen({ profile, onSignOut }: { profile: UserProfile; onSignO
         <Text style={styles.eyebrow}>Role mismatch</Text>
         <Text style={styles.title}>Use the right workspace.</Text>
         <ShellCard title="Mobile access blocked">
-          <Text style={styles.copy}>
-            {roleLabels[profile.role]} accounts are not mobile marketplace accounts. Use the admin web dashboard for staff workflows.
-          </Text>
+          <Text style={styles.copy}>This account belongs in the web dashboard. Sign out here and continue from the staff workspace.</Text>
           <Pressable accessibilityRole="button" onPress={onSignOut} style={styles.secondaryButton}>
             <Text style={styles.secondaryButtonText}>Sign out</Text>
           </Pressable>
@@ -1050,12 +1092,12 @@ function AccountBlockedScreen({ profile, onSignOut }: { profile: UserProfile; on
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.eyebrow}>Account status</Text>
         <Text style={styles.title}>Your account needs support.</Text>
-        <ShellCard title="Commands are blocked">
+        <ShellCard title="Account paused">
           <View style={styles.cardHeader}>
             <Text style={styles.copy}>{profile.fullName || profile.email}</Text>
-            <StatusPill tone="blocked">{profile.accountStatus}</StatusPill>
+            <StatusPill tone="blocked">{accountStatusLabels[profile.accountStatus]}</StatusPill>
           </View>
-          <Text style={styles.muted}>Authentication can succeed, but KULI blocks business actions for suspended, banned, or deleted accounts.</Text>
+          <Text style={styles.muted}>You can sign in, but KULI actions are paused until support reviews the account.</Text>
           <Pressable accessibilityRole="button" onPress={onSignOut} style={styles.secondaryButton}>
             <Text style={styles.secondaryButtonText}>Sign out</Text>
           </Pressable>
@@ -1101,8 +1143,8 @@ function ProfileRequiredScreen({ session, onAuthenticated, onSignOut }: { sessio
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.eyebrow}>Profile required</Text>
-        <Text style={styles.title}>Finish your public profile.</Text>
-        <Text style={styles.copy}>Supabase authenticated you, but KULI still needs a MongoDB application profile before routing.</Text>
+        <Text style={styles.title}>Finish your profile.</Text>
+        <Text style={styles.copy}>Add the details KULI needs to set up your mobile account.</Text>
         <View style={styles.roleGrid}>
           <RoleOption role="client" selected={role === 'client'} onPress={() => setRole('client')} />
           <RoleOption role="truck_owner" selected={role === 'truck_owner'} onPress={() => setRole('truck_owner')} />
@@ -1131,22 +1173,21 @@ function HomeOverview({ profile, onSignOut }: { profile: UserProfile; onSignOut:
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.cardHeader}>
           <View style={styles.flex}>
-            <Text style={styles.eyebrow}>{isClient ? '/client/home' : '/owner/home'}</Text>
-            <Text style={styles.title}>{isClient ? 'Ready to book with confidence.' : 'Keep your truck ready for work.'}</Text>
+            <Text style={styles.eyebrow}>Home</Text>
+            <Text style={styles.title}>{isClient ? 'Ready for your next move?' : 'Ready to drive?'}</Text>
           </View>
-          <StatusPill tone={profile.accountStatus === 'active' ? 'ready' : 'warn'}>{profile.accountStatus}</StatusPill>
+          <StatusPill tone={profile.accountStatus === 'active' ? 'ready' : 'warn'}>{accountStatusLabels[profile.accountStatus]}</StatusPill>
         </View>
-        <ShellCard title="Authenticated profile">
+        <ShellCard title="Account">
           <Text style={styles.copy}>{profile.fullName || profile.email}</Text>
-          <Text style={styles.muted}>{roleLabels[profile.role]} routed from backend `/me`.</Text>
           <Text style={styles.muted}>{profile.email}</Text>
           {profile.phone ? <Text style={styles.muted}>{profile.phone}</Text> : null}
         </ShellCard>
-        <ShellCard title={isClient ? 'Next client workflow' : 'Next owner workflow'}>
+        <ShellCard title={isClient ? 'Start a move' : 'Truck readiness'}>
           <Text style={styles.copy}>
             {isClient
-              ? 'Phase 2 and 3 will add quote creation, nearby candidates, and active request visibility here.'
-              : 'Phase 2 will add vehicle registration, document upload, verification status, and availability prompts here.'}
+              ? 'Request a quote, choose a verified truck, and follow the trip from pickup to delivery.'
+              : 'Keep your documents complete and your approved vehicle online when you are available.'}
           </Text>
         </ShellCard>
         <Pressable accessibilityRole="button" onPress={onSignOut} style={styles.secondaryButton}>
@@ -1208,11 +1249,11 @@ function VehicleCard({
           <Text style={styles.cardTitle}>{vehicle.licensePlate}</Text>
           <Text style={styles.muted}>{vehicle.vehicleClassSnapshot?.name || vehicle.vehicleClassId}</Text>
         </View>
-        <StatusPill tone={statusTone(vehicle.verificationStatus)}>{vehicle.verificationStatus}</StatusPill>
+        <StatusPill tone={statusTone(vehicle.verificationStatus)}>{vehicleVerificationLabels[vehicle.verificationStatus]}</StatusPill>
       </View>
       <View style={styles.cardHeader}>
         <Text style={styles.muted}>{vehicle.capacityKg ?? 0}kg / {vehicle.capacityCubicMeters ?? 0}m3</Text>
-        <StatusPill tone={statusTone(vehicle.availabilityStatus)}>{vehicle.availabilityStatus}</StatusPill>
+        <StatusPill tone={statusTone(vehicle.availabilityStatus)}>{vehicleAvailabilityLabels[vehicle.availabilityStatus]}</StatusPill>
       </View>
       {vehicle.rejectionReason ? <Text style={styles.errorText}>{vehicle.rejectionReason}</Text> : null}
       <Text style={styles.muted}>{vehicle.description || 'No description yet.'}</Text>
@@ -1562,7 +1603,7 @@ function OwnerVehiclesScreen() {
         }
       });
       setActiveVehicleId(vehicleId);
-      setNotice('Active vehicle updated for owner workflows.');
+      setNotice('Active vehicle updated.');
     } catch (activeVehicleError) {
       setError(getErrorMessage(activeVehicleError));
     } finally {
@@ -1597,8 +1638,8 @@ function OwnerVehiclesScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>/owner/vehicles</Text>
-        <Text style={styles.title}>Register, document, and verify your truck.</Text>
+        <Text style={styles.eyebrow}>Vehicles</Text>
+        <Text style={styles.title}>Ready to drive?</Text>
         <Text style={styles.copy}>Approved vehicles can go online. Pending or rejected vehicles stay out of matching.</Text>
 
         <ShellCard title="Vehicle registration">
@@ -1752,7 +1793,7 @@ const cancellationReasons = [
   { key: 'safety_or_contact_issue', label: 'Safety or contact issue', detail: 'Something feels wrong or I cannot reach the owner.' }
 ];
 const statusLabels: Record<KuliStatus, string> = {
-  pending: 'Waiting',
+  pending: 'Pending',
   accepted: 'Accepted',
   en_route_to_pickup: 'En route',
   arrived_at_pickup: 'Arrived',
@@ -1829,7 +1870,7 @@ function CandidateCard({ candidate, capacityLabel }: { candidate: QuoteCandidate
       <View style={styles.metricGrid}>
         <View style={styles.metricBox}>
           <Text style={styles.metricValue}>{candidate.rating.toFixed(1)}</Text>
-          <Text style={styles.metricLabel}>owner rating</Text>
+          <Text style={styles.metricLabel}>rating</Text>
         </View>
         <View style={styles.metricBox}>
           <Text style={styles.metricValue}>{candidate.rankingScore.toFixed(1)}</Text>
@@ -2570,7 +2611,7 @@ function ClientQuoteScreen() {
             <SectionHeader
               eyebrow="Step 2"
               title="Truck and load."
-              description="Pick a truck class, tell owners what is moving, then get a backend quote."
+              description="Pick a truck class, describe the load, then get your quote."
             />
             {vehicleClassesQuery.isLoading ? (
               <LoadingState title="Loading truck types" message="Checking approved KULI vehicle classes." />
@@ -2627,7 +2668,7 @@ function ClientQuoteScreen() {
             >
               <View style={styles.flex}>
                 <Text style={[styles.requestSwitchText, loadingAssistanceRequested && styles.requestSwitchTextActive]}>Loading help</Text>
-                <Text style={styles.muted}>Owner should expect help loading or unloading.</Text>
+                <Text style={styles.muted}>Add loading or unloading help to this request.</Text>
               </View>
               <StatusBadge tone={loadingAssistanceRequested ? 'success' : 'warning'}>{loadingAssistanceRequested ? 'Yes' : 'No'}</StatusBadge>
             </Pressable>
@@ -2671,11 +2712,11 @@ function ClientQuoteScreen() {
             <View style={styles.requestPaymentNote}>
               <Text style={styles.noticeText}>Payment is handled after delivery in the current KULI flow. Keep final payment coordination inside the trip chat.</Text>
             </View>
-            <SectionHeader title="Nearby verified trucks" description="Select one or more. First owner to accept gets the trip." />
+            <SectionHeader title="Nearby verified trucks" description="Select one or more. The first truck to accept gets the trip." />
             {quote.candidates.length === 0 ? (
               <EmptyState
                 title="No nearby approved trucks yet"
-                message="Try a smaller load, another truck type, or a different pickup area after more owners come online."
+                message="Try a smaller load, another truck type, or a different pickup area when more trucks are online."
                 action={<SecondaryButton label="Adjust request" onPress={() => setStep('load')} />}
               />
             ) : (
@@ -2691,7 +2732,7 @@ function ClientQuoteScreen() {
                     />
                   ))}
                 </View>
-                <Text style={styles.muted}>{selectedVehicleIds.length} selected for dispatch. Owners receive first-accept-wins offers.</Text>
+                <Text style={styles.muted}>{selectedVehicleIds.length} selected. KULI will send the request to those trucks.</Text>
               </>
             )}
             <View style={styles.actionRow}>
@@ -2759,8 +2800,8 @@ function RequestSummaryCard({
           <Text style={styles.metricLabel}>offers</Text>
         </View>
       </View>
-      {request.status === 'pending' ? <Text style={styles.noticeText}>Waiting for an owner to accept. The first accepted truck gets the trip, and all other open offers close automatically.</Text> : null}
-      {request.status === 'accepted' ? <Text style={styles.noticeText}>A truck owner accepted. Other offers are closed, the truck is assigned, and messages stay attached to this request.</Text> : null}
+      {request.status === 'pending' ? <Text style={styles.noticeText}>Waiting for a truck to accept. The first accepted truck gets the trip, and all other open offers close automatically.</Text> : null}
+      {request.status === 'accepted' ? <Text style={styles.noticeText}>Your truck accepted. Other offers are closed, the truck is assigned, and messages stay attached to this request.</Text> : null}
       {isPaymentSettlingRequest(request) ? <Text style={styles.noticeText}>Payment is still open. Keep any final cash/payment coordination in chat until it is confirmed.</Text> : null}
       {children}
       <Pressable
@@ -2819,7 +2860,7 @@ function TripTimeline({ requestId }: { requestId: string }) {
       </View>
       {eventsQuery.isLoading ? <LoadingState title="Loading timeline" message="Checking the latest trip status events." /> : null}
       {eventsQuery.isError ? <ErrorState title="Could not refresh timeline" message={getErrorMessage(eventsQuery.error)} /> : null}
-      {events.length === 0 && !eventsQuery.isLoading ? <EmptyState title="No status events yet" message="The acceptance event appears after the owner accepts." /> : null}
+      {events.length === 0 && !eventsQuery.isLoading ? <EmptyState title="No status updates yet" message="Updates appear after a truck accepts the request." /> : null}
       <View style={styles.timelineList}>
         {events.map((event, index) => (
           <TimelineEventRow event={event} isLast={index === events.length - 1} key={event.id} />
@@ -2836,7 +2877,7 @@ function ArchivedMessagePanel({ request }: { request: KuliRequest }) {
         <Text style={styles.trackingPanelTitle}>Messages archived</Text>
         <StatusBadge tone="error">{statusLabels[request.status]}</StatusBadge>
       </View>
-      <Text style={styles.muted}>Trip messaging is archived after cancellation or timeout. Use History or support actions for any follow-up.</Text>
+      <Text style={styles.muted}>Trip messaging is archived after cancellation or timeout. Use Activity or support actions for any follow-up.</Text>
     </View>
   );
 }
@@ -2989,7 +3030,7 @@ function OwnerStatusControls({
 
   return (
     <View style={styles.subsection}>
-      <Text style={styles.fieldLabel}>Owner trip controls</Text>
+      <Text style={styles.fieldLabel}>Trip controls</Text>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
       <View style={styles.actionRow}>
         <Pressable
@@ -3162,16 +3203,16 @@ const activeTrackingStatuses: KuliStatus[] = ['accepted', 'en_route_to_pickup', 
 
 const nextStepForRequest = (status: KuliStatus) => {
   const nextStepByStatus: Record<KuliStatus, string> = {
-    pending: 'Waiting for a verified truck owner to accept.',
-    accepted: 'Owner accepted. Watch status updates and coordinate pickup details in chat.',
-    en_route_to_pickup: 'Truck is marked en route to pickup. This is status-based tracking, not live GPS.',
+    pending: 'Waiting for a verified truck to accept.',
+    accepted: 'Your truck accepted. Watch status updates and coordinate pickup details in chat.',
+    en_route_to_pickup: 'Truck is marked en route to pickup. Live GPS is not shown.',
     arrived_at_pickup: 'Truck is marked arrived. Confirm gate, floor, or loading details in chat.',
     loading: 'Loading is in progress. Keep fragile or access notes in chat.',
     in_transit: 'Items are marked in transit. Follow status updates until arrival.',
     unloading: 'Unloading is in progress. Confirm final delivery details before payment.',
-    completed: 'Trip is complete. Payment and trust actions are available from History.',
+    completed: 'Trip is complete. Payment and trust actions are available from Activity.',
     cancelled: 'This request was cancelled and archived.',
-    timed_out: 'No owner accepted in time. Start a new request when you are ready.'
+    timed_out: 'No truck accepted in time. Start a new request when you are ready.'
   };
 
   return nextStepByStatus[status];
@@ -3226,7 +3267,7 @@ function DispatchSearchPanel({ request }: { request: KuliRequest }) {
   const offerCount = request.offers?.length ?? 0;
   const steps = [
     { key: 'sent', label: 'Request sent', detail: request.requestCode },
-    { key: 'notified', label: 'Owners notified', detail: `${offerCount} offer${offerCount === 1 ? '' : 's'} open` },
+    { key: 'notified', label: 'Trucks notified', detail: `${offerCount} offer${offerCount === 1 ? '' : 's'} open` },
     { key: 'waiting', label: 'Waiting for acceptance', detail: 'First accepted truck wins the trip' }
   ];
 
@@ -3236,7 +3277,7 @@ function DispatchSearchPanel({ request }: { request: KuliRequest }) {
         <Text style={styles.dispatchPulseText}>...</Text>
       </View>
       <Text style={styles.dispatchTitle}>Finding nearby verified trucks</Text>
-      <Text style={styles.dispatchCopy}>KULI sent this request to selected owners. Tracking begins after backend-confirmed acceptance.</Text>
+      <Text style={styles.dispatchCopy}>KULI sent this request to the selected trucks. Tracking begins after one accepts.</Text>
       <View style={styles.dispatchSummaryRow}>
         <View style={styles.dispatchSummaryItem}>
           <Text style={styles.dispatchSummaryValue}>{requestEstimateLabel(request)}</Text>
@@ -3260,7 +3301,7 @@ function DispatchSearchPanel({ request }: { request: KuliRequest }) {
           </View>
         ))}
       </View>
-      <Text style={styles.noticeText}>You can cancel while this request is waiting. If no owner accepts, create a new request with adjusted details.</Text>
+      <Text style={styles.noticeText}>You can cancel while this request is waiting. If no truck accepts, create a new request with adjusted details.</Text>
     </View>
   );
 }
@@ -3314,7 +3355,7 @@ function ActiveTripSummary({ request }: { request: KuliRequest }) {
       {request.selectedVehicleLocationUpdatedAt ? (
         <Text style={styles.muted}>Last truck status location update: {new Date(request.selectedVehicleLocationUpdatedAt).toLocaleString()}</Text>
       ) : (
-        <Text style={styles.muted}>KULI v1 uses status-based tracking and static map previews. Live GPS movement is not shown.</Text>
+        <Text style={styles.muted}>KULI shows confirmed trip status and static map previews. Live GPS movement is not shown.</Text>
       )}
     </View>
   );
@@ -3436,7 +3477,7 @@ function ClientActiveRequestCard({
           tone={isCancellable ? 'danger' : 'default'}
         />
       </View>
-      {expanded ? <View style={styles.clientExpandedDetails}>{children || <Text style={styles.muted}>Request details are up to date. Status-based tracking starts after an owner accepts.</Text>}</View> : null}
+      {expanded ? <View style={styles.clientExpandedDetails}>{children || <Text style={styles.muted}>Request details are up to date. Tracking starts after a truck accepts.</Text>}</View> : null}
     </View>
   );
 }
@@ -3482,7 +3523,7 @@ function ClientHomeEmptyMove({ onRequest }: { onRequest: () => void }) {
       </View>
       <View style={styles.flex}>
         <Text style={styles.clientEmptyTitle}>No active move yet</Text>
-        <Text style={styles.clientEmptyCopy}>Request a quote when you are ready. Owner responses, messages, and status-based tracking will appear here.</Text>
+        <Text style={styles.clientEmptyCopy}>Request a quote when you are ready. Responses, messages, and trip tracking will appear here.</Text>
       </View>
       <PrimaryButton label="Request a truck" onPress={onRequest} />
     </View>
@@ -3570,7 +3611,7 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
           <View style={styles.clientSectionHead}>
             <View>
               <Text style={styles.clientSectionTitle}>Active move</Text>
-              <Text style={styles.clientSectionSubtitle}>{activeRequests.length ? 'Follow the latest confirmed backend status.' : 'Start with a quote, then send to verified owners.'}</Text>
+              <Text style={styles.clientSectionSubtitle}>{activeRequests.length ? 'Follow the latest confirmed trip status.' : 'Start with a quote, then send to verified trucks.'}</Text>
             </View>
             {activeRequests.length ? <StatusBadge tone="success">{`${activeRequests.length} live`}</StatusBadge> : null}
           </View>
@@ -3665,7 +3706,7 @@ function OwnerOfferCard({
           <Text style={styles.cardTitle}>{request?.requestCode ?? `Offer ${offer.id.slice(-6).toUpperCase()}`}</Text>
           <Text style={styles.muted}>{request ? `${request.pickupLocation?.addressText} to ${request.destinationLocation?.addressText}` : `Request ${offer.requestId}`}</Text>
         </View>
-        <StatusPill tone={statusTone(offer.status)}>{offer.status}</StatusPill>
+        <StatusPill tone={statusTone(offer.status)}>{offerStatusLabels[offer.status]}</StatusPill>
       </View>
       <View style={styles.metricGrid}>
         <View style={styles.metricBox}>
@@ -3804,8 +3845,8 @@ function OwnerOffersScreen({ profile }: { profile: UserProfile }) {
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>/owner/offers</Text>
-        <Text style={styles.title}>Accept fast, with confidence.</Text>
+        <Text style={styles.eyebrow}>Offers</Text>
+        <Text style={styles.title}>New requests</Text>
         <Text style={styles.copy}>Open offers are first-accept-wins. Accepted requests become active trips and make the vehicle busy.</Text>
 
         <ShellCard title="Offer inbox">
@@ -3850,7 +3891,7 @@ function OwnerOffersScreen({ profile }: { profile: UserProfile }) {
         ) : null}
 
         {acceptedTrips.length ? (
-          <ShellCard title="Active trip detail">
+          <ShellCard title="Active trips">
             <View style={styles.roleGrid}>
               {acceptedTrips.map((request) => (
                 <View key={request.id} style={styles.card}>
@@ -3902,7 +3943,7 @@ function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
         method: 'PATCH'
       });
       await queryClient.invalidateQueries({ queryKey: ['notifications'] });
-      setMessage('Notification marked read.');
+      setMessage('Marked as read.');
     } catch (readError) {
       setError(getErrorMessage(readError));
     } finally {
@@ -3926,7 +3967,7 @@ function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
       if (profile.role === 'truck_owner') {
         navigation.navigate(notification.type === 'offer.sent' ? 'Offers' : notification.data?.requestId ? 'Offers' : 'Home');
       } else {
-        navigation.navigate(notification.data?.requestId ? 'Home' : 'Alerts');
+        navigation.navigate(notification.data?.requestId ? 'Home' : 'Notifications');
       }
     } catch (detailError) {
       setError(getErrorMessage(detailError));
@@ -3964,14 +4005,14 @@ function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.cardHeader}>
           <View style={styles.flex}>
-            <Text style={styles.eyebrow}>{profile.role === 'client' ? '/client/notifications' : '/owner/notifications'}</Text>
-            <Text style={styles.title}>Updates stay inside KULI.</Text>
+            <Text style={styles.eyebrow}>Notifications</Text>
+            <Text style={styles.title}>Your updates</Text>
           </View>
           <StatusPill tone={unreadCount ? 'warn' : 'ready'}>{unreadCount} unread</StatusPill>
         </View>
 
-        <ShellCard title="Delivery preferences">
-          <Text style={styles.muted}>In-app transactional alerts stay on. External channels can be toggled once providers are configured.</Text>
+        <ShellCard title="Alert preferences">
+          <Text style={styles.muted}>Important in-app updates stay on. Choose any extra channels you want to receive.</Text>
           {[
             { label: 'Push', value: pushEnabled, onPress: () => setPushEnabled((value) => !value) },
             { label: 'SMS', value: smsEnabled, onPress: () => setSmsEnabled((value) => !value) },
@@ -3995,27 +4036,27 @@ function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
           </Pressable>
         </ShellCard>
 
-        <ShellCard title="Notification center">
+        <ShellCard title="Latest updates">
           {notificationsQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(notificationsQuery.error)}</Text> : null}
           <Pressable accessibilityRole="button" onPress={() => notificationsQuery.refetch()} style={styles.secondaryButton}>
             <Text style={styles.secondaryButtonText}>Refresh notifications</Text>
           </Pressable>
-          {notifications.length === 0 ? <Text style={styles.muted}>No notifications yet. Offer, message, and status updates will appear here.</Text> : null}
+          {notifications.length === 0 ? <Text style={styles.muted}>No updates yet. Requests, messages, and trip changes will appear here.</Text> : null}
           <View style={styles.roleGrid}>
             {notifications.map((notification) => (
               <View key={notification.id} style={styles.notificationRow}>
                 <View style={styles.flex}>
                   <Text style={styles.cardTitle}>{notification.title}</Text>
                   <Text style={styles.muted}>{notification.body}</Text>
-                  <Text style={styles.muted}>{notification.type}{notification.createdAt ? ` / ${new Date(notification.createdAt).toLocaleString()}` : ''}</Text>
+                  <Text style={styles.muted}>{notification.createdAt ? new Date(notification.createdAt).toLocaleString() : 'Just now'}</Text>
                   {profile.role === 'truck_owner' && notification.type === 'offer.sent' ? (
-                    <Text style={styles.noticeText}>Open Offers to review pickup, destination, load, estimate, then accept or decline.</Text>
+                    <Text style={styles.noticeText}>Open Offers to review the route, load, and estimate before accepting.</Text>
                   ) : null}
                 </View>
                 <View style={styles.notificationActions}>
                   {notification.data?.requestId ? (
                     <Pressable accessibilityRole="button" disabled={pendingId === notification.id} onPress={() => openNotificationDetail(notification)} style={[styles.compactButton, pendingId === notification.id && styles.buttonDisabled]}>
-                      <Text style={styles.compactButtonText}>{profile.role === 'truck_owner' && notification.type === 'offer.sent' ? 'View offer' : 'View detail'}</Text>
+                      <Text style={styles.compactButtonText}>{profile.role === 'truck_owner' && notification.type === 'offer.sent' ? 'View offer' : 'View details'}</Text>
                     </Pressable>
                   ) : null}
                   <Pressable
@@ -4308,12 +4349,12 @@ function ClientHistoryScreen({ profile }: { profile: UserProfile }) {
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>/client/history</Text>
-        <Text style={styles.title}>Close the trust loop.</Text>
-        <Text style={styles.copy}>Payment disputes, ratings, and reports stay attached to terminal KULI requests.</Text>
-        <ShellCard title="Completed and cancelled requests">
+        <Text style={styles.eyebrow}>Activity</Text>
+        <Text style={styles.title}>Past moves</Text>
+        <Text style={styles.copy}>Reviews, issues, and payment questions stay attached to each completed move.</Text>
+        <ShellCard title="Completed and cancelled moves">
           {requestsQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(requestsQuery.error)}</Text> : null}
-          {terminalRequests.length === 0 ? <Text style={styles.muted}>No terminal trips yet. Complete or cancel an accepted trip before rating or disputing payment.</Text> : null}
+          {terminalRequests.length === 0 ? <Text style={styles.muted}>No past moves yet. Completed and cancelled moves will appear here.</Text> : null}
           <View style={styles.roleGrid}>
             {terminalRequests.map((request) => (
               <View key={request.id} style={styles.requestRowStack}>
@@ -4413,8 +4454,8 @@ function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>/owner/earnings</Text>
-        <Text style={styles.title}>Confirm cash and watch trust.</Text>
+        <Text style={styles.eyebrow}>Earnings</Text>
+        <Text style={styles.title}>Payments and ratings</Text>
         <ShellCard title="Rating summary">
           <View style={styles.metricGrid}>
             <View style={styles.metricBox}>
@@ -4441,7 +4482,7 @@ function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
           {message ? <Text style={styles.noticeText}>{message}</Text> : null}
           <Field label="Override amount ETB" value={amountConfirmed} onChangeText={setAmountConfirmed} placeholder="Leave blank for estimate" keyboardType="numeric" />
-          {completedRequests.length === 0 ? <Text style={styles.muted}>No completed trips waiting for cash confirmation. Payment confirmation is blocked until completion.</Text> : null}
+          {completedRequests.length === 0 ? <Text style={styles.muted}>No completed trips are waiting for cash confirmation.</Text> : null}
           <View style={styles.roleGrid}>
             {completedRequests.map((request) => (
               <View key={request.id} style={styles.card}>
@@ -4450,7 +4491,7 @@ function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
                     <Text style={styles.cardTitle}>{request.requestCode}</Text>
                     <Text style={styles.muted}>{request.quoteSnapshot?.currency ?? 'ETB'} {Number(request.quoteSnapshot?.totalEstimate ?? 0).toFixed(2)}</Text>
                   </View>
-                  <StatusPill tone={request.payment?.status === 'disputed' ? 'warn' : 'ready'}>{request.payment?.status ?? 'Payment pending'}</StatusPill>
+                  <StatusPill tone={request.payment?.status === 'disputed' ? 'warn' : 'ready'}>{request.payment ? paymentStatusLabels[request.payment.status] : 'Payment pending'}</StatusPill>
                 </View>
                 <Pressable accessibilityRole="button" disabled={pendingRequestId === request.id} onPress={() => confirmPayment(request)} style={[styles.primaryButton, pendingRequestId === request.id && styles.buttonDisabled]}>
                   <Text style={styles.primaryButtonText}>{pendingRequestId === request.id ? 'Confirming...' : 'Confirm cash payment'}</Text>
@@ -4469,8 +4510,8 @@ function ClientTabs({ profile, onSignOut }: { profile: UserProfile; onSignOut: (
     <Tab.Navigator screenOptions={createTabScreenOptions(clientTabIcons)}>
       <Tab.Screen name="Home">{() => <ClientHomeScreen profile={profile} onSignOut={onSignOut} />}</Tab.Screen>
       <Tab.Screen name="Request" component={ClientQuoteScreen} />
-      <Tab.Screen name="History">{() => <ClientHistoryScreen profile={profile} />}</Tab.Screen>
-      <Tab.Screen name="Alerts">{() => <NotificationCenterScreen profile={profile} />}</Tab.Screen>
+      <Tab.Screen name="Activity">{() => <ClientHistoryScreen profile={profile} />}</Tab.Screen>
+      <Tab.Screen name="Notifications">{() => <NotificationCenterScreen profile={profile} />}</Tab.Screen>
     </Tab.Navigator>
   );
 }
@@ -4481,7 +4522,7 @@ function OwnerTabs({ profile, onSignOut }: { profile: UserProfile; onSignOut: ()
       <Tab.Screen name="Home">{() => <HomeOverview profile={profile} onSignOut={onSignOut} />}</Tab.Screen>
       <Tab.Screen name="Vehicles" component={OwnerVehiclesScreen} />
       <Tab.Screen name="Offers">{() => <OwnerOffersScreen profile={profile} />}</Tab.Screen>
-      <Tab.Screen name="Alerts">{() => <NotificationCenterScreen profile={profile} />}</Tab.Screen>
+      <Tab.Screen name="Notifications">{() => <NotificationCenterScreen profile={profile} />}</Tab.Screen>
       <Tab.Screen name="Earnings">{() => <OwnerEarningsScreen profile={profile} />}</Tab.Screen>
     </Tab.Navigator>
   );
@@ -4626,15 +4667,15 @@ type TabBarIconProps = { focused: boolean; color: string; size: number };
 const clientTabIcons: TabIconConfig = {
   Home: { name: 'home-outline', label: 'Home' },
   Request: { name: 'map-marker-path', label: 'Request', iconSet: 'material' },
-  History: { name: 'receipt-outline', label: 'History' },
-  Alerts: { name: 'notifications-outline', label: 'Alerts' }
+  Activity: { name: 'receipt-outline', label: 'Activity' },
+  Notifications: { name: 'notifications-outline', label: 'Updates' }
 };
 
 const ownerTabIcons: TabIconConfig = {
   Home: { name: 'speedometer-outline', label: 'Home', iconSet: 'material' },
   Vehicles: { name: 'truck-outline', label: 'Vehicles', iconSet: 'material' },
   Offers: { name: 'clipboard-list-outline', label: 'Offers', iconSet: 'material' },
-  Alerts: { name: 'notifications-outline', label: 'Alerts' },
+  Notifications: { name: 'notifications-outline', label: 'Updates' },
   Earnings: { name: 'cash-multiple', label: 'Earnings', iconSet: 'material' }
 };
 
