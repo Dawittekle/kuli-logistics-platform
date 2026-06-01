@@ -27,6 +27,9 @@ import { runtimeConfig, runtimeReadiness } from './config/runtime';
 import { colors, radii, spacing } from './theme';
 import { AppHeader } from './components/ui/AppHeader';
 import { Card as UiCard } from './components/ui/Card';
+import { EmptyState } from './components/ui/EmptyState';
+import { ErrorState } from './components/ui/ErrorState';
+import { LoadingState } from './components/ui/LoadingState';
 import { PrimaryButton } from './components/ui/PrimaryButton';
 import { SecondaryButton } from './components/ui/SecondaryButton';
 import { SectionHeader } from './components/ui/SectionHeader';
@@ -2830,11 +2833,186 @@ function ClientCancelDialog({
   );
 }
 
+type BadgeTone = 'success' | 'warning' | 'error' | 'neutral' | 'dark';
+
+const clientServiceOptions = [
+  { key: 'house_move', title: 'House move', detail: 'Full relocation support', symbol: 'H' },
+  { key: 'furniture_delivery', title: 'Furniture delivery', detail: 'Sofas, beds, tables', symbol: 'F' },
+  { key: 'appliance_transport', title: 'Appliance transport', detail: 'Large item handling', symbol: 'A' },
+  { key: 'business_goods', title: 'Business goods', detail: 'Commercial logistics', symbol: 'B' }
+];
+
+const badgeToneForStatus = (status: string): BadgeTone => {
+  const tone = statusTone(status);
+
+  if (tone === 'ready') {
+    return 'success';
+  }
+
+  if (tone === 'blocked') {
+    return 'error';
+  }
+
+  return 'warning';
+};
+
+const requestEstimateLabel = (request: KuliRequest) =>
+  `${request.quoteSnapshot?.currency ?? 'ETB'} ${Number(request.quoteSnapshot?.totalEstimate ?? 0).toFixed(0)}`;
+
+const requestRouteLabel = (request: KuliRequest) =>
+  `${request.pickupLocation?.addressText ?? 'Pickup'} to ${request.destinationLocation?.addressText ?? 'Destination'}`;
+
+const formatRequestSchedule = (request: KuliRequest) => request.requestedPickupTime || 'Pickup time pending';
+
+const greetingForNow = () => {
+  const hour = new Date().getHours();
+
+  if (hour < 12) {
+    return 'Good morning';
+  }
+
+  if (hour < 18) {
+    return 'Good afternoon';
+  }
+
+  return 'Good evening';
+};
+
+function ClientServiceTile({ title, detail, symbol, onPress }: { title: string; detail: string; symbol: string; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={styles.serviceTile}>
+      <View style={styles.serviceIcon}>
+        <Text style={styles.serviceIconText}>{symbol}</Text>
+      </View>
+      <Text style={styles.serviceTitle}>{title}</Text>
+      <Text style={styles.serviceDetail}>{detail}</Text>
+    </Pressable>
+  );
+}
+
+function ClientDashboardHero({
+  profile,
+  activeCount,
+  onRequest
+}: {
+  profile: UserProfile;
+  activeCount: number;
+  onRequest: () => void;
+}) {
+  const displayName = profile.fullName?.split(' ')[0] || profile.fullName || profile.email?.split('@')[0] || 'there';
+
+  return (
+    <View style={styles.clientHero}>
+      <View style={styles.cardHeader}>
+        <View style={styles.flex}>
+          <Text style={styles.clientGreeting}>{greetingForNow()}, {displayName}</Text>
+          <Text style={styles.clientLocation}>Addis Ababa</Text>
+        </View>
+        <View style={styles.clientAvatar}>
+          <Text style={styles.clientAvatarText}>{displayName.slice(0, 1).toUpperCase()}</Text>
+        </View>
+      </View>
+      <View style={styles.clientCtaPanel}>
+        <View style={styles.flex}>
+          <Text style={styles.clientCtaTitle}>Move something today?</Text>
+          <Text style={styles.clientCtaCopy}>Get a quote, compare verified trucks, and send a KULI request when you are ready.</Text>
+        </View>
+        <Pressable accessibilityRole="button" onPress={onRequest} style={styles.clientCtaButton}>
+          <Text style={styles.clientCtaButtonText}>Request a truck</Text>
+        </Pressable>
+      </View>
+      <View style={styles.clientHeroMeta}>
+        <StatusBadge tone={profile.accountStatus === 'active' ? 'success' : 'warning'}>{profile.accountStatus}</StatusBadge>
+        <Text style={styles.clientHeroMetaText}>{activeCount ? `${activeCount} active request${activeCount === 1 ? '' : 's'}` : 'No active request'}</Text>
+      </View>
+    </View>
+  );
+}
+
+function ClientActiveRequestCard({
+  request,
+  expanded,
+  onToggleDetails,
+  onCancel,
+  children
+}: {
+  request: KuliRequest;
+  expanded: boolean;
+  onToggleDetails: () => void;
+  onCancel: (request: KuliRequest) => void;
+  children?: ReactNode;
+}) {
+  const isCancellable = ['pending', 'accepted', 'en_route_to_pickup'].includes(request.status);
+  const cancelLabel = request.status === 'pending' ? 'Cancel request' : 'Cancel trip';
+  const detailsLabel = expanded ? 'Hide details' : request.status === 'pending' ? 'View details' : 'Track request';
+
+  return (
+    <UiCard style={styles.dashboardCard}>
+      <View style={styles.cardHeader}>
+        <View style={styles.flex}>
+          <Text style={styles.cardTitle}>{request.requestCode}</Text>
+          <Text style={styles.dashboardRoute}>{requestRouteLabel(request)}</Text>
+        </View>
+        <StatusBadge tone={badgeToneForStatus(request.status)}>{statusLabels[request.status]}</StatusBadge>
+      </View>
+      <View style={styles.dashboardMetricRow}>
+        <View style={styles.dashboardMetric}>
+          <Text style={styles.dashboardMetricValue}>{requestEstimateLabel(request)}</Text>
+          <Text style={styles.dashboardMetricLabel}>estimate</Text>
+        </View>
+        <View style={styles.dashboardMetric}>
+          <Text style={styles.dashboardMetricValue}>{request.offers?.length ?? 0}</Text>
+          <Text style={styles.dashboardMetricLabel}>offers</Text>
+        </View>
+        <View style={styles.dashboardMetric}>
+          <Text style={styles.dashboardMetricValue}>{request.status === 'pending' ? 'Open' : 'Live'}</Text>
+          <Text style={styles.dashboardMetricLabel}>tracking</Text>
+        </View>
+      </View>
+      <Text style={styles.dashboardSubcopy}>{formatRequestSchedule(request)}</Text>
+      {request.status === 'pending' ? (
+        <Text style={styles.noticeText}>Waiting for an owner to accept. The first accepted truck gets the trip and other offers close automatically.</Text>
+      ) : null}
+      <View style={styles.actionRow}>
+        <PrimaryButton label={detailsLabel} onPress={onToggleDetails} style={styles.actionButton} />
+        <SecondaryButton
+          disabled={!isCancellable}
+          label={isCancellable ? cancelLabel : 'Cancellation closed'}
+          onPress={() => onCancel(request)}
+          style={styles.actionButton}
+          tone={isCancellable ? 'danger' : 'default'}
+        />
+      </View>
+      {expanded ? <View style={styles.clientExpandedDetails}>{children || <Text style={styles.muted}>Request details are up to date. Tracking starts after an owner accepts.</Text>}</View> : null}
+    </UiCard>
+  );
+}
+
+function ClientRecentTripCard({ request }: { request: KuliRequest }) {
+  return (
+    <UiCard compact style={styles.recentTripCard}>
+      <View style={styles.cardHeader}>
+        <View style={styles.flex}>
+          <Text style={styles.fieldLabel}>{request.requestCode}</Text>
+          <Text style={styles.dashboardRoute}>{requestRouteLabel(request)}</Text>
+        </View>
+        <StatusBadge tone={badgeToneForStatus(request.status)}>{statusLabels[request.status]}</StatusBadge>
+      </View>
+      <View style={styles.recentTripFooter}>
+        <Text style={styles.muted}>{formatRequestSchedule(request)}</Text>
+        <Text style={styles.recentTripPrice}>{requestEstimateLabel(request)}</Text>
+      </View>
+    </UiCard>
+  );
+}
+
 function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
   const queryClient = useQueryClient();
+  const navigation = useNavigation();
   const [actionError, setActionError] = useState('');
   const [pendingCancelId, setPendingCancelId] = useState('');
   const [cancelTarget, setCancelTarget] = useState<KuliRequest | null>(null);
+  const [expandedRequestIds, setExpandedRequestIds] = useState<string[]>([]);
 
   const requestsQuery = useQuery({
     queryKey: ['kuli-requests', 'mine'],
@@ -2845,6 +3023,14 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
   const requests = requestsQuery.data ?? [];
   const activeRequests = requests.filter((request) => activeRequestStatuses.includes(request.status) || isPaymentSettlingRequest(request));
   const recentRequests = requests.filter((request) => !activeRequestStatuses.includes(request.status) && !isPaymentSettlingRequest(request)).slice(0, 3);
+  const goToRequest = () => {
+    (navigation as { navigate: (screen: string) => void }).navigate('Request');
+  };
+  const toggleRequestDetails = (requestId: string) => {
+    setExpandedRequestIds((current) =>
+      current.includes(requestId) ? current.filter((id) => id !== requestId) : [...current, requestId]
+    );
+  };
 
   const cancelRequest = async (request: KuliRequest, reason: string) => {
     setPendingCancelId(request.id);
@@ -2868,27 +3054,39 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.cardHeader}>
-          <View style={styles.flex}>
-            <Text style={styles.eyebrow}>/client/home</Text>
-            <Text style={styles.title}>Track the request after dispatch.</Text>
+      <ScrollView contentContainerStyle={styles.clientHomeContent}>
+        <ClientDashboardHero profile={profile} activeCount={activeRequests.length} onRequest={goToRequest} />
+
+        <View style={styles.dashboardSection}>
+          <SectionHeader title="Quick services" description="Choose a starting point. Details stay editable in the request flow." />
+          <View style={styles.serviceGrid}>
+            {clientServiceOptions.map((service) => (
+              <ClientServiceTile key={service.key} title={service.title} detail={service.detail} symbol={service.symbol} onPress={goToRequest} />
+            ))}
           </View>
-          <StatusPill tone={profile.accountStatus === 'active' ? 'ready' : 'warn'}>{profile.accountStatus}</StatusPill>
         </View>
-        <ShellCard title="Authenticated profile">
-          <Text style={styles.copy}>{profile.fullName || profile.email}</Text>
-          <Text style={styles.muted}>Signed in through your KULI profile.</Text>
-          <Text style={styles.muted}>{profile.email}</Text>
-        </ShellCard>
-        <ShellCard title="Active requests">
-          {requestsQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(requestsQuery.error)}</Text> : null}
-          {actionError ? <Text style={styles.errorText}>{actionError}</Text> : null}
-          {requestsQuery.isLoading ? <Text style={styles.muted}>Loading your requests...</Text> : null}
-          {activeRequests.length === 0 && !requestsQuery.isLoading ? <Text style={styles.muted}>No active request yet. Use Request to price and send one.</Text> : null}
-          <View style={styles.roleGrid}>
-            {activeRequests.map((request) => (
-              <RequestSummaryCard
+
+        <View style={styles.dashboardSection}>
+          <SectionHeader
+            title="Active requests"
+            description={activeRequests.length ? 'Track current KULI work from request to completion.' : 'Start with a quote, then send a request to verified truck owners.'}
+          />
+          {requestsQuery.isError ? <ErrorState message={getErrorMessage(requestsQuery.error)} title="Could not load requests" /> : null}
+          {actionError ? <ErrorState message={actionError} title="Action failed" /> : null}
+          {requestsQuery.isLoading ? <LoadingState message="Loading active and recent KULI requests." title="Loading requests" /> : null}
+          {activeRequests.length === 0 && !requestsQuery.isLoading && !requestsQuery.isError ? (
+            <EmptyState
+              title="No active move yet"
+              message="When you send a KULI request, owner responses, tracking, and messages will appear here."
+              action={<PrimaryButton label="Request a truck" onPress={goToRequest} />}
+            />
+          ) : null}
+          {activeRequests.map((request) => {
+            const detailsOpen = expandedRequestIds.includes(request.id);
+
+            return (
+              <ClientActiveRequestCard
+                expanded={detailsOpen}
                 key={request.id}
                 request={request}
                 onCancel={(nextRequest) => {
@@ -2896,30 +3094,28 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
                     setCancelTarget(nextRequest);
                   }
                 }}
+                onToggleDetails={() => toggleRequestDetails(request.id)}
               >
                 {request.status !== 'pending' ? <ActiveTripWorkspace request={request} profile={profile} /> : null}
-              </RequestSummaryCard>
-            ))}
-          </View>
-        </ShellCard>
-        {recentRequests.length ? (
-          <ShellCard title="Recent outcomes">
+              </ClientActiveRequestCard>
+            );
+          })}
+        </View>
+
+        <View style={styles.dashboardSection}>
+          <SectionHeader title="Recent trips" description="Completed, cancelled, and timed-out requests stay here for follow-up." />
+          {recentRequests.length ? (
             <View style={styles.roleGrid}>
               {recentRequests.map((request) => (
-                <View key={request.id} style={styles.requestRow}>
-                  <View style={styles.flex}>
-                    <Text style={styles.fieldLabel}>{request.requestCode}</Text>
-                    <Text style={styles.muted}>{request.pickupLocation?.addressText}</Text>
-                  </View>
-                  <StatusPill tone={statusTone(request.status)}>{request.status}</StatusPill>
-                </View>
+                <ClientRecentTripCard key={request.id} request={request} />
               ))}
             </View>
-          </ShellCard>
-        ) : null}
-        <Pressable accessibilityRole="button" onPress={onSignOut} style={styles.secondaryButton}>
-          <Text style={styles.secondaryButtonText}>Sign out</Text>
-        </Pressable>
+          ) : (
+            <EmptyState title="No recent trips" message="Completed or cancelled trips will appear here after your first request." />
+          )}
+        </View>
+
+        <SecondaryButton label="Sign out" onPress={onSignOut} />
       </ScrollView>
       <ClientCancelDialog
         request={cancelTarget}
@@ -3967,6 +4163,184 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
     padding: spacing.lg,
     paddingBottom: spacing.xxl
+  },
+  clientHomeContent: {
+    gap: spacing.xl,
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl
+  },
+  clientHero: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    gap: spacing.lg,
+    padding: spacing.lg
+  },
+  clientGreeting: {
+    color: colors.textPrimary,
+    fontSize: 28,
+    fontWeight: '900',
+    lineHeight: 34
+  },
+  clientLocation: {
+    color: colors.textSecondary,
+    fontSize: 15,
+    fontWeight: '800',
+    lineHeight: 22
+  },
+  clientAvatar: {
+    alignItems: 'center',
+    backgroundColor: colors.black,
+    borderRadius: 22,
+    height: 44,
+    justifyContent: 'center',
+    width: 44
+  },
+  clientAvatarText: {
+    color: colors.card,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  clientCtaPanel: {
+    backgroundColor: colors.black,
+    borderRadius: radii.lg,
+    gap: spacing.lg,
+    padding: spacing.lg
+  },
+  clientCtaTitle: {
+    color: colors.card,
+    fontSize: 24,
+    fontWeight: '900',
+    lineHeight: 30
+  },
+  clientCtaCopy: {
+    color: '#D1D5DB',
+    fontSize: 14,
+    lineHeight: 21
+  },
+  clientCtaButton: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    justifyContent: 'center',
+    minHeight: 52,
+    paddingHorizontal: spacing.xl
+  },
+  clientCtaButtonText: {
+    color: colors.black,
+    fontSize: 15,
+    fontWeight: '900'
+  },
+  clientHeroMeta: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  clientHeroMetaText: {
+    color: colors.textSecondary,
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700'
+  },
+  dashboardSection: {
+    gap: spacing.md
+  },
+  serviceGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md
+  },
+  serviceTile: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.sm,
+    minHeight: 136,
+    padding: spacing.lg,
+    width: '47.8%'
+  },
+  serviceIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    height: 42,
+    justifyContent: 'center',
+    width: 42
+  },
+  serviceIconText: {
+    color: colors.black,
+    fontSize: 20,
+    fontWeight: '900'
+  },
+  serviceTitle: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '900',
+    lineHeight: 20
+  },
+  serviceDetail: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 17
+  },
+  dashboardCard: {
+    gap: spacing.lg
+  },
+  dashboardRoute: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20
+  },
+  dashboardMetricRow: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  dashboardMetric: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flex: 1,
+    gap: 2,
+    minHeight: 66,
+    justifyContent: 'center',
+    padding: spacing.md
+  },
+  dashboardMetricValue: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  dashboardMetricLabel: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase'
+  },
+  dashboardSubcopy: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '700'
+  },
+  clientExpandedDetails: {
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    paddingTop: spacing.lg
+  },
+  recentTripCard: {
+    gap: spacing.md
+  },
+  recentTripFooter: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  recentTripPrice: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '900'
   },
   authHero: {
     backgroundColor: colors.black,
