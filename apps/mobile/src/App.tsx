@@ -380,10 +380,10 @@ const createDemoSession = ({ accessToken, email }: { accessToken: string; email?
     }
   }) as Session;
 
-function StatusPill({ tone, children }: { tone: 'ready' | 'warn' | 'blocked'; children: string }) {
+function StatusPill({ tone, children }: { tone: 'ready' | 'warn' | 'blocked'; children: ReactNode }) {
   return (
     <View style={[styles.pill, tone === 'ready' && styles.pillReady, tone === 'warn' && styles.pillWarn, tone === 'blocked' && styles.pillBlocked]}>
-      <Text style={styles.pillText}>{children}</Text>
+      <Text style={[styles.pillText, tone === 'ready' && styles.pillTextReady, tone === 'warn' && styles.pillTextWarn, tone === 'blocked' && styles.pillTextBlocked]}>{children}</Text>
     </View>
   );
 }
@@ -1172,6 +1172,10 @@ function DocumentUploadField({
     })) as ApiEnvelope<{ file: { id: string }; upload: { url: string; method?: string } }>;
 
     if (intent.data.upload.url.startsWith('http')) {
+      if (!file.uri) {
+        throw new Error(`Could not read ${file.name} for upload. Choose the file again.`);
+      }
+
       const fileResponse = await fetch(file.uri);
       const fileBlob = await fileResponse.blob();
       const uploadResponse = await fetch(intent.data.upload.url, {
@@ -1916,7 +1920,7 @@ const buildGoogleStaticMapUrl = (points: {
     `markers=color:orange%7Clabel:D%7C${points.destination.lat},${points.destination.lon}`,
     points.truck ? `markers=color:blue%7Clabel:T%7C${points.truck.lat},${points.truck.lon}` : ''
   ].filter(Boolean);
-  const path = `path=color:0x0d5668ff%7Cweight:5%7C${points.pickup.lat},${points.pickup.lon}%7C${points.destination.lat},${points.destination.lon}`;
+  const path = `path=color:0x000000ff%7Cweight:5%7C${points.pickup.lat},${points.pickup.lon}%7C${points.destination.lat},${points.destination.lon}`;
 
   return `https://maps.googleapis.com/maps/api/staticmap?center=${points.pickup.lat},${points.pickup.lon}&zoom=${points.zoom}&size=640x320&scale=2&maptype=roadmap&${markers.join('&')}&${path}&key=${encodeURIComponent(runtimeConfig.googleMapsApiKey)}`;
 };
@@ -1957,8 +1961,8 @@ function RouteMapPreview({
     const left = Math.max(6, Math.min(88, ((lon - 38.65) / (38.91 - 38.65)) * 100));
     const top = Math.max(8, Math.min(84, (1 - (lat - 8.88) / (9.08 - 8.88)) * 100));
     return {
-      left: `${left}%`,
-      top: `${top}%`
+      left: `${left}%` as ViewStyle['left'],
+      top: `${top}%` as ViewStyle['top']
     };
   };
 
@@ -3808,15 +3812,24 @@ export default function App() {
 }
 
 const tabScreenOptions = {
-  headerStyle: { backgroundColor: colors.primaryDeep },
-  headerTintColor: '#fffaf0',
-  tabBarActiveTintColor: colors.primary,
-  tabBarInactiveTintColor: colors.muted,
+  headerStyle: { backgroundColor: colors.black },
+  headerTintColor: colors.card,
+  headerTitleStyle: {
+    fontSize: 18,
+    fontWeight: '800' as const
+  },
+  tabBarActiveTintColor: colors.black,
+  tabBarInactiveTintColor: colors.textSecondary,
   tabBarStyle: {
-    minHeight: 62,
-    paddingTop: 6,
-    paddingBottom: 8,
-    borderTopColor: colors.line
+    backgroundColor: colors.card,
+    borderTopColor: colors.border,
+    minHeight: 68,
+    paddingBottom: 10,
+    paddingTop: 8
+  },
+  tabBarLabelStyle: {
+    fontSize: 11,
+    fontWeight: '800' as const
   }
 };
 
@@ -3833,14 +3846,14 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: spacing.md,
     justifyContent: 'center',
-    padding: spacing.lg
+    padding: spacing.xl
   },
   content: {
-    gap: spacing.md,
-    padding: spacing.lg
+    gap: spacing.lg,
+    padding: spacing.xl
   },
   eyebrow: {
-    color: colors.primary,
+    color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0,
@@ -3858,14 +3871,14 @@ const styles = StyleSheet.create({
     lineHeight: 24
   },
   segmented: {
-    backgroundColor: '#e7ddcf',
+    backgroundColor: colors.subtle,
     borderRadius: radii.md,
     flexDirection: 'row',
     gap: spacing.xs,
     padding: spacing.xs
   },
   segmentedCompact: {
-    backgroundColor: '#e7ddcf',
+    backgroundColor: colors.subtle,
     borderRadius: radii.md,
     flexDirection: 'row',
     gap: spacing.xs,
@@ -3876,18 +3889,18 @@ const styles = StyleSheet.create({
     borderRadius: radii.sm,
     flex: 1,
     justifyContent: 'center',
-    minHeight: 46
+    minHeight: 50
   },
   segmentButtonActive: {
-    backgroundColor: colors.primaryDeep
+    backgroundColor: colors.black
   },
   segmentText: {
-    color: colors.primaryDeep,
+    color: colors.black,
     fontSize: 15,
     fontWeight: '800'
   },
   segmentTextActive: {
-    color: '#fffaf0'
+    color: colors.card
   },
   roleGrid: {
     gap: spacing.sm
@@ -3898,12 +3911,12 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     gap: spacing.xs,
-    minHeight: 86,
-    padding: spacing.md
+    minHeight: 92,
+    padding: spacing.lg
   },
   roleOptionSelected: {
-    backgroundColor: colors.primaryDeep,
-    borderColor: colors.primaryDeep
+    backgroundColor: colors.black,
+    borderColor: colors.black
   },
   roleOptionTitle: {
     color: colors.ink,
@@ -3911,7 +3924,7 @@ const styles = StyleSheet.create({
     fontWeight: '900'
   },
   roleOptionTitleSelected: {
-    color: '#fffaf0'
+    color: colors.card
   },
   roleOptionText: {
     color: colors.muted,
@@ -3919,10 +3932,10 @@ const styles = StyleSheet.create({
     lineHeight: 20
   },
   roleOptionTextSelected: {
-    color: '#f0dcc0'
+    color: '#E5E7EB'
   },
   documentOption: {
-    backgroundColor: '#fffdf7',
+    backgroundColor: colors.card,
     borderColor: colors.line,
     borderRadius: radii.sm,
     borderWidth: 1,
@@ -3930,11 +3943,11 @@ const styles = StyleSheet.create({
     padding: spacing.sm
   },
   documentOptionSelected: {
-    backgroundColor: colors.primaryDeep,
-    borderColor: colors.primaryDeep
+    backgroundColor: colors.black,
+    borderColor: colors.black
   },
   documentOptionSelectedText: {
-    color: '#fffaf0'
+    color: colors.card
   },
   documentUploadHeader: {
     alignItems: 'flex-start',
@@ -3942,17 +3955,17 @@ const styles = StyleSheet.create({
     gap: spacing.sm
   },
   documentProgressTrack: {
-    backgroundColor: '#f1eadf',
+    backgroundColor: colors.subtle,
     borderRadius: radii.sm,
     height: 8,
     overflow: 'hidden'
   },
   documentProgressFill: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.black,
     height: '100%'
   },
   documentUploadCard: {
-    backgroundColor: '#fffdf7',
+    backgroundColor: colors.card,
     borderColor: colors.line,
     borderRadius: radii.sm,
     borderWidth: 1,
@@ -3960,11 +3973,11 @@ const styles = StyleSheet.create({
     padding: spacing.sm
   },
   documentUploadCardUploaded: {
-    borderColor: colors.primary,
-    backgroundColor: '#eef5ef'
+    borderColor: colors.success,
+    backgroundColor: colors.successTint
   },
   documentUploadCardReady: {
-    borderColor: colors.accent
+    borderColor: colors.warning
   },
   documentGuidelineGrid: {
     gap: 2
@@ -3975,7 +3988,7 @@ const styles = StyleSheet.create({
     lineHeight: 17
   },
   reasonOption: {
-    backgroundColor: '#fffdf7',
+    backgroundColor: colors.card,
     borderColor: colors.line,
     borderRadius: radii.sm,
     borderWidth: 1,
@@ -3988,15 +4001,15 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     alignItems: 'center',
-    backgroundColor: colors.primary,
+    backgroundColor: colors.black,
     borderRadius: radii.md,
-    minHeight: 48,
+    minHeight: 56,
     justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md
   },
   primaryButtonText: {
-    color: '#fffaf0',
+    color: colors.card,
     fontSize: 15,
     fontWeight: '800'
   },
@@ -4005,16 +4018,17 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     alignItems: 'center',
-    borderColor: colors.primary,
+    backgroundColor: colors.subtle,
+    borderColor: colors.subtle,
     borderRadius: radii.md,
     borderWidth: 1,
-    minHeight: 48,
+    minHeight: 52,
     justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md
   },
   secondaryButtonText: {
-    color: colors.primary,
+    color: colors.black,
     fontSize: 15,
     fontWeight: '800'
   },
@@ -4030,15 +4044,15 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.panel,
     borderColor: colors.line,
-    borderRadius: radii.md,
+    borderRadius: radii.lg,
     borderWidth: 1,
-    gap: spacing.sm,
-    padding: spacing.md
+    gap: spacing.md,
+    padding: spacing.lg
   },
   detailPanel: {
-    backgroundColor: '#fffdf7',
+    backgroundColor: colors.card,
     borderColor: colors.line,
-    borderRadius: radii.sm,
+    borderRadius: radii.md,
     borderWidth: 1,
     gap: spacing.sm,
     padding: spacing.sm
@@ -4052,7 +4066,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     color: colors.ink,
     fontSize: 17,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   muted: {
     color: colors.muted,
@@ -4066,7 +4080,7 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   noticeText: {
-    color: colors.primaryDeep,
+    color: colors.nearBlack,
     fontSize: 14,
     fontWeight: '700',
     lineHeight: 20
@@ -4080,14 +4094,14 @@ const styles = StyleSheet.create({
     fontWeight: '800'
   },
   input: {
-    backgroundColor: '#fffdf7',
+    backgroundColor: colors.subtle,
     borderColor: colors.line,
-    borderRadius: radii.sm,
+    borderRadius: radii.md,
     borderWidth: 1,
     color: colors.ink,
     fontSize: 16,
-    minHeight: 48,
-    paddingHorizontal: spacing.md
+    minHeight: 52,
+    paddingHorizontal: spacing.lg
   },
   inlineFields: {
     flexDirection: 'row',
@@ -4103,24 +4117,24 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
-    minHeight: 44,
+    minHeight: 48,
     minWidth: 118,
     paddingHorizontal: spacing.xs
   },
   switchRow: {
     alignItems: 'center',
-    backgroundColor: '#fffdf7',
+    backgroundColor: colors.card,
     borderColor: colors.line,
     borderRadius: radii.sm,
     borderWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    minHeight: 48,
+    minHeight: 52,
     paddingHorizontal: spacing.md
   },
   switchRowActive: {
-    borderColor: colors.primary,
-    backgroundColor: '#eef5ef'
+    borderColor: colors.success,
+    backgroundColor: colors.successTint
   },
   switchText: {
     color: colors.ink,
@@ -4128,10 +4142,10 @@ const styles = StyleSheet.create({
     fontWeight: '800'
   },
   switchTextActive: {
-    color: colors.primaryDeep
+    color: colors.success
   },
   priceBox: {
-    backgroundColor: '#fffdf7',
+    backgroundColor: colors.card,
     borderColor: colors.line,
     borderRadius: radii.sm,
     borderWidth: 1,
@@ -4150,7 +4164,7 @@ const styles = StyleSheet.create({
     fontWeight: '800'
   },
   candidateCard: {
-    backgroundColor: '#fffdf7',
+    backgroundColor: colors.card,
     borderColor: colors.line,
     borderRadius: radii.sm,
     borderWidth: 1,
@@ -4163,11 +4177,11 @@ const styles = StyleSheet.create({
     borderWidth: 2
   },
   selectableSurfaceActive: {
-    borderColor: colors.primary
+    borderColor: colors.black
   },
   requestRow: {
     alignItems: 'center',
-    backgroundColor: '#fffdf7',
+    backgroundColor: colors.card,
     borderColor: colors.line,
     borderRadius: radii.sm,
     borderWidth: 1,
@@ -4178,7 +4192,7 @@ const styles = StyleSheet.create({
     padding: spacing.sm
   },
   requestRowStack: {
-    backgroundColor: '#fffdf7',
+    backgroundColor: colors.card,
     borderColor: colors.line,
     borderRadius: radii.sm,
     borderWidth: 1,
@@ -4187,14 +4201,14 @@ const styles = StyleSheet.create({
   },
   locationSelectButton: {
     alignItems: 'center',
-    backgroundColor: '#fffdf7',
+    backgroundColor: colors.card,
     borderColor: colors.line,
     borderRadius: radii.sm,
     borderWidth: 1,
     flexDirection: 'row',
     gap: spacing.sm,
     justifyContent: 'space-between',
-    minHeight: 58,
+    minHeight: 60,
     padding: spacing.sm
   },
   locationSelectTitle: {
@@ -4203,7 +4217,7 @@ const styles = StyleSheet.create({
     fontWeight: '900'
   },
   locationChevron: {
-    color: colors.primary,
+    color: colors.black,
     fontSize: 12,
     fontWeight: '900',
     textTransform: 'uppercase'
@@ -4220,7 +4234,7 @@ const styles = StyleSheet.create({
   },
   locationOption: {
     alignItems: 'center',
-    backgroundColor: '#fffdf7',
+    backgroundColor: colors.card,
     borderRadius: radii.sm,
     flexDirection: 'row',
     gap: spacing.sm,
@@ -4229,7 +4243,7 @@ const styles = StyleSheet.create({
     padding: spacing.sm
   },
   locationOptionSelected: {
-    backgroundColor: colors.primaryDeep
+    backgroundColor: colors.black
   },
   locationCoords: {
     color: colors.muted,
@@ -4237,8 +4251,8 @@ const styles = StyleSheet.create({
     fontWeight: '800'
   },
   mapPreview: {
-    backgroundColor: '#eaf1ed',
-    borderColor: colors.primary,
+    backgroundColor: '#ECECEA',
+    borderColor: colors.border,
     borderRadius: radii.md,
     borderWidth: 1,
     height: 190,
@@ -4251,12 +4265,12 @@ const styles = StyleSheet.create({
     height: 'auto'
   },
   fullscreenMapShell: {
-    backgroundColor: colors.canvas,
+    backgroundColor: colors.background,
     flex: 1
   },
   fullscreenMapHeader: {
     alignItems: 'center',
-    backgroundColor: colors.panel,
+    backgroundColor: colors.card,
     borderBottomColor: colors.line,
     borderBottomWidth: 1,
     flexDirection: 'row',
@@ -4296,7 +4310,7 @@ const styles = StyleSheet.create({
     width: '100%'
   },
   mapRoute: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.warning,
     borderRadius: radii.sm,
     height: 6,
     left: '18%',
@@ -4307,7 +4321,7 @@ const styles = StyleSheet.create({
   },
   mapPin: {
     alignItems: 'center',
-    borderColor: '#fffaf0',
+    borderColor: colors.card,
     borderRadius: 14,
     borderWidth: 2,
     height: 28,
@@ -4318,13 +4332,13 @@ const styles = StyleSheet.create({
     width: 28
   },
   mapPinPickup: {
-    backgroundColor: colors.primary
+    backgroundColor: colors.black
   },
   mapPinDestination: {
-    backgroundColor: colors.amber
+    backgroundColor: colors.warning
   },
   mapPinTruck: {
-    backgroundColor: colors.primaryDeep
+    backgroundColor: colors.nearBlack
   },
   mapControls: {
     gap: spacing.xs,
@@ -4334,8 +4348,8 @@ const styles = StyleSheet.create({
   },
   mapControlButton: {
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 250, 240, 0.94)',
-    borderColor: colors.primary,
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    borderColor: colors.border,
     borderRadius: radii.sm,
     borderWidth: 1,
     height: 34,
@@ -4343,14 +4357,14 @@ const styles = StyleSheet.create({
     width: 34
   },
   mapControlText: {
-    color: colors.primaryDeep,
+    color: colors.black,
     fontSize: 20,
     fontWeight: '900'
   },
   mapExpandButton: {
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 250, 240, 0.94)',
-    borderColor: colors.primary,
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    borderColor: colors.border,
     borderRadius: radii.sm,
     borderWidth: 1,
     minHeight: 34,
@@ -4358,17 +4372,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm
   },
   mapExpandText: {
-    color: colors.primary,
+    color: colors.black,
     fontSize: 12,
     fontWeight: '900'
   },
   mapPinText: {
-    color: '#fffaf0',
+    color: colors.card,
     fontSize: 12,
     fontWeight: '900'
   },
   mapLegend: {
-    backgroundColor: 'rgba(255, 250, 240, 0.92)',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
     borderRadius: radii.sm,
     bottom: spacing.sm,
     gap: 2,
@@ -4378,12 +4392,12 @@ const styles = StyleSheet.create({
     right: spacing.sm
   },
   mapLegendText: {
-    color: colors.primaryDeep,
+    color: colors.nearBlack,
     fontSize: 12,
     fontWeight: '800'
   },
   subsection: {
-    backgroundColor: '#fffdf7',
+    backgroundColor: colors.card,
     borderColor: colors.line,
     borderRadius: radii.sm,
     borderWidth: 1,
@@ -4410,10 +4424,10 @@ const styles = StyleSheet.create({
     fontWeight: '900'
   },
   starTextSelected: {
-    color: colors.accent
+    color: colors.warning
   },
   ratingSummary: {
-    color: colors.primaryDeep,
+    color: colors.nearBlack,
     fontSize: 13,
     fontWeight: '900',
     textAlign: 'center'
@@ -4433,10 +4447,10 @@ const styles = StyleSheet.create({
     fontSize: 14
   },
   candidateStarFilled: {
-    color: colors.accent
+    color: colors.warning
   },
   fileSummary: {
-    backgroundColor: '#f1eadf',
+    backgroundColor: colors.subtle,
     borderRadius: radii.sm,
     gap: spacing.xs,
     padding: spacing.sm
@@ -4446,7 +4460,7 @@ const styles = StyleSheet.create({
   },
   timelineRow: {
     alignItems: 'flex-start',
-    backgroundColor: '#f1eadf',
+    backgroundColor: colors.subtle,
     borderRadius: radii.sm,
     flexDirection: 'row',
     gap: spacing.sm,
@@ -4454,7 +4468,8 @@ const styles = StyleSheet.create({
   },
   compactButton: {
     alignItems: 'center',
-    borderColor: colors.primary,
+    backgroundColor: colors.subtle,
+    borderColor: colors.subtle,
     borderRadius: radii.sm,
     borderWidth: 1,
     justifyContent: 'center',
@@ -4462,7 +4477,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm
   },
   compactButtonText: {
-    color: colors.primary,
+    color: colors.black,
     fontSize: 12,
     fontWeight: '800'
   },
@@ -4471,14 +4486,14 @@ const styles = StyleSheet.create({
   },
   messageBubble: {
     alignSelf: 'flex-start',
-    backgroundColor: '#f1eadf',
+    backgroundColor: colors.subtle,
     borderRadius: radii.sm,
     maxWidth: '92%',
     padding: spacing.sm
   },
   messageBubbleMine: {
     alignSelf: 'flex-end',
-    backgroundColor: colors.primaryDeep
+    backgroundColor: colors.black
   },
   messageBody: {
     color: colors.ink,
@@ -4486,7 +4501,7 @@ const styles = StyleSheet.create({
     lineHeight: 20
   },
   messageBodyMine: {
-    color: '#fffaf0'
+    color: colors.card
   },
   messageMeta: {
     color: colors.muted,
@@ -4496,7 +4511,7 @@ const styles = StyleSheet.create({
   },
   notificationRow: {
     alignItems: 'flex-start',
-    backgroundColor: '#fffdf7',
+    backgroundColor: colors.card,
     borderColor: colors.line,
     borderRadius: radii.sm,
     borderWidth: 1,
@@ -4515,7 +4530,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm
   },
   metricBox: {
-    backgroundColor: '#f1eadf',
+    backgroundColor: colors.subtle,
     borderRadius: radii.sm,
     flex: 1,
     minHeight: 62,
@@ -4534,8 +4549,8 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase'
   },
   emptyState: {
-    backgroundColor: '#fffdf7',
-    borderColor: colors.amber,
+    backgroundColor: colors.card,
+    borderColor: colors.warning,
     borderRadius: radii.sm,
     borderWidth: 1,
     gap: spacing.xs,
@@ -4543,7 +4558,7 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     alignItems: 'center',
-    backgroundColor: 'rgba(23, 33, 38, 0.55)',
+    backgroundColor: 'rgba(0, 0, 0, 0.42)',
     flex: 1,
     justifyContent: 'center',
     padding: spacing.lg
@@ -4560,7 +4575,7 @@ const styles = StyleSheet.create({
     gap: spacing.md
   },
   pickerHeader: {
-    backgroundColor: '#2990d8',
+    backgroundColor: colors.black,
     borderRadius: radii.sm,
     gap: spacing.xs,
     margin: -spacing.lg,
@@ -4568,7 +4583,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg
   },
   pickerEyebrow: {
-    color: colors.primary,
+    color: colors.textSecondary,
     fontSize: 13,
     fontWeight: '900',
     textTransform: 'uppercase'
@@ -4580,10 +4595,10 @@ const styles = StyleSheet.create({
     lineHeight: 30
   },
   pickerHeaderText: {
-    color: '#e9f5ff'
+    color: '#E5E7EB'
   },
   pickerHeaderTitle: {
-    color: '#ffffff'
+    color: colors.card
   },
   calendarGrid: {
     flexDirection: 'row',
@@ -4598,7 +4613,7 @@ const styles = StyleSheet.create({
     width: '22.8%'
   },
   dateCellSelected: {
-    backgroundColor: '#4f83f1'
+    backgroundColor: colors.black
   },
   dateCellWeekday: {
     color: colors.muted,
@@ -4637,10 +4652,10 @@ const styles = StyleSheet.create({
     width: 20
   },
   radioOuterSelected: {
-    borderColor: '#2990d8'
+    borderColor: colors.black
   },
   radioInner: {
-    backgroundColor: '#2990d8',
+    backgroundColor: colors.black,
     borderRadius: 5,
     height: 10,
     width: 10
@@ -4651,24 +4666,33 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end'
   },
   pill: {
-    borderRadius: radii.sm,
+    borderRadius: radii.xl,
     minHeight: 28,
     justifyContent: 'center',
-    paddingHorizontal: spacing.sm
+    paddingHorizontal: spacing.md
   },
   pillReady: {
-    backgroundColor: colors.green
+    backgroundColor: colors.successTint
   },
   pillWarn: {
-    backgroundColor: colors.amber
+    backgroundColor: colors.warningTint
   },
   pillBlocked: {
-    backgroundColor: colors.red
+    backgroundColor: colors.errorTint
   },
   pillText: {
-    color: '#fffaf0',
+    color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '800'
+  },
+  pillTextReady: {
+    color: colors.success
+  },
+  pillTextWarn: {
+    color: colors.warning
+  },
+  pillTextBlocked: {
+    color: colors.error
   },
   readinessRow: {
     alignItems: 'center',
