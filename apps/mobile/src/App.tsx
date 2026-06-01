@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -26,6 +27,7 @@ import { supabase } from './lib/supabase';
 import { runtimeConfig, runtimeReadiness } from './config/runtime';
 import { colors, radii, spacing } from './theme';
 import { BottomTabIcon } from './components/navigation/BottomTabIcon';
+import { ActionSheetCard } from './components/ui/ActionSheetCard';
 import { AppHeader } from './components/ui/AppHeader';
 import { Card as UiCard } from './components/ui/Card';
 import { EmptyState } from './components/ui/EmptyState';
@@ -36,6 +38,8 @@ import { Screen } from './components/ui/Screen';
 import { SecondaryButton } from './components/ui/SecondaryButton';
 import { SectionHeader } from './components/ui/SectionHeader';
 import { StatusBadge } from './components/ui/StatusBadge';
+import { MetricCard } from './components/visual/MetricCard';
+import { RoutePill } from './components/visual/RoutePill';
 
 type Role = 'client' | 'truck_owner' | 'assistant' | 'admin';
 type AccountStatus = 'active' | 'pending_verification' | 'suspended' | 'banned' | 'deleted';
@@ -2050,12 +2054,14 @@ function RouteMapPreview({
   pickup,
   destination,
   truck,
-  statusLabel
+  statusLabel,
+  style
 }: {
   pickup: MapLocationInput;
   destination: MapLocationInput;
   truck?: QuoteLocation;
   statusLabel?: string;
+  style?: StyleProp<ViewStyle>;
 }) {
   const [zoom, setZoom] = useState(12);
   const [expanded, setExpanded] = useState(false);
@@ -2078,7 +2084,7 @@ function RouteMapPreview({
   };
 
   const renderMap = (fullScreen = false) => (
-    <View style={[styles.mapPreview, fullScreen && styles.mapPreviewFullScreen]}>
+    <View style={[styles.mapPreview, !fullScreen && style, fullScreen && styles.mapPreviewFullScreen]}>
       <Image source={{ uri: googleMapUrl || fallbackTileUrl }} resizeMode="cover" style={styles.mapTile} />
       <View style={styles.mapScrim} />
       <View style={styles.mapGridLineVertical} />
@@ -2137,6 +2143,71 @@ function RouteMapPreview({
   );
 }
 
+type RequestFlowStep = 'route' | 'load' | 'quote' | 'sent';
+
+const requestFlowSteps: Array<{ key: RequestFlowStep; label: string }> = [
+  { key: 'route', label: 'Route' },
+  { key: 'load', label: 'Truck' },
+  { key: 'quote', label: 'Quote' },
+  { key: 'sent', label: 'Sent' }
+];
+
+const truckIconForClass = (vehicleClass: VehicleClass) => {
+  const source = `${vehicleClass.slug ?? ''} ${vehicleClass.name}`.toLowerCase();
+
+  if (source.includes('large') || source.includes('heavy') || source.includes('cargo')) {
+    return 'truck-cargo-container';
+  }
+
+  if (source.includes('medium') || source.includes('box')) {
+    return 'truck';
+  }
+
+  if (source.includes('pickup') || source.includes('small')) {
+    return 'truck-pickup';
+  }
+
+  return 'truck-outline';
+};
+
+const loadIconForType = (key: string) => {
+  if (key.includes('household')) {
+    return 'home-city-outline';
+  }
+
+  if (key.includes('furniture')) {
+    return 'sofa-outline';
+  }
+
+  if (key.includes('appliance')) {
+    return 'fridge-outline';
+  }
+
+  return 'storefront-outline';
+};
+
+function RequestStepIndicator({ currentStep }: { currentStep: RequestFlowStep }) {
+  const currentIndex = requestFlowSteps.findIndex((step) => step.key === currentStep);
+
+  return (
+    <View style={styles.requestStepRail}>
+      {requestFlowSteps.map((step, index) => {
+        const active = step.key === currentStep;
+        const complete = index < currentIndex;
+
+        return (
+          <View key={step.key} style={styles.requestStepItem}>
+            <View style={[styles.requestStepDot, complete && styles.requestStepDotComplete, active && styles.requestStepDotActive]}>
+              <Text style={[styles.requestStepDotText, (active || complete) && styles.requestStepDotTextActive]}>{index + 1}</Text>
+            </View>
+            <Text style={[styles.requestStepLabel, active && styles.requestStepLabelActive]}>{step.label}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 function RequestTruckTypeCards({
   vehicleClasses,
   selectedVehicleClassId,
@@ -2161,6 +2232,9 @@ function RequestTruckTypeCards({
             onPress={() => onSelect(vehicleClass.id)}
             style={[styles.requestTruckCard, selected && styles.requestTruckCardSelected]}
           >
+            <View style={[styles.requestTruckIcon, selected && styles.requestTruckIconSelected]}>
+              <MaterialCommunityIcons name={truckIconForClass(vehicleClass) as never} color={selected ? colors.card : colors.black} size={30} />
+            </View>
             <View style={styles.cardHeader}>
               <View style={styles.flex}>
                 <Text style={[styles.requestTruckTitle, selected && styles.requestTextOnDark]}>{vehicleClass.name}</Text>
@@ -2235,6 +2309,7 @@ function RequestCandidateOption({
 
 function ClientQuoteScreen() {
   const queryClient = useQueryClient();
+  const navigation = useNavigation();
   const [vehicleClassId, setVehicleClassId] = useState('');
   const [pickupLocationKey, setPickupLocationKey] = useState('bole-medhanialem');
   const [pickupAddressNote, setPickupAddressNote] = useState('');
@@ -2260,6 +2335,7 @@ function ClientQuoteScreen() {
   const [pending, setPending] = useState(false);
   const [requestPending, setRequestPending] = useState(false);
   const [error, setError] = useState('');
+  const [requestStep, setRequestStep] = useState<RequestFlowStep>('route');
 
   const vehicleClassesQuery = useQuery({
     queryKey: ['vehicle-classes'],
@@ -2338,6 +2414,7 @@ function ClientQuoteScreen() {
       setQuote(result.data);
       setQuoteInput(nextQuoteInput);
       setSelectedVehicleIds(result.data.candidates.slice(0, 3).map((candidate) => candidate.vehicleId));
+      setRequestStep('quote');
     } catch (quoteError) {
       setError(getErrorMessage(quoteError));
     } finally {
@@ -2369,6 +2446,7 @@ function ClientQuoteScreen() {
       })) as ApiEnvelope<RequestCreateResult>;
 
       setRequestResult(result.data);
+      setRequestStep('sent');
       await queryClient.invalidateQueries({ queryKey: ['kuli-requests', 'mine'] });
     } catch (requestError) {
       setError(getErrorMessage(requestError));
@@ -2378,239 +2456,274 @@ function ClientQuoteScreen() {
   };
 
   const snapshot = quote?.quoteSnapshot;
+  const routeSummaryPickup = formatLocationAddress(pickupOption);
+  const routeSummaryDestination = formatLocationAddress(destinationOption);
+
+  const setStep = (step: RequestFlowStep) => {
+    setError('');
+    setRequestStep(step);
+  };
+
+  const continueToTruckAndLoad = () => {
+    if (pickupLocationKey === destinationLocationKey) {
+      setError('Choose different pickup and drop-off areas.');
+      return;
+    }
+
+    setStep('load');
+  };
+
+  const goToHome = () => {
+    (navigation as { navigate: (screen: string) => void }).navigate('Home');
+  };
 
   return (
-    <Screen contentStyle={styles.requestContent}>
-      <AppHeader
-        eyebrow="Request"
-        title="Book a truck."
-        subtitle="Choose a route, load, truck type, and quote before owners receive the request."
-      />
-
-      <UiCard style={styles.requestSection}>
-        <SectionHeader
-          eyebrow="Route"
-          title="Where should the truck go?"
-          description="Pick familiar Addis Ababa areas and add building or landmark notes for the owner."
-          action={<StatusBadge tone="dark">Addis Ababa</StatusBadge>}
-        />
-        <RouteMapPreview pickup={pickupOption} destination={destinationOption} />
-        <View style={styles.requestLocationStack}>
-          <LocationDropdown
-            label="Pickup area"
-            selectedKey={pickupLocationKey}
-            avoidKey={destinationLocationKey}
-            onSelect={(option) => {
-              setPickupLocationKey(option.key);
-              setPickupLon(option.lon);
-              setPickupLat(option.lat);
-            }}
+    <Screen padded={false} contentStyle={styles.requestFlowContent}>
+      <View style={styles.requestMapStage}>
+        <RouteMapPreview pickup={pickupOption} destination={destinationOption} style={styles.requestHeroMap} />
+        <View style={styles.requestFloatingHeader}>
+          <AppHeader
+            eyebrow="KULI Request"
+            title="Plan your move."
+            subtitle="Static route preview with Addis Ababa area selection."
+            dark
+            boxed
+            trailing={<StatusBadge tone="warning">{formatPickupWindow(pickupDateKey, pickupTime)}</StatusBadge>}
           />
-          <Field label="Pickup note" value={pickupAddressNote} onChangeText={setPickupAddressNote} placeholder="Building, gate, floor, or nearby landmark" />
-          <LocationDropdown
-            label="Drop-off area"
-            selectedKey={destinationLocationKey}
-            avoidKey={pickupLocationKey}
-            onSelect={(option) => {
-              setDestinationLocationKey(option.key);
-              setDestinationLon(option.lon);
-              setDestinationLat(option.lat);
-            }}
-          />
-          <Field label="Drop-off note" value={destinationAddressNote} onChangeText={setDestinationAddressNote} placeholder="Building, gate, floor, or nearby landmark" />
         </View>
-        <SecondaryButton
-          label={showManualCoordinates ? 'Hide pin details' : 'Adjust map pin'}
-          onPress={() => setShowManualCoordinates((value) => !value)}
-        />
-        {showManualCoordinates ? (
-          <View style={styles.requestManualPanel}>
-            <Text style={styles.muted}>Fine tune generated coordinates only when the selected area is not close enough.</Text>
-            <View style={styles.inlineFields}>
-              <Field containerStyle={styles.inlineField} label="Pickup lon" value={pickupLon} onChangeText={setPickupLon} placeholder="38.7903" keyboardType="decimal-pad" />
-              <Field containerStyle={styles.inlineField} label="Pickup lat" value={pickupLat} onChangeText={setPickupLat} placeholder="8.9806" keyboardType="decimal-pad" />
-            </View>
-            <View style={styles.inlineFields}>
-              <Field containerStyle={styles.inlineField} label="Drop-off lon" value={destinationLon} onChangeText={setDestinationLon} placeholder="38.7578" keyboardType="decimal-pad" />
-              <Field containerStyle={styles.inlineField} label="Drop-off lat" value={destinationLat} onChangeText={setDestinationLat} placeholder="9.0350" keyboardType="decimal-pad" />
-            </View>
-          </View>
-        ) : null}
-      </UiCard>
+      </View>
 
-      <UiCard style={styles.requestSection}>
-        <SectionHeader
-          eyebrow="Truck type"
-          title="Choose the right size."
-          description="Vehicle classes come from the backend, so pricing and matching stay consistent."
-        />
-        {vehicleClassesQuery.isLoading ? (
-          <LoadingState title="Loading truck types" message="Checking approved KULI vehicle classes." />
-        ) : vehicleClassesQuery.isError ? (
-          <ErrorState title="Could not load truck types" message={getErrorMessage(vehicleClassesQuery.error)} />
-        ) : vehicleClasses.length === 0 ? (
-          <EmptyState title="No truck types available" message="Ask an administrator to create vehicle classes before requesting a truck." />
-        ) : (
-          <RequestTruckTypeCards vehicleClasses={vehicleClasses} selectedVehicleClassId={vehicleClassId} onSelect={setVehicleClassId} />
-        )}
-      </UiCard>
+      <ActionSheetCard style={styles.requestFlowSheet}>
+        <RequestStepIndicator currentStep={requestStep} />
+        {error ? <ErrorState title="Request needs attention" message={error} /> : null}
 
-      <UiCard style={styles.requestSection}>
-        <SectionHeader
-          eyebrow="Load details"
-          title="What are you moving?"
-          description="These details help KULI calculate a fair quote and rank nearby trucks."
-        />
-        <View style={styles.requestLoadGrid}>
-          {loadTypeOptions.map((option) => {
-            const selected = itemType === option.key;
-
-            return (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-                key={option.key}
-                onPress={() => setItemType(option.key)}
-                style={[styles.requestLoadOption, selected && styles.requestLoadOptionSelected]}
-              >
-                <Text style={[styles.requestLoadTitle, selected && styles.requestTextOnDark]}>{option.label}</Text>
-                <Text style={[styles.requestLoadDetail, selected && styles.requestMutedOnDark]}>{option.detail}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-        <View style={styles.inlineFields}>
-          <Field containerStyle={styles.inlineField} label="Weight kg" value={estimatedWeightKg} onChangeText={setEstimatedWeightKg} placeholder="800" keyboardType="numeric" />
-          <Field containerStyle={styles.inlineField} label="Volume m3" value={estimatedVolumeCubicMeters} onChangeText={setEstimatedVolumeCubicMeters} placeholder="8" keyboardType="decimal-pad" />
-        </View>
-        <Pressable
-          accessibilityRole="switch"
-          accessibilityState={{ checked: loadingAssistanceRequested }}
-          onPress={() => setLoadingAssistanceRequested((value) => !value)}
-          style={[styles.requestSwitchRow, loadingAssistanceRequested && styles.requestSwitchRowActive]}
-        >
-          <View style={styles.flex}>
-            <Text style={[styles.requestSwitchText, loadingAssistanceRequested && styles.requestSwitchTextActive]}>Loading help</Text>
-            <Text style={styles.muted}>Owner should expect help loading or unloading.</Text>
-          </View>
-          <StatusBadge tone={loadingAssistanceRequested ? 'success' : 'warning'}>{loadingAssistanceRequested ? 'Yes' : 'No'}</StatusBadge>
-        </Pressable>
-        <Field label="Special handling" value={specialHandlingInstructions} onChangeText={setSpecialHandlingInstructions} placeholder="Fragile wardrobe, narrow stairs" />
-        <Field label="Tip ETB" value={tip} onChangeText={setTip} placeholder="0" keyboardType="numeric" />
-      </UiCard>
-
-      <UiCard style={styles.requestSection}>
-        <SectionHeader
-          eyebrow="Schedule"
-          title="When should pickup happen?"
-          description="Choose a pickup window owners can plan around."
-          action={<StatusBadge tone="warning">{formatPickupWindow(pickupDateKey, pickupTime)}</StatusBadge>}
-        />
-        <PickupSchedulePicker
-          dateKey={pickupDateKey}
-          time={pickupTime}
-          onChange={(next) => {
-            if (next.dateKey) {
-              setPickupDateKey(next.dateKey);
-            }
-
-            if (next.time) {
-              setPickupTime(next.time);
-            }
-          }}
-        />
-      </UiCard>
-
-      {error ? <ErrorState title="Request needs attention" message={error} /> : null}
-      <PrimaryButton label="Get quote" loading={pending} disabled={vehicleClasses.length === 0} onPress={submitQuote} />
-      {pending ? <LoadingState title="Calculating quote" message="Checking route distance, pricing, and nearby approved trucks." /> : null}
-
-      {quote && snapshot ? (
-        <UiCard style={styles.requestSection}>
-          <SectionHeader
-            eyebrow="Quote"
-            title="Review your estimate."
-            description="Confirm the estimate before selected owners receive the request."
-            action={<StatusBadge tone={quote.search.noResults ? 'warning' : 'success'}>{`${quote.search.radiusKmUsed}km radius`}</StatusBadge>}
-          />
-          <View style={styles.requestQuoteHero}>
-            <Text style={styles.requestQuoteLabel}>Total estimate</Text>
-            <Text style={styles.requestQuoteTotal}>{snapshot.currency} {snapshot.totalEstimate.toFixed(2)}</Text>
-            <Text style={styles.requestQuoteMeta}>{quote.route.distanceKm.toFixed(2)}km / about {Math.round(quote.route.etaMinutes)} min / pricing v{snapshot.pricingRuleVersion}</Text>
-          </View>
-          {quote.search.expanded ? <StatusBadge tone="warning">Search expanded</StatusBadge> : null}
-          <View style={styles.priceBox}>
-            <PriceLine label="Base fare" value={snapshot.baseFare} currency={snapshot.currency} />
-            <PriceLine label="Distance" value={snapshot.distanceCharge} currency={snapshot.currency} />
-            <PriceLine label="Time" value={snapshot.durationCharge} currency={snapshot.currency} />
-            <PriceLine label="Load adjustment" value={snapshot.loadAdjustment} currency={snapshot.currency} />
-            <PriceLine label="Fuel surcharge" value={snapshot.fuelSurcharge} currency={snapshot.currency} />
-            <PriceLine label="Tip" value={snapshot.tip} currency={snapshot.currency} />
-          </View>
-          <View style={styles.requestPaymentNote}>
-            <Text style={styles.noticeText}>Payment is handled after delivery in the current KULI flow. Keep final payment coordination inside the trip chat.</Text>
-          </View>
-        </UiCard>
-      ) : null}
-
-      {quote && snapshot ? (
-        <UiCard style={styles.requestSection}>
-          <SectionHeader
-            eyebrow="Dispatch"
-            title="Nearby candidates."
-            description="Select one or more trucks. The first owner to accept gets the trip and other offers close automatically."
-          />
-          {quote.candidates.length === 0 ? (
-            <EmptyState
-              title="No nearby approved trucks yet"
-              message="Try a smaller load, another truck type, or a different pickup area after more owners come online."
-              action={<SecondaryButton label="Adjust request" onPress={() => setQuote(null)} />}
+        {requestStep === 'route' ? (
+          <>
+            <SectionHeader
+              eyebrow="Step 1"
+              title="Set your route."
+              description="Choose pickup and drop-off areas. You can fine tune map pins when needed."
+              action={<StatusBadge tone="dark">Addis Ababa</StatusBadge>}
             />
-          ) : (
-            <>
-              <View style={styles.requestCandidateList}>
-                {quote.candidates.map((candidate) => (
-                  <RequestCandidateOption
-                    key={candidate.vehicleId}
-                    candidate={candidate}
-                    capacityLabel={selectedCapacityLabel}
-                    selected={selectedVehicleIds.includes(candidate.vehicleId)}
-                    onPress={() => toggleCandidateSelection(candidate.vehicleId)}
-                  />
-                ))}
-              </View>
-              <Text style={styles.muted}>{selectedVehicleIds.length} selected for dispatch. Owners receive first-accept-wins offers.</Text>
-              <PrimaryButton
-                label="Send KULI request"
-                loading={requestPending}
-                disabled={selectedVehicleIds.length === 0}
-                onPress={createRequest}
-              />
-            </>
-          )}
-        </UiCard>
-      ) : null}
-
-      {requestResult ? (
-        <UiCard style={styles.requestSection}>
-          <SectionHeader
-            eyebrow="Waiting for owner"
-            title={requestResult.request.requestCode}
-            description={`${requestResult.offers.length} offer${requestResult.offers.length === 1 ? '' : 's'} sent`}
-            action={<StatusBadge tone={statusTone(requestResult.request.status) === 'ready' ? 'success' : statusTone(requestResult.request.status) === 'blocked' ? 'error' : 'warning'}>{requestResult.request.status}</StatusBadge>}
-          />
-          <View style={styles.requestWaitingPanel}>
-            <View style={styles.flex}>
-              <Text style={styles.fieldLabel}>Offer expiry</Text>
-              <Text style={styles.muted}>
-                {requestResult.waitingState?.expiresAt ? new Date(requestResult.waitingState.expiresAt).toLocaleTimeString() : 'Soon'}
-              </Text>
+            <RoutePill pickup={routeSummaryPickup} destination={routeSummaryDestination} />
+            <View style={styles.requestSuggestionRow}>
+              {addisLocationOptions.slice(0, 6).map((option) => (
+                <Pressable
+                  accessibilityRole="button"
+                  key={option.key}
+                  onPress={() => {
+                    setPickupLocationKey(option.key);
+                    setPickupLon(option.lon);
+                    setPickupLat(option.lat);
+                  }}
+                  style={[styles.requestSuggestionChip, pickupLocationKey === option.key && styles.requestSuggestionChipActive]}
+                >
+                  <Text style={[styles.requestSuggestionText, pickupLocationKey === option.key && styles.requestSuggestionTextActive]}>{option.label}</Text>
+                </Pressable>
+              ))}
             </View>
-            <StatusBadge tone="warning">Pending</StatusBadge>
-          </View>
-          <Text style={styles.noticeText}>Follow or cancel this request from Home while it is still cancellable. Once a truck accepts, other offers are released automatically.</Text>
-        </UiCard>
-      ) : null}
+            <LocationDropdown
+              label="Pickup area"
+              selectedKey={pickupLocationKey}
+              avoidKey={destinationLocationKey}
+              onSelect={(option) => {
+                setPickupLocationKey(option.key);
+                setPickupLon(option.lon);
+                setPickupLat(option.lat);
+              }}
+            />
+            <Field label="Pickup note" value={pickupAddressNote} onChangeText={setPickupAddressNote} placeholder="Building, gate, floor, or nearby landmark" />
+            <LocationDropdown
+              label="Drop-off area"
+              selectedKey={destinationLocationKey}
+              avoidKey={pickupLocationKey}
+              onSelect={(option) => {
+                setDestinationLocationKey(option.key);
+                setDestinationLon(option.lon);
+                setDestinationLat(option.lat);
+              }}
+            />
+            <Field label="Drop-off note" value={destinationAddressNote} onChangeText={setDestinationAddressNote} placeholder="Building, gate, floor, or nearby landmark" />
+            <SecondaryButton
+              label={showManualCoordinates ? 'Hide pin details' : 'Adjust map pin'}
+              onPress={() => setShowManualCoordinates((value) => !value)}
+            />
+            {showManualCoordinates ? (
+              <View style={styles.requestManualPanel}>
+                <Text style={styles.muted}>Fine tune generated coordinates only when the selected area is not close enough.</Text>
+                <View style={styles.inlineFields}>
+                  <Field containerStyle={styles.inlineField} label="Pickup lon" value={pickupLon} onChangeText={setPickupLon} placeholder="38.7903" keyboardType="decimal-pad" />
+                  <Field containerStyle={styles.inlineField} label="Pickup lat" value={pickupLat} onChangeText={setPickupLat} placeholder="8.9806" keyboardType="decimal-pad" />
+                </View>
+                <View style={styles.inlineFields}>
+                  <Field containerStyle={styles.inlineField} label="Drop-off lon" value={destinationLon} onChangeText={setDestinationLon} placeholder="38.7578" keyboardType="decimal-pad" />
+                  <Field containerStyle={styles.inlineField} label="Drop-off lat" value={destinationLat} onChangeText={setDestinationLat} placeholder="9.0350" keyboardType="decimal-pad" />
+                </View>
+              </View>
+            ) : null}
+            <PrimaryButton label="Continue" onPress={continueToTruckAndLoad} />
+          </>
+        ) : null}
+
+        {requestStep === 'load' ? (
+          <>
+            <SectionHeader
+              eyebrow="Step 2"
+              title="Truck and load."
+              description="Pick a truck class, tell owners what is moving, then get a backend quote."
+            />
+            {vehicleClassesQuery.isLoading ? (
+              <LoadingState title="Loading truck types" message="Checking approved KULI vehicle classes." />
+            ) : vehicleClassesQuery.isError ? (
+              <ErrorState title="Could not load truck types" message={getErrorMessage(vehicleClassesQuery.error)} />
+            ) : vehicleClasses.length === 0 ? (
+              <EmptyState title="No truck types available" message="Ask an administrator to create vehicle classes before requesting a truck." />
+            ) : (
+              <RequestTruckTypeCards vehicleClasses={vehicleClasses} selectedVehicleClassId={vehicleClassId} onSelect={setVehicleClassId} />
+            )}
+            <View style={styles.requestLoadGrid}>
+              {loadTypeOptions.map((option) => {
+                const selected = itemType === option.key;
+
+                return (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    key={option.key}
+                    onPress={() => setItemType(option.key)}
+                    style={[styles.requestLoadOption, selected && styles.requestLoadOptionSelected]}
+                  >
+                    <View style={[styles.requestLoadIcon, selected && styles.requestLoadIconSelected]}>
+                      <MaterialCommunityIcons name={loadIconForType(option.key) as never} color={selected ? colors.card : colors.black} size={24} />
+                    </View>
+                    <Text style={[styles.requestLoadTitle, selected && styles.requestTextOnDark]}>{option.label}</Text>
+                    <Text style={[styles.requestLoadDetail, selected && styles.requestMutedOnDark]}>{option.detail}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <View style={styles.inlineFields}>
+              <Field containerStyle={styles.inlineField} label="Weight kg" value={estimatedWeightKg} onChangeText={setEstimatedWeightKg} placeholder="800" keyboardType="numeric" />
+              <Field containerStyle={styles.inlineField} label="Volume m3" value={estimatedVolumeCubicMeters} onChangeText={setEstimatedVolumeCubicMeters} placeholder="8" keyboardType="decimal-pad" />
+            </View>
+            <PickupSchedulePicker
+              dateKey={pickupDateKey}
+              time={pickupTime}
+              onChange={(next) => {
+                if (next.dateKey) {
+                  setPickupDateKey(next.dateKey);
+                }
+
+                if (next.time) {
+                  setPickupTime(next.time);
+                }
+              }}
+            />
+            <Pressable
+              accessibilityRole="switch"
+              accessibilityState={{ checked: loadingAssistanceRequested }}
+              onPress={() => setLoadingAssistanceRequested((value) => !value)}
+              style={[styles.requestSwitchRow, loadingAssistanceRequested && styles.requestSwitchRowActive]}
+            >
+              <View style={styles.flex}>
+                <Text style={[styles.requestSwitchText, loadingAssistanceRequested && styles.requestSwitchTextActive]}>Loading help</Text>
+                <Text style={styles.muted}>Owner should expect help loading or unloading.</Text>
+              </View>
+              <StatusBadge tone={loadingAssistanceRequested ? 'success' : 'warning'}>{loadingAssistanceRequested ? 'Yes' : 'No'}</StatusBadge>
+            </Pressable>
+            <Field label="Handling notes" value={specialHandlingInstructions} onChangeText={setSpecialHandlingInstructions} placeholder="Fragile wardrobe, narrow stairs" />
+            <Field label="Tip ETB" value={tip} onChangeText={setTip} placeholder="0" keyboardType="numeric" />
+            <View style={styles.actionRow}>
+              <SecondaryButton label="Back" onPress={() => setStep('route')} style={styles.actionButton} />
+              <PrimaryButton label="Get quote" loading={pending} disabled={vehicleClasses.length === 0} onPress={submitQuote} style={styles.actionButton} />
+            </View>
+            {pending ? <LoadingState title="Calculating quote" message="Checking route distance, pricing, and nearby approved trucks." /> : null}
+          </>
+        ) : null}
+
+        {requestStep === 'quote' && quote && snapshot ? (
+          <>
+            <SectionHeader
+              eyebrow="Step 3"
+              title="Confirm your quote."
+              description="Review ETB pricing, route, and nearby candidates before dispatch."
+              action={<StatusBadge tone={quote.search.noResults ? 'warning' : 'success'}>{`${quote.search.radiusKmUsed}km radius`}</StatusBadge>}
+            />
+            <View style={styles.requestCheckoutHero}>
+              <Text style={styles.requestQuoteLabel}>Total estimate</Text>
+              <Text style={styles.requestQuoteTotal}>{snapshot.currency} {snapshot.totalEstimate.toFixed(2)}</Text>
+              <Text style={styles.requestQuoteMeta}>{quote.route.distanceKm.toFixed(2)}km / about {Math.round(quote.route.etaMinutes)} min / {selectedVehicleClass?.name ?? quote.requestedVehicleClass.name}</Text>
+            </View>
+            <RoutePill pickup={routeSummaryPickup} destination={routeSummaryDestination} />
+            <View style={styles.requestMetricGrid}>
+              <MetricCard label="truck type" value={selectedVehicleClass?.name ?? quote.requestedVehicleClass.name} />
+              <MetricCard label="payment" value="Cash" detail="Pay after delivery" tone="warning" />
+            </View>
+            {quote.search.expanded ? <StatusBadge tone="warning">Search expanded</StatusBadge> : null}
+            <View style={styles.priceBox}>
+              <PriceLine label="Base fare" value={snapshot.baseFare} currency={snapshot.currency} />
+              <PriceLine label="Distance" value={snapshot.distanceCharge} currency={snapshot.currency} />
+              <PriceLine label="Time" value={snapshot.durationCharge} currency={snapshot.currency} />
+              <PriceLine label="Load adjustment" value={snapshot.loadAdjustment} currency={snapshot.currency} />
+              <PriceLine label="Fuel surcharge" value={snapshot.fuelSurcharge} currency={snapshot.currency} />
+              <PriceLine label="Tip" value={snapshot.tip} currency={snapshot.currency} />
+            </View>
+            <View style={styles.requestPaymentNote}>
+              <Text style={styles.noticeText}>Payment is handled after delivery in the current KULI flow. Keep final payment coordination inside the trip chat.</Text>
+            </View>
+            <SectionHeader title="Nearby verified trucks" description="Select one or more. First owner to accept gets the trip." />
+            {quote.candidates.length === 0 ? (
+              <EmptyState
+                title="No nearby approved trucks yet"
+                message="Try a smaller load, another truck type, or a different pickup area after more owners come online."
+                action={<SecondaryButton label="Adjust request" onPress={() => setStep('load')} />}
+              />
+            ) : (
+              <>
+                <View style={styles.requestCandidateList}>
+                  {quote.candidates.map((candidate) => (
+                    <RequestCandidateOption
+                      key={candidate.vehicleId}
+                      candidate={candidate}
+                      capacityLabel={selectedCapacityLabel}
+                      selected={selectedVehicleIds.includes(candidate.vehicleId)}
+                      onPress={() => toggleCandidateSelection(candidate.vehicleId)}
+                    />
+                  ))}
+                </View>
+                <Text style={styles.muted}>{selectedVehicleIds.length} selected for dispatch. Owners receive first-accept-wins offers.</Text>
+              </>
+            )}
+            <View style={styles.actionRow}>
+              <SecondaryButton label="Edit" onPress={() => setStep('load')} style={styles.actionButton} />
+              <PrimaryButton label="Send request" loading={requestPending} disabled={selectedVehicleIds.length === 0} onPress={createRequest} style={styles.actionButton} />
+            </View>
+          </>
+        ) : null}
+
+        {requestStep === 'quote' && !quote ? (
+          <EmptyState title="No quote yet" message="Add truck and load details, then generate a quote before dispatch." action={<PrimaryButton label="Build quote" onPress={() => setStep('load')} />} />
+        ) : null}
+
+        {requestStep === 'sent' && requestResult ? (
+          <>
+            <DispatchSearchPanel request={requestResult.request} />
+            <View style={styles.requestWaitingPanel}>
+              <View style={styles.flex}>
+                <Text style={styles.fieldLabel}>Offer expiry</Text>
+                <Text style={styles.muted}>
+                  {requestResult.waitingState?.expiresAt ? new Date(requestResult.waitingState.expiresAt).toLocaleTimeString() : 'Soon'}
+                </Text>
+              </View>
+              <StatusBadge tone="warning">Pending</StatusBadge>
+            </View>
+            <View style={styles.actionRow}>
+              <SecondaryButton label="Review quote" onPress={() => setStep('quote')} style={styles.actionButton} />
+              <PrimaryButton label="Go to Home" onPress={goToHome} style={styles.actionButton} />
+            </View>
+          </>
+        ) : null}
+      </ActionSheetCard>
     </Screen>
   );
 }
@@ -4523,6 +4636,99 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingBottom: spacing.xxl
   },
+  requestFlowContent: {
+    backgroundColor: colors.background,
+    gap: 0,
+    paddingBottom: 128
+  },
+  requestMapStage: {
+    backgroundColor: colors.black,
+    minHeight: 430,
+    position: 'relative'
+  },
+  requestHeroMap: {
+    borderRadius: 0,
+    borderWidth: 0,
+    height: 430
+  },
+  requestFloatingHeader: {
+    left: spacing.lg,
+    position: 'absolute',
+    right: spacing.lg,
+    top: spacing.lg
+  },
+  requestFlowSheet: {
+    marginTop: -spacing.xl,
+    paddingBottom: spacing.xl
+  },
+  requestStepRail: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.xl,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    padding: spacing.xs
+  },
+  requestStepItem: {
+    alignItems: 'center',
+    flex: 1,
+    gap: spacing.xs
+  },
+  requestStepDot: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 17,
+    height: 34,
+    justifyContent: 'center',
+    width: 34
+  },
+  requestStepDotActive: {
+    backgroundColor: colors.black
+  },
+  requestStepDotComplete: {
+    backgroundColor: colors.success
+  },
+  requestStepDotText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  requestStepDotTextActive: {
+    color: colors.card
+  },
+  requestStepLabel: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '800'
+  },
+  requestStepLabelActive: {
+    color: colors.textPrimary
+  },
+  requestSuggestionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm
+  },
+  requestSuggestionChip: {
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    minHeight: 38,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md
+  },
+  requestSuggestionChipActive: {
+    backgroundColor: colors.black,
+    borderColor: colors.black
+  },
+  requestSuggestionText: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  requestSuggestionTextActive: {
+    color: colors.card
+  },
   requestContent: {
     gap: spacing.lg,
     padding: spacing.lg,
@@ -4557,6 +4763,17 @@ const styles = StyleSheet.create({
   requestTruckCardSelected: {
     backgroundColor: colors.black,
     borderColor: colors.black
+  },
+  requestTruckIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.lg,
+    height: 56,
+    justifyContent: 'center',
+    width: 56
+  },
+  requestTruckIconSelected: {
+    backgroundColor: colors.darkSurface
   },
   requestTruckTitle: {
     color: colors.textPrimary,
@@ -4624,6 +4841,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.black,
     borderColor: colors.black
   },
+  requestLoadIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    height: 40,
+    justifyContent: 'center',
+    width: 40
+  },
+  requestLoadIconSelected: {
+    backgroundColor: colors.darkSurface
+  },
   requestLoadTitle: {
     color: colors.textPrimary,
     fontSize: 15,
@@ -4665,6 +4893,12 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     padding: spacing.lg
   },
+  requestCheckoutHero: {
+    backgroundColor: colors.black,
+    borderRadius: radii.xl,
+    gap: spacing.xs,
+    padding: spacing.xl
+  },
   requestQuoteLabel: {
     color: '#D1D5DB',
     fontSize: 12,
@@ -4689,6 +4923,10 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     padding: spacing.md
+  },
+  requestMetricGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm
   },
   requestCandidateList: {
     gap: spacing.md
