@@ -2627,10 +2627,10 @@ function RequestSummaryCard({
   const cancelLabel = request.status === 'pending' ? 'Cancel request' : 'Cancel trip';
 
   return (
-    <View style={styles.card}>
+    <View style={styles.requestSummaryPanel}>
       <View style={styles.cardHeader}>
         <View style={styles.flex}>
-          <Text style={styles.cardTitle}>{request.requestCode}</Text>
+          <Text style={styles.activeTripTitle}>{request.requestCode}</Text>
           <Text style={styles.muted}>{request.pickupLocation?.addressText} to {request.destinationLocation?.addressText}</Text>
         </View>
         <StatusPill tone={statusTone(request.status)}>{statusLabels[request.status]}</StatusPill>
@@ -2661,16 +2661,25 @@ function RequestSummaryCard({
   );
 }
 
-function TimelineEventRow({ event }: { event: StatusEvent }) {
+function TimelineEventRow({ event, isLast = false }: { event: StatusEvent; isLast?: boolean }) {
   const label = statusLabels[event.toStatus] ?? event.toStatus;
+  const tone = statusTone(event.toStatus);
 
   return (
-    <View style={styles.timelineRow}>
-      <StatusPill tone={statusTone(event.toStatus)}>{label}</StatusPill>
+    <View style={styles.timelineEventRow}>
+      <View style={styles.timelineMarkerColumn}>
+        <View style={[styles.timelineDot, tone === 'ready' && styles.timelineDotReady, tone === 'warn' && styles.timelineDotWarn, tone === 'blocked' && styles.timelineDotBlocked]} />
+        {!isLast ? <View style={styles.timelineConnector} /> : null}
+      </View>
       <View style={styles.flex}>
-        <Text style={styles.fieldLabel}>{event.fromStatus ? `${statusLabels[event.fromStatus]} to ${label}` : label}</Text>
-        <Text style={styles.muted}>{event.reason || 'Status event recorded'} / {event.actorRole || 'system'}</Text>
-        {event.createdAt ? <Text style={styles.muted}>{new Date(event.createdAt).toLocaleString()}</Text> : null}
+        <View style={styles.timelineEventCard}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.fieldLabel}>{event.fromStatus ? `${statusLabels[event.fromStatus]} to ${label}` : label}</Text>
+            <StatusBadge tone={badgeToneForStatus(event.toStatus)}>{label}</StatusBadge>
+          </View>
+          <Text style={styles.muted}>{event.reason || 'Status event recorded'} / {event.actorRole || 'system'}</Text>
+          {event.createdAt ? <Text style={styles.timelineTime}>{new Date(event.createdAt).toLocaleString()}</Text> : null}
+        </View>
       </View>
     </View>
   );
@@ -2686,18 +2695,20 @@ function TripTimeline({ requestId }: { requestId: string }) {
   const events = eventsQuery.data ?? [];
 
   return (
-    <View style={styles.subsection}>
+    <View style={styles.trackingPanel}>
       <View style={styles.cardHeader}>
-        <Text style={styles.fieldLabel}>Trip timeline</Text>
-        <Pressable accessibilityRole="button" onPress={() => eventsQuery.refetch()} style={styles.compactButton}>
-          <Text style={styles.compactButtonText}>Refresh</Text>
-        </Pressable>
+        <View style={styles.flex}>
+          <Text style={styles.trackingPanelTitle}>Trip timeline</Text>
+          <Text style={styles.muted}>Server-confirmed status events. Refresh or wait for polling.</Text>
+        </View>
+        <SecondaryButton label="Refresh" onPress={() => eventsQuery.refetch()} style={styles.timelineRefreshButton} />
       </View>
-      {eventsQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(eventsQuery.error)}</Text> : null}
-      {events.length === 0 ? <Text style={styles.muted}>No status events yet. The acceptance event appears after the owner accepts.</Text> : null}
-      <View style={styles.roleGrid}>
-        {events.map((event) => (
-          <TimelineEventRow event={event} key={event.id} />
+      {eventsQuery.isLoading ? <LoadingState title="Loading timeline" message="Checking the latest trip status events." /> : null}
+      {eventsQuery.isError ? <ErrorState title="Could not refresh timeline" message={getErrorMessage(eventsQuery.error)} /> : null}
+      {events.length === 0 && !eventsQuery.isLoading ? <EmptyState title="No status events yet" message="The acceptance event appears after the owner accepts." /> : null}
+      <View style={styles.timelineList}>
+        {events.map((event, index) => (
+          <TimelineEventRow event={event} isLast={index === events.length - 1} key={event.id} />
         ))}
       </View>
     </View>
@@ -2706,10 +2717,10 @@ function TripTimeline({ requestId }: { requestId: string }) {
 
 function ArchivedMessagePanel({ request }: { request: KuliRequest }) {
   return (
-    <View style={styles.subsection}>
+    <View style={styles.trackingPanel}>
       <View style={styles.cardHeader}>
-        <Text style={styles.fieldLabel}>Messages</Text>
-        <StatusPill tone="blocked">{statusLabels[request.status]}</StatusPill>
+        <Text style={styles.trackingPanelTitle}>Messages archived</Text>
+        <StatusBadge tone="error">{statusLabels[request.status]}</StatusBadge>
       </View>
       <Text style={styles.muted}>Trip messaging is archived after cancellation or timeout. Use History or support actions for any follow-up.</Text>
     </View>
@@ -2771,17 +2782,22 @@ function MessageThread({
   };
 
   const messages = messagesQuery.data ?? [];
+  const quickReplies = ["I'm outside", 'Please call me', 'Coming now'];
 
   return (
-    <View style={styles.subsection}>
-      <View style={styles.cardHeader}>
-        <Text style={styles.fieldLabel}>Messages</Text>
-        <StatusPill tone={messagesQuery.isError ? 'blocked' : 'ready'}>{messages.length}</StatusPill>
+    <View style={styles.chatPanel}>
+      <View style={styles.chatHeader}>
+        <View style={styles.flex}>
+          <Text style={styles.trackingPanelTitle}>Trip chat</Text>
+          <Text style={styles.muted}>Coordinate pickup and delivery details inside this request.</Text>
+        </View>
+        <StatusBadge tone={messagesQuery.isError ? 'error' : 'success'}>{`${messages.length}`}</StatusBadge>
       </View>
-      {messagesQuery.isError ? <Text style={styles.errorText}>Connection issue loading messages. Pull this panel by refreshing after the network returns.</Text> : null}
+      {messagesQuery.isLoading ? <LoadingState title="Loading messages" message="Fetching the latest request chat." /> : null}
+      {messagesQuery.isError ? <ErrorState title="Messages could not refresh" message="Connection issue loading messages. Try again after the network returns." /> : null}
       {closed ? <Text style={styles.noticeText}>{closedReason}</Text> : null}
       <View style={styles.messageList}>
-        {messages.length === 0 ? <Text style={styles.muted}>No messages yet. Keep coordination inside the request for accountability.</Text> : null}
+        {messages.length === 0 && !messagesQuery.isLoading ? <EmptyState title="No messages yet" message="Keep coordination inside the request for accountability." /> : null}
         {messages.map((message) => {
           const mine = message.senderId === profile.id;
           const profileName = profile.fullName || profile.email || 'You';
@@ -2801,16 +2817,21 @@ function MessageThread({
         <View style={styles.emptyState}>
           <Text style={styles.errorText}>{error}</Text>
           {retryBody ? (
-            <Pressable accessibilityRole="button" disabled={pending} onPress={() => sendMessage(retryBody)} style={[styles.secondaryButton, pending && styles.buttonDisabled]}>
-              <Text style={styles.secondaryButtonText}>{pending ? 'Retrying...' : 'Retry message'}</Text>
-            </Pressable>
+            <SecondaryButton disabled={pending} label={pending ? 'Retrying...' : 'Retry message'} onPress={() => sendMessage(retryBody)} />
           ) : null}
         </View>
       ) : null}
+      {!closed ? (
+        <View style={styles.quickReplyRow}>
+          {quickReplies.map((reply) => (
+            <Pressable accessibilityRole="button" disabled={pending} key={reply} onPress={() => sendMessage(reply)} style={[styles.quickReplyChip, pending && styles.buttonDisabled]}>
+              <Text style={styles.quickReplyText}>{reply}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
       <Field label="Message" value={body} onChangeText={setBody} placeholder={closed ? 'Messages reopen only if support reopens the payment record' : 'Share arrival detail or loading instruction'} />
-      <Pressable accessibilityRole="button" disabled={!body.trim() || pending || closed} onPress={() => sendMessage()} style={[styles.primaryButton, (!body.trim() || pending || closed) && styles.buttonDisabled]}>
-        <Text style={styles.primaryButtonText}>{closed ? 'Chat closed' : pending ? 'Sending...' : 'Send message'}</Text>
-      </Pressable>
+      <PrimaryButton disabled={!body.trim() || closed} label={closed ? 'Chat closed' : 'Send message'} loading={pending} onPress={() => sendMessage()} />
     </View>
   );
 }
@@ -2899,14 +2920,19 @@ function ActiveTripWorkspace({
 
   return (
     <View style={styles.tripWorkspace}>
-      <RouteMapPreview
-        pickup={request.pickupLocation}
-        destination={request.destinationLocation}
-        truck={request.selectedVehicleLocation}
-        statusLabel={request.status === 'completed' ? request.payment?.status ?? 'payment pending' : statusLabels[request.status]}
-      />
+      <View style={styles.activeMapStage}>
+        <RouteMapPreview
+          pickup={request.pickupLocation}
+          destination={request.destinationLocation}
+          truck={request.selectedVehicleLocation}
+          statusLabel={request.status === 'completed' ? request.payment?.status ?? 'payment pending' : statusLabels[request.status]}
+        />
+      </View>
+      <ActiveTripSummary request={request} />
       {paymentSettling ? (
-        <Text style={styles.noticeText}>Trip is complete, but this chat stays open until the cash/manual payment is confirmed or resolved.</Text>
+        <View style={styles.requestPaymentNote}>
+          <Text style={styles.noticeText}>Trip is complete, but this chat stays open until the cash/manual payment is confirmed or resolved.</Text>
+        </View>
       ) : null}
       {ownerControls && !terminalWithoutSettlement ? <OwnerStatusControls request={request} onRequestUpdated={onRequestUpdated} /> : null}
       <TripTimeline requestId={request.id} />
@@ -3018,6 +3044,44 @@ const requestRouteLabel = (request: KuliRequest) =>
 
 const formatRequestSchedule = (request: KuliRequest) => request.requestedPickupTime || 'Pickup time pending';
 
+const activeTrackingStatuses: KuliStatus[] = ['accepted', 'en_route_to_pickup', 'arrived_at_pickup', 'loading', 'in_transit', 'unloading', 'completed'];
+
+const nextStepForRequest = (status: KuliStatus) => {
+  const nextStepByStatus: Record<KuliStatus, string> = {
+    pending: 'Waiting for a verified truck owner to accept.',
+    accepted: 'Owner accepted. Watch status updates and coordinate pickup details in chat.',
+    en_route_to_pickup: 'Truck is marked en route to pickup. This is status-based tracking, not live GPS.',
+    arrived_at_pickup: 'Truck is marked arrived. Confirm gate, floor, or loading details in chat.',
+    loading: 'Loading is in progress. Keep fragile or access notes in chat.',
+    in_transit: 'Items are marked in transit. Follow status updates until arrival.',
+    unloading: 'Unloading is in progress. Confirm final delivery details before payment.',
+    completed: 'Trip is complete. Payment and trust actions are available from History.',
+    cancelled: 'This request was cancelled and archived.',
+    timed_out: 'No owner accepted in time. Start a new request when you are ready.'
+  };
+
+  return nextStepByStatus[status];
+};
+
+const statusProgressTone = (status: KuliStatus, currentStatus: KuliStatus) => {
+  if (status === currentStatus) {
+    return 'current';
+  }
+
+  const statusIndex = activeTrackingStatuses.indexOf(status);
+  const currentIndex = activeTrackingStatuses.indexOf(currentStatus);
+
+  if (currentIndex >= 0 && statusIndex >= 0 && statusIndex < currentIndex) {
+    return 'done';
+  }
+
+  if (terminalRequestStatuses.includes(currentStatus) && status === currentStatus) {
+    return 'current';
+  }
+
+  return 'pending';
+};
+
 const greetingForNow = () => {
   const hour = new Date().getHours();
 
@@ -3041,6 +3105,104 @@ function ClientServiceTile({ title, detail, symbol, onPress }: { title: string; 
       <Text style={styles.serviceTitle}>{title}</Text>
       <Text style={styles.serviceDetail}>{detail}</Text>
     </Pressable>
+  );
+}
+
+function DispatchSearchPanel({ request }: { request: KuliRequest }) {
+  const offerCount = request.offers?.length ?? 0;
+  const steps = [
+    { key: 'sent', label: 'Request sent', detail: request.requestCode },
+    { key: 'notified', label: 'Owners notified', detail: `${offerCount} offer${offerCount === 1 ? '' : 's'} open` },
+    { key: 'waiting', label: 'Waiting for acceptance', detail: 'First accepted truck wins the trip' }
+  ];
+
+  return (
+    <View style={styles.dispatchPanel}>
+      <View style={styles.dispatchPulse}>
+        <Text style={styles.dispatchPulseText}>...</Text>
+      </View>
+      <Text style={styles.dispatchTitle}>Finding nearby verified trucks</Text>
+      <Text style={styles.dispatchCopy}>KULI sent this request to selected owners. Tracking begins after backend-confirmed acceptance.</Text>
+      <View style={styles.dispatchSummaryRow}>
+        <View style={styles.dispatchSummaryItem}>
+          <Text style={styles.dispatchSummaryValue}>{requestEstimateLabel(request)}</Text>
+          <Text style={styles.dispatchSummaryLabel}>estimate</Text>
+        </View>
+        <View style={styles.dispatchSummaryItem}>
+          <Text style={styles.dispatchSummaryValue}>{offerCount}</Text>
+          <Text style={styles.dispatchSummaryLabel}>offers</Text>
+        </View>
+      </View>
+      <View style={styles.dispatchStepList}>
+        {steps.map((step, index) => (
+          <View key={step.key} style={styles.dispatchStepRow}>
+            <View style={[styles.dispatchStepDot, index < 2 && styles.dispatchStepDotDone, index === 2 && styles.dispatchStepDotCurrent]}>
+              <Text style={styles.dispatchStepDotText}>{index + 1}</Text>
+            </View>
+            <View style={styles.flex}>
+              <Text style={styles.dispatchStepTitle}>{step.label}</Text>
+              <Text style={styles.muted}>{step.detail}</Text>
+            </View>
+          </View>
+        ))}
+      </View>
+      <Text style={styles.noticeText}>You can cancel while this request is waiting. If no owner accepts, create a new request with adjusted details.</Text>
+    </View>
+  );
+}
+
+function TrackingStatusStrip({ status }: { status: KuliStatus }) {
+  const visibleStatuses = activeTrackingStatuses.slice(0, -1);
+
+  return (
+    <View style={styles.trackingStatusStrip}>
+      {visibleStatuses.map((entry) => {
+        const tone = statusProgressTone(entry, status);
+
+        return (
+          <View key={entry} style={styles.trackingStatusItem}>
+            <View style={[styles.trackingStatusDot, tone === 'done' && styles.trackingStatusDotDone, tone === 'current' && styles.trackingStatusDotCurrent]} />
+            <Text style={[styles.trackingStatusLabel, tone === 'current' && styles.trackingStatusLabelCurrent]} numberOfLines={1}>
+              {statusLabels[entry]}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function ActiveTripSummary({ request }: { request: KuliRequest }) {
+  return (
+    <View style={styles.activeTripSheet}>
+      <View style={styles.cardHeader}>
+        <View style={styles.flex}>
+          <Text style={styles.activeTripTitle}>{request.requestCode}</Text>
+          <Text style={styles.dashboardRoute}>{requestRouteLabel(request)}</Text>
+        </View>
+        <StatusBadge tone={badgeToneForStatus(request.status)}>{statusLabels[request.status]}</StatusBadge>
+      </View>
+      <TrackingStatusStrip status={request.status} />
+      <View style={styles.dashboardMetricRow}>
+        <View style={styles.dashboardMetric}>
+          <Text style={styles.dashboardMetricValue}>{requestEstimateLabel(request)}</Text>
+          <Text style={styles.dashboardMetricLabel}>estimate</Text>
+        </View>
+        <View style={styles.dashboardMetric}>
+          <Text style={styles.dashboardMetricValue}>{request.selectedVehicleId ? request.selectedVehicleId.slice(-6).toUpperCase() : 'Pending'}</Text>
+          <Text style={styles.dashboardMetricLabel}>vehicle</Text>
+        </View>
+      </View>
+      <View style={styles.activeNextStep}>
+        <Text style={styles.fieldLabel}>Next expected step</Text>
+        <Text style={styles.muted}>{nextStepForRequest(request.status)}</Text>
+      </View>
+      {request.selectedVehicleLocationUpdatedAt ? (
+        <Text style={styles.muted}>Last truck status location update: {new Date(request.selectedVehicleLocationUpdatedAt).toLocaleString()}</Text>
+      ) : (
+        <Text style={styles.muted}>KULI v1 uses status-based tracking and static map previews. Live GPS movement is not shown.</Text>
+      )}
+    </View>
   );
 }
 
@@ -3099,6 +3261,7 @@ function ClientActiveRequestCard({
   const isCancellable = ['pending', 'accepted', 'en_route_to_pickup'].includes(request.status);
   const cancelLabel = request.status === 'pending' ? 'Cancel request' : 'Cancel trip';
   const detailsLabel = expanded ? 'Hide details' : request.status === 'pending' ? 'View details' : 'Track request';
+  const isWaiting = request.status === 'pending';
 
   return (
     <UiCard style={styles.dashboardCard}>
@@ -3124,9 +3287,7 @@ function ClientActiveRequestCard({
         </View>
       </View>
       <Text style={styles.dashboardSubcopy}>{formatRequestSchedule(request)}</Text>
-      {request.status === 'pending' ? (
-        <Text style={styles.noticeText}>Waiting for an owner to accept. The first accepted truck gets the trip and other offers close automatically.</Text>
-      ) : null}
+      {isWaiting ? <DispatchSearchPanel request={request} /> : <Text style={styles.noticeText}>{nextStepForRequest(request.status)}</Text>}
       <View style={styles.actionRow}>
         <PrimaryButton label={detailsLabel} onPress={onToggleDetails} style={styles.actionButton} />
         <SecondaryButton
@@ -3137,12 +3298,14 @@ function ClientActiveRequestCard({
           tone={isCancellable ? 'danger' : 'default'}
         />
       </View>
-      {expanded ? <View style={styles.clientExpandedDetails}>{children || <Text style={styles.muted}>Request details are up to date. Tracking starts after an owner accepts.</Text>}</View> : null}
+      {expanded ? <View style={styles.clientExpandedDetails}>{children || <Text style={styles.muted}>Request details are up to date. Status-based tracking starts after an owner accepts.</Text>}</View> : null}
     </UiCard>
   );
 }
 
-function ClientRecentTripCard({ request }: { request: KuliRequest }) {
+function ClientRecentTripCard({ request, onRequest }: { request: KuliRequest; onRequest?: () => void }) {
+  const noAcceptance = request.status === 'timed_out';
+
   return (
     <UiCard compact style={styles.recentTripCard}>
       <View style={styles.cardHeader}>
@@ -3156,6 +3319,13 @@ function ClientRecentTripCard({ request }: { request: KuliRequest }) {
         <Text style={styles.muted}>{formatRequestSchedule(request)}</Text>
         <Text style={styles.recentTripPrice}>{requestEstimateLabel(request)}</Text>
       </View>
+      {noAcceptance ? (
+        <View style={styles.timeoutPanel}>
+          <Text style={styles.fieldLabel}>No truck accepted in time</Text>
+          <Text style={styles.muted}>You can try again with a different truck type, load size, or pickup area.</Text>
+          {onRequest ? <SecondaryButton label="Start new request" onPress={onRequest} /> : null}
+        </View>
+      ) : null}
     </UiCard>
   );
 }
@@ -3261,7 +3431,7 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
           {recentRequests.length ? (
             <View style={styles.roleGrid}>
               {recentRequests.map((request) => (
-                <ClientRecentTripCard key={request.id} request={request} />
+                <ClientRecentTripCard key={request.id} request={request} onRequest={goToRequest} />
               ))}
             </View>
           ) : (
@@ -4546,6 +4716,118 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.md
   },
+  dispatchPanel: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  dispatchPulse: {
+    alignItems: 'center',
+    backgroundColor: colors.black,
+    borderRadius: 32,
+    height: 64,
+    justifyContent: 'center',
+    width: 64
+  },
+  dispatchPulseText: {
+    color: colors.card,
+    fontSize: 24,
+    fontWeight: '900',
+    marginTop: -8
+  },
+  dispatchTitle: {
+    color: colors.textPrimary,
+    fontSize: 21,
+    fontWeight: '900',
+    lineHeight: 27,
+    textAlign: 'center'
+  },
+  dispatchCopy: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center'
+  },
+  dispatchSummaryRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    width: '100%'
+  },
+  dispatchSummaryItem: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flex: 1,
+    gap: 2,
+    minHeight: 66,
+    justifyContent: 'center',
+    padding: spacing.md
+  },
+  dispatchSummaryValue: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  dispatchSummaryLabel: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase'
+  },
+  dispatchStepList: {
+    gap: spacing.md,
+    width: '100%'
+  },
+  dispatchStepRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md
+  },
+  dispatchStepDot: {
+    alignItems: 'center',
+    backgroundColor: colors.muted,
+    borderRadius: 16,
+    height: 32,
+    justifyContent: 'center',
+    width: 32
+  },
+  dispatchStepDotDone: {
+    backgroundColor: colors.success
+  },
+  dispatchStepDotCurrent: {
+    backgroundColor: colors.warning
+  },
+  dispatchStepDotText: {
+    color: colors.card,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  dispatchStepTitle: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '900'
+  },
+  timeoutPanel: {
+    backgroundColor: colors.warningTint,
+    borderColor: colors.warning,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  requestSummaryPanel: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
   clientHomeContent: {
     gap: spacing.xl,
     padding: spacing.lg,
@@ -5427,7 +5709,129 @@ const styles = StyleSheet.create({
     padding: spacing.sm
   },
   tripWorkspace: {
-    gap: spacing.sm
+    gap: spacing.md
+  },
+  activeMapStage: {
+    borderRadius: radii.lg,
+    overflow: 'hidden'
+  },
+  activeTripSheet: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    marginTop: -spacing.xl,
+    padding: spacing.lg
+  },
+  activeTripTitle: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '900',
+    lineHeight: 26
+  },
+  activeNextStep: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    gap: spacing.xs,
+    padding: spacing.md
+  },
+  trackingStatusStrip: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    justifyContent: 'space-between'
+  },
+  trackingStatusItem: {
+    alignItems: 'center',
+    flex: 1,
+    gap: spacing.xs
+  },
+  trackingStatusDot: {
+    backgroundColor: colors.border,
+    borderRadius: 7,
+    height: 14,
+    width: 14
+  },
+  trackingStatusDotDone: {
+    backgroundColor: colors.success
+  },
+  trackingStatusDotCurrent: {
+    backgroundColor: colors.warning
+  },
+  trackingStatusLabel: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    fontWeight: '800',
+    textAlign: 'center'
+  },
+  trackingStatusLabelCurrent: {
+    color: colors.textPrimary
+  },
+  trackingPanel: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  trackingPanelTitle: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '900',
+    lineHeight: 23
+  },
+  timelineRefreshButton: {
+    minHeight: 40,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  timelineList: {
+    gap: 0
+  },
+  timelineEventRow: {
+    alignItems: 'stretch',
+    flexDirection: 'row',
+    gap: spacing.md
+  },
+  timelineMarkerColumn: {
+    alignItems: 'center',
+    width: 22
+  },
+  timelineDot: {
+    backgroundColor: colors.muted,
+    borderColor: colors.card,
+    borderRadius: 10,
+    borderWidth: 3,
+    height: 20,
+    width: 20
+  },
+  timelineDotReady: {
+    backgroundColor: colors.success
+  },
+  timelineDotWarn: {
+    backgroundColor: colors.warning
+  },
+  timelineDotBlocked: {
+    backgroundColor: colors.error
+  },
+  timelineConnector: {
+    backgroundColor: colors.border,
+    flex: 1,
+    minHeight: 48,
+    width: 2
+  },
+  timelineEventCard: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    gap: spacing.xs,
+    marginBottom: spacing.md,
+    padding: spacing.md
+  },
+  timelineTime: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '800'
   },
   timelineRow: {
     alignItems: 'flex-start',
@@ -5453,14 +5857,15 @@ const styles = StyleSheet.create({
     fontWeight: '800'
   },
   messageList: {
-    gap: spacing.xs
+    gap: spacing.md
   },
   messageBubble: {
     alignSelf: 'flex-start',
     backgroundColor: colors.subtle,
-    borderRadius: radii.sm,
-    maxWidth: '92%',
-    padding: spacing.sm
+    borderRadius: radii.lg,
+    maxWidth: '88%',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md
   },
   messageBubbleMine: {
     alignSelf: 'flex-end',
@@ -5479,6 +5884,39 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     marginTop: 4
+  },
+  chatPanel: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  chatHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  quickReplyRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm
+  },
+  quickReplyChip: {
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md
+  },
+  quickReplyText: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '800'
   },
   notificationRow: {
     alignItems: 'flex-start',
