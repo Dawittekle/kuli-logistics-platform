@@ -16,6 +16,7 @@ import {
 import type { StyleProp, ViewStyle } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -365,6 +366,9 @@ const offerStatusLabels: Record<TripOffer['status'], string> = {
 };
 
 const isBlockedStatus = (status: AccountStatus) => ['suspended', 'banned', 'deleted'].includes(status);
+const AUTH_ONBOARDING_COMPLETED_KEY = 'kuli.authOnboardingCompleted';
+const VERIFICATION_RESEND_COOLDOWN_SECONDS = 60;
+const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
 const documentTypes: Array<{ type: VehicleDocumentType; label: string; detail: string; required: boolean; tips: string[] }> = [
   {
@@ -535,30 +539,48 @@ function RoleOption({
   selected: boolean;
   onPress: () => void;
 }) {
+  const icon = role === 'client' ? 'home-city-outline' : 'truck-fast-outline';
+
   return (
     <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} style={[styles.roleOption, selected && styles.roleOptionSelected]}>
-      <Text style={[styles.roleOptionTitle, selected && styles.roleOptionTitleSelected]}>{roleLabels[role]}</Text>
-      <Text style={[styles.roleOptionText, selected && styles.roleOptionTextSelected]}>
-        {role === 'client' ? 'Book verified trucks and follow your move.' : 'Register vehicles and receive verified requests.'}
-      </Text>
+      <View style={[styles.roleOptionIcon, selected && styles.roleOptionIconSelected]}>
+        <MaterialCommunityIcons color={selected ? colors.black : colors.textPrimary} name={icon} size={24} />
+      </View>
+      <View style={styles.roleOptionBody}>
+        <Text style={[styles.roleOptionTitle, selected && styles.roleOptionTitleSelected]}>
+          {role === 'client' ? 'Request trucks' : 'Earn with your truck'}
+        </Text>
+        <Text style={[styles.roleOptionText, selected && styles.roleOptionTextSelected]}>
+          {role === 'client' ? 'Book verified trucks for moves and deliveries.' : 'Register a vehicle and receive nearby requests.'}
+        </Text>
+      </View>
+      {selected ? <MaterialCommunityIcons color={colors.card} name="check-circle" size={22} /> : null}
     </Pressable>
   );
 }
 
 function AuthBrandPanel({ mode }: { mode: AuthMode }) {
+  const title = mode === 'register' ? 'Join KULI.' : mode === 'forgot' ? 'Recover your account.' : 'Welcome back.';
+  const copy =
+    mode === 'register'
+      ? 'Create a client or truck-owner account for verified logistics in Addis Ababa.'
+      : mode === 'forgot'
+        ? 'Enter your email and we will send a secure password reset link.'
+        : 'Sign in to request trucks, manage offers, and follow every move with your KULI account.';
+
   return (
     <View style={styles.authHero}>
-      <View style={styles.authLogoMark}>
-        <Text style={styles.authLogoText}>KULI</Text>
+      <View style={styles.authHeroTop}>
+        <View style={styles.authLogoMark}>
+          <Text style={styles.authLogoText}>KULI</Text>
+        </View>
+        <Text style={styles.authCityLabel}>Addis Ababa</Text>
       </View>
-      <Text style={styles.authHeroTitle}>
-        {mode === 'register' ? 'Create your KULI account.' : mode === 'forgot' ? 'Recover access securely.' : 'Move with verified trucks.'}
-      </Text>
-      <Text style={styles.authHeroCopy}>
-        {mode === 'forgot'
-          ? 'Enter your email and Supabase will send a secure password reset link.'
-          : 'Book, verify, accept, and track logistics work with your KULI account.'}
-      </Text>
+      <View style={styles.authHeroCenter}>
+        <MaterialCommunityIcons color={colors.card} name="truck-delivery-outline" size={42} />
+        <Text style={styles.authHeroTitle}>{title}</Text>
+        <Text style={styles.authHeroCopy}>{copy}</Text>
+      </View>
       {runtimeConfig.demoAuthEnabled ? <StatusBadge tone="warning">Local demo mode</StatusBadge> : null}
     </View>
   );
@@ -582,6 +604,87 @@ function AuthMessage({ tone, message }: { tone: 'notice' | 'error'; message: str
     <View style={[styles.authMessage, tone === 'error' ? styles.authMessageError : styles.authMessageNotice]}>
       <Text style={[styles.authMessageText, tone === 'error' ? styles.authMessageTextError : styles.authMessageTextNotice]}>{message}</Text>
     </View>
+  );
+}
+
+function SplashScreen({ compact = false }: { compact?: boolean }) {
+  return (
+    <SafeAreaView style={styles.splashScreen}>
+      <View style={styles.splashGrain} />
+      <View style={styles.splashContent}>
+        <View style={styles.splashLogoBox}>
+          <Text style={styles.splashLogoText}>KULI</Text>
+        </View>
+        <View style={styles.splashDots} accessibilityElementsHidden>
+          <View style={[styles.splashDot, styles.splashDotMuted]} />
+          <View style={styles.splashDot} />
+          <View style={[styles.splashDot, styles.splashDotMuted]} />
+        </View>
+      </View>
+      <View style={styles.splashFooter}>
+        <Text style={styles.splashTitle}>{compact ? 'Opening your workspace.' : 'Your logistics partner in Addis.'}</Text>
+        <Text style={styles.splashCopy}>Verified trucks. Clear prices. Accountable moves.</Text>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+function VerificationRequiredScreen({
+  draft,
+  code,
+  cooldown,
+  pending,
+  notice,
+  error,
+  onCodeChange,
+  onVerifyCode,
+  onRefresh,
+  onResend,
+  onBack
+}: {
+  draft: VerificationDraft;
+  code: string;
+  cooldown: number;
+  pending: boolean;
+  notice: string;
+  error: string;
+  onCodeChange: (value: string) => void;
+  onVerifyCode: () => void;
+  onRefresh: () => void;
+  onResend: () => void;
+  onBack: () => void;
+}) {
+  const canResend = cooldown <= 0 && !pending;
+
+  return (
+    <UiCard style={styles.authCard}>
+      <View style={styles.verificationIcon}>
+        <MaterialCommunityIcons color={colors.black} name="email-check-outline" size={30} />
+      </View>
+      <SectionHeader
+        eyebrow="Email confirmation"
+        title="Check your email"
+        description="Open the confirmation link or enter the code Supabase sent. KULI will not resend automatically."
+      />
+      <View style={styles.verificationEmailBox}>
+        <Text style={styles.fieldLabel}>{draft.email}</Text>
+        <Text style={styles.muted}>Resending too often may be rate-limited. Use the resend button only when needed.</Text>
+      </View>
+      <Field label="Confirmation code" value={code} onChangeText={onCodeChange} placeholder="6-digit code" keyboardType="numeric" />
+      {error ? <AuthMessage tone="error" message={error} /> : null}
+      {notice ? <AuthMessage tone="notice" message={notice} /> : null}
+      <PrimaryButton disabled={!code.trim() || pending} label={pending ? 'Checking...' : 'Verify code'} loading={pending} onPress={onVerifyCode} />
+      <SecondaryButton disabled={pending} label="I verified my email" loading={pending} onPress={onRefresh} />
+      <View style={styles.actionRow}>
+        <SecondaryButton
+          disabled={!canResend}
+          label={cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend email'}
+          onPress={onResend}
+          style={styles.actionButton}
+        />
+        <SecondaryButton disabled={pending} label="Use another email" onPress={onBack} style={styles.actionButton} />
+      </View>
+    </UiCard>
   );
 }
 
@@ -683,6 +786,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
   const [verificationDraft, setVerificationDraft] = useState<VerificationDraft | null>(null);
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationPending, setVerificationPending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [resetPending, setResetPending] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -701,9 +805,30 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
     setNotice('');
   };
 
+  useEffect(() => {
+    if (resendCooldown <= 0) {
+      return;
+    }
+
+    const timer = setTimeout(() => setResendCooldown((value) => Math.max(0, value - 1)), 1000);
+
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
   const loadProfile = async (session: Session) => {
     const profile = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
     onAuthenticated(profile.data, session);
+  };
+
+  const syncDraftProfile = async (session: Session, draft: VerificationDraft) => {
+    const result = (await kuliApi.syncProfile({
+      role: draft.role,
+      fullName: draft.fullName,
+      phone: draft.phone || undefined,
+      email: draft.email
+    })) as ApiEnvelope<ProfileSyncResult>;
+
+    onAuthenticated(result.data.user, session);
   };
 
   const sendPasswordReset = async () => {
@@ -719,7 +844,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
       return;
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    if (!isValidEmail(normalizedEmail)) {
       setError('Enter a valid email address.');
       return;
     }
@@ -784,13 +909,14 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
   };
 
   const resendConfirmation = async (targetEmail = verificationDraft?.email) => {
-    if (!targetEmail || verificationPending) {
+    if (!targetEmail || verificationPending || resendCooldown > 0) {
       return;
     }
 
     setVerificationPending(true);
     setError('');
     setNotice('');
+    setResendCooldown(VERIFICATION_RESEND_COOLDOWN_SECONDS);
 
     try {
       const { error: resendError } = await supabase.auth.resend({
@@ -805,6 +931,53 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
       setNotice('Confirmation sent. Check your email for a code or confirmation link.');
     } catch (resendError) {
       setError(getErrorMessage(resendError));
+    } finally {
+      setVerificationPending(false);
+    }
+  };
+
+  const refreshVerification = async () => {
+    if (!verificationDraft || verificationPending) {
+      return;
+    }
+
+    setVerificationPending(true);
+    setError('');
+    setNotice('');
+
+    try {
+      const { data: currentData } = await supabase.auth.getSession();
+      let nextSession = currentData.session;
+
+      if (!nextSession && password.length >= 6) {
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email: verificationDraft.email,
+          password
+        });
+
+        if (signInError) {
+          throw signInError;
+        }
+
+        nextSession = data.session;
+      }
+
+      if (!nextSession) {
+        setNotice('If you opened a confirmation link, sign in with your email and password to continue.');
+        setVerificationDraft(null);
+        setVerificationCode('');
+        setMode('login');
+        return;
+      }
+
+      await syncDraftProfile(nextSession, verificationDraft);
+    } catch (refreshError) {
+      if (isEmailNotConfirmedError(refreshError)) {
+        setNotice('Email is still waiting for confirmation. Check your inbox or resend after the cooldown.');
+        return;
+      }
+
+      setError(getErrorMessage(refreshError));
     } finally {
       setVerificationPending(false);
     }
@@ -838,19 +1011,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
         return;
       }
 
-      if (verificationDraft.fullName) {
-        const result = (await kuliApi.syncProfile({
-          role: verificationDraft.role,
-          fullName: verificationDraft.fullName,
-          phone: verificationDraft.phone || undefined,
-          email: verificationDraft.email
-        })) as ApiEnvelope<ProfileSyncResult>;
-
-        onAuthenticated(result.data.user, data.session);
-        return;
-      }
-
-      await loadProfile(data.session);
+      await syncDraftProfile(data.session, verificationDraft);
     } catch (verifyError) {
       setError(getErrorMessage(verifyError));
     } finally {
@@ -881,6 +1042,11 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
       }
 
       if (mode === 'login') {
+        if (!isValidEmail(normalizedEmail)) {
+          setError('Enter a valid email address.');
+          return;
+        }
+
         const { data, error: authError } = await supabase.auth.signInWithPassword({
           email: normalizedEmail,
           password
@@ -891,11 +1057,16 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
         }
 
         if (!data.session) {
-          setNotice('Check your email to finish sign in.');
+          setNotice('Check your email if Supabase asks for confirmation. KULI will not resend automatically.');
           return;
         }
 
         await loadProfile(data.session);
+        return;
+      }
+
+      if (!isValidEmail(normalizedEmail)) {
+        setError('Enter a valid email address.');
         return;
       }
 
@@ -923,7 +1094,8 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
           phone: phone.trim()
         });
         setVerificationCode('');
-        setNotice('Account created. Check your email for a confirmation code or link, then finish verification here.');
+        setResendCooldown(VERIFICATION_RESEND_COOLDOWN_SECONDS);
+        setNotice('Account created. Check your email for a confirmation code or link. We will not resend unless you press Resend.');
         setMode('login');
         return;
       }
@@ -963,9 +1135,29 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
         <ScrollView contentContainerStyle={styles.authContent}>
           <AuthBrandPanel mode={mode} />
 
-          {mode !== 'forgot' ? <AuthModeTabs mode={mode} onChange={changeMode} /> : null}
+          {mode !== 'forgot' && !verificationDraft ? <AuthModeTabs mode={mode} onChange={changeMode} /> : null}
 
-          {mode === 'forgot' ? (
+          {verificationDraft ? (
+            <VerificationRequiredScreen
+              draft={verificationDraft}
+              code={verificationCode}
+              cooldown={resendCooldown}
+              pending={verificationPending}
+              notice={notice}
+              error={error}
+              onCodeChange={setVerificationCode}
+              onVerifyCode={verifyEmailCode}
+              onRefresh={refreshVerification}
+              onResend={() => resendConfirmation()}
+              onBack={() => {
+                setVerificationDraft(null);
+                setVerificationCode('');
+                setError('');
+                setNotice('');
+                setMode('login');
+              }}
+            />
+          ) : mode === 'forgot' ? (
             <UiCard style={styles.authCard}>
               <AppHeader
                 eyebrow="Account recovery"
@@ -1016,28 +1208,6 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
                 />
               </UiCard>
 
-              {verificationDraft ? (
-                <UiCard style={styles.authCard}>
-                  <SectionHeader
-                    eyebrow="Email confirmation"
-                    title="Confirm your email."
-                    description="Enter the confirmation code from your email. If Supabase sent a link instead, open that link, then return and sign in."
-                  />
-                  <Text style={styles.muted}>{verificationDraft.email}</Text>
-                  <Field label="Confirmation code" value={verificationCode} onChangeText={setVerificationCode} placeholder="6-digit code" keyboardType="numeric" />
-                  <View style={styles.actionRow}>
-                    <PrimaryButton
-                      disabled={!verificationCode.trim() || verificationPending}
-                      label={verificationPending ? 'Checking...' : 'Verify'}
-                      loading={verificationPending}
-                      onPress={verifyEmailCode}
-                      style={styles.actionButton}
-                    />
-                    <SecondaryButton disabled={verificationPending} label="Resend" onPress={() => resendConfirmation()} style={styles.actionButton} />
-                  </View>
-                </UiCard>
-              ) : null}
-
               {runtimeConfig.demoAuthEnabled ? (
                 <UiCard style={styles.authCard}>
                   <SectionHeader
@@ -1067,15 +1237,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
 }
 
 function SessionLoadingScreen() {
-  return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.centered}>
-        <ActivityIndicator color={colors.primary} size="large" />
-        <Text style={styles.cardTitle}>Opening KULI</Text>
-        <Text style={styles.muted}>Checking your account details.</Text>
-      </View>
-    </SafeAreaView>
-  );
+  return <SplashScreen compact />;
 }
 
 function ForbiddenScreen({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
@@ -5635,6 +5797,8 @@ function AppContent() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileMissing, setProfileMissing] = useState(false);
+  const [splashReady, setSplashReady] = useState(false);
+  const [splashSeen, setSplashSeen] = useState(true);
 
   const loadCurrentProfile = useCallback(async (nextSession: Session | null) => {
     setSession(nextSession);
@@ -5661,6 +5825,34 @@ function AppContent() {
   useEffect(() => {
     let mounted = true;
 
+    AsyncStorage.getItem(AUTH_ONBOARDING_COMPLETED_KEY)
+      .then((value) => {
+        if (!mounted) {
+          return;
+        }
+
+        const alreadySeen = value === 'true';
+        setSplashSeen(alreadySeen);
+
+        if (alreadySeen) {
+          setSplashReady(true);
+          return;
+        }
+
+        setTimeout(() => {
+          AsyncStorage.setItem(AUTH_ONBOARDING_COMPLETED_KEY, 'true').catch(() => undefined);
+
+          if (mounted) {
+            setSplashReady(true);
+          }
+        }, 900);
+      })
+      .catch(() => {
+        if (mounted) {
+          setSplashReady(true);
+        }
+      });
+
     supabase.auth.getSession().then(({ data }) => {
       if (mounted) {
         loadCurrentProfile(data.session);
@@ -5678,6 +5870,7 @@ function AppContent() {
   }, [loadCurrentProfile]);
 
   const handleAuthenticated = (nextProfile: UserProfile, nextSession: Session) => {
+    AsyncStorage.setItem(AUTH_ONBOARDING_COMPLETED_KEY, 'true').catch(() => undefined);
     setSession(nextSession);
     setProfile(nextProfile);
     setProfileMissing(false);
@@ -5693,8 +5886,8 @@ function AppContent() {
     setProfileMissing(false);
   };
 
-  if (loading) {
-    return <SessionLoadingScreen />;
+  if (loading || !splashReady) {
+    return <SplashScreen compact={splashSeen} />;
   }
 
   if (!session) {
@@ -5813,6 +6006,79 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
     padding: spacing.lg,
     paddingBottom: spacing.xxl
+  },
+  splashScreen: {
+    backgroundColor: colors.black,
+    flex: 1,
+    overflow: 'hidden'
+  },
+  splashGrain: {
+    backgroundColor: '#0A0A0A',
+    bottom: 0,
+    left: 0,
+    opacity: 0.65,
+    position: 'absolute',
+    right: 0,
+    top: 0
+  },
+  splashContent: {
+    alignItems: 'center',
+    flex: 1,
+    gap: spacing.xl,
+    justifyContent: 'center',
+    padding: spacing.xl
+  },
+  splashLogoBox: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: radii.xl,
+    justifyContent: 'center',
+    minHeight: 118,
+    minWidth: 214,
+    shadowColor: colors.card,
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.16,
+    shadowRadius: 46
+  },
+  splashLogoText: {
+    color: colors.black,
+    fontSize: 42,
+    fontWeight: '900',
+    letterSpacing: 0
+  },
+  splashDots: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  splashDot: {
+    backgroundColor: colors.card,
+    borderRadius: 4,
+    height: 7,
+    opacity: 0.75,
+    width: 7
+  },
+  splashDotMuted: {
+    opacity: 0.25
+  },
+  splashFooter: {
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.xl,
+    paddingBottom: spacing.xxl
+  },
+  splashTitle: {
+    color: colors.card,
+    fontSize: 22,
+    fontWeight: '900',
+    lineHeight: 28,
+    textAlign: 'center'
+  },
+  splashCopy: {
+    color: '#AEB4B8',
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
+    textAlign: 'center'
   },
   requestFlowContent: {
     backgroundColor: colors.background,
@@ -6728,10 +6994,25 @@ const styles = StyleSheet.create({
   authHero: {
     backgroundColor: colors.black,
     borderRadius: radii.xl,
-    gap: spacing.md,
-    minHeight: 220,
-    justifyContent: 'flex-end',
+    gap: spacing.xl,
+    minHeight: 292,
+    justifyContent: 'space-between',
     padding: spacing.xl
+  },
+  authHeroTop: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between'
+  },
+  authCityLabel: {
+    color: '#D1D5DB',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase'
+  },
+  authHeroCenter: {
+    gap: spacing.md
   },
   authLogoMark: {
     alignItems: 'center',
@@ -6751,9 +7032,9 @@ const styles = StyleSheet.create({
   },
   authHeroTitle: {
     color: colors.card,
-    fontSize: 30,
+    fontSize: 34,
     fontWeight: '900',
-    lineHeight: 36
+    lineHeight: 39
   },
   authHeroCopy: {
     color: '#D1D5DB',
@@ -6789,6 +7070,22 @@ const styles = StyleSheet.create({
   },
   authCard: {
     gap: spacing.lg
+  },
+  verificationIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: 22,
+    height: 56,
+    justifyContent: 'center',
+    width: 56
+  },
+  verificationEmailBox: {
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    gap: spacing.xs,
+    padding: spacing.md
   },
   authInlineLink: {
     alignSelf: 'flex-end',
@@ -6878,17 +7175,34 @@ const styles = StyleSheet.create({
     gap: spacing.sm
   },
   roleOption: {
+    alignItems: 'center',
     backgroundColor: colors.panel,
     borderColor: colors.line,
-    borderRadius: radii.md,
+    borderRadius: radii.lg,
     borderWidth: 1,
-    gap: spacing.xs,
-    minHeight: 92,
+    flexDirection: 'row',
+    gap: spacing.md,
+    minHeight: 104,
     padding: spacing.lg
   },
   roleOptionSelected: {
     backgroundColor: colors.black,
     borderColor: colors.black
+  },
+  roleOptionIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    height: 52,
+    justifyContent: 'center',
+    width: 52
+  },
+  roleOptionIconSelected: {
+    backgroundColor: colors.card
+  },
+  roleOptionBody: {
+    flex: 1,
+    gap: spacing.xs
   },
   roleOptionTitle: {
     color: colors.ink,
