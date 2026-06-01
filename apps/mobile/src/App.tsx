@@ -3130,10 +3130,10 @@ function ClientCancelDialog({
 type BadgeTone = 'success' | 'warning' | 'error' | 'neutral' | 'dark';
 
 const clientServiceOptions = [
-  { key: 'house_move', title: 'House move', detail: 'Full relocation support', symbol: 'H' },
-  { key: 'furniture_delivery', title: 'Furniture delivery', detail: 'Sofas, beds, tables', symbol: 'F' },
-  { key: 'appliance_transport', title: 'Appliance transport', detail: 'Large item handling', symbol: 'A' },
-  { key: 'business_goods', title: 'Business goods', detail: 'Commercial logistics', symbol: 'B' }
+  { key: 'house_move', title: 'House move', detail: 'Apartments and room moves', icon: 'home-city-outline' },
+  { key: 'furniture_delivery', title: 'Furniture delivery', detail: 'Sofas, beds, office sets', icon: 'sofa-outline' },
+  { key: 'appliance_transport', title: 'Appliance transport', detail: 'Fridges, washers, cookers', icon: 'fridge-outline' },
+  { key: 'business_goods', title: 'Business goods', detail: 'Shop stock and packages', icon: 'package-variant-closed' }
 ];
 
 const badgeToneForStatus = (status: string): BadgeTone => {
@@ -3210,11 +3210,11 @@ const greetingForNow = () => {
   return 'Good evening';
 };
 
-function ClientServiceTile({ title, detail, symbol, onPress }: { title: string; detail: string; symbol: string; onPress: () => void }) {
+function ClientServiceTile({ title, detail, icon, onPress }: { title: string; detail: string; icon: string; onPress: () => void }) {
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={styles.serviceTile}>
       <View style={styles.serviceIcon}>
-        <Text style={styles.serviceIconText}>{symbol}</Text>
+        <MaterialCommunityIcons name={icon as never} color={colors.black} size={26} />
       </View>
       <Text style={styles.serviceTitle}>{title}</Text>
       <Text style={styles.serviceDetail}>{detail}</Text>
@@ -3330,30 +3330,38 @@ function ClientDashboardHero({
   onRequest: () => void;
 }) {
   const displayName = profile.fullName?.split(' ')[0] || profile.fullName || profile.email?.split('@')[0] || 'there';
+  const initial = displayName.slice(0, 1).toUpperCase();
 
   return (
-    <View style={styles.clientHero}>
-      <View style={styles.cardHeader}>
+    <View style={styles.clientHomeHeroStack}>
+      <View style={styles.clientTopBar}>
         <View style={styles.flex}>
           <Text style={styles.clientGreeting}>{greetingForNow()}, {displayName}</Text>
-          <Text style={styles.clientLocation}>Addis Ababa</Text>
+          <View style={styles.clientLocationRow}>
+            <MaterialCommunityIcons name="map-marker" color={colors.textSecondary} size={18} />
+            <Text style={styles.clientLocation}>Addis Ababa</Text>
+          </View>
         </View>
         <View style={styles.clientAvatar}>
-          <Text style={styles.clientAvatarText}>{displayName.slice(0, 1).toUpperCase()}</Text>
+          <Text style={styles.clientAvatarText}>{initial}</Text>
         </View>
       </View>
       <View style={styles.clientCtaPanel}>
+        <View style={styles.clientHeroTruckMark}>
+          <MaterialCommunityIcons name="truck-fast-outline" color={colors.card} size={104} />
+        </View>
         <View style={styles.flex}>
           <Text style={styles.clientCtaTitle}>Move something today?</Text>
-          <Text style={styles.clientCtaCopy}>Get a quote, compare verified trucks, and send a KULI request when you are ready.</Text>
+          <Text style={styles.clientCtaCopy}>Get an upfront quote, compare verified trucks, and send your request when you are ready.</Text>
         </View>
         <Pressable accessibilityRole="button" onPress={onRequest} style={styles.clientCtaButton}>
           <Text style={styles.clientCtaButtonText}>Request a truck</Text>
+          <MaterialCommunityIcons name="arrow-right" color={colors.black} size={20} />
         </Pressable>
       </View>
       <View style={styles.clientHeroMeta}>
         <StatusBadge tone={profile.accountStatus === 'active' ? 'success' : 'warning'}>{profile.accountStatus}</StatusBadge>
-        <Text style={styles.clientHeroMetaText}>{activeCount ? `${activeCount} active request${activeCount === 1 ? '' : 's'}` : 'No active request'}</Text>
+        <Text style={styles.clientHeroMetaText}>{activeCount ? `${activeCount} active move${activeCount === 1 ? '' : 's'}` : 'Ready for your next move'}</Text>
       </View>
     </View>
   );
@@ -3376,31 +3384,47 @@ function ClientActiveRequestCard({
   const cancelLabel = request.status === 'pending' ? 'Cancel request' : 'Cancel trip';
   const detailsLabel = expanded ? 'Hide details' : request.status === 'pending' ? 'View details' : 'Track request';
   const isWaiting = request.status === 'pending';
+  const vehicleLabel = request.selectedVehicleId ? request.selectedVehicleId.slice(-6).toUpperCase() : request.offers?.length ? `${request.offers.length} offer${request.offers.length === 1 ? '' : 's'}` : 'Matching';
 
   return (
-    <UiCard style={styles.dashboardCard}>
-      <View style={styles.cardHeader}>
+    <View style={styles.clientActiveCard}>
+      <View style={styles.clientActiveCardTop}>
         <View style={styles.flex}>
-          <Text style={styles.cardTitle}>{request.requestCode}</Text>
-          <Text style={styles.dashboardRoute}>{requestRouteLabel(request)}</Text>
+          <Text style={styles.clientActiveEyebrow}>Active move</Text>
+          <Text style={styles.clientActiveCode}>{request.requestCode}</Text>
         </View>
         <StatusBadge tone={badgeToneForStatus(request.status)}>{statusLabels[request.status]}</StatusBadge>
       </View>
-      <View style={styles.dashboardMetricRow}>
-        <View style={styles.dashboardMetric}>
-          <Text style={styles.dashboardMetricValue}>{requestEstimateLabel(request)}</Text>
-          <Text style={styles.dashboardMetricLabel}>estimate</Text>
+      <View style={styles.clientRouteCard}>
+        <View style={styles.clientRouteRail}>
+          <View style={styles.clientRouteDotStart} />
+          <View style={styles.clientRouteLine} />
+          <View style={styles.clientRouteDotEnd} />
         </View>
-        <View style={styles.dashboardMetric}>
-          <Text style={styles.dashboardMetricValue}>{request.offers?.length ?? 0}</Text>
-          <Text style={styles.dashboardMetricLabel}>offers</Text>
-        </View>
-        <View style={styles.dashboardMetric}>
-          <Text style={styles.dashboardMetricValue}>{request.status === 'pending' ? 'Open' : 'Live'}</Text>
-          <Text style={styles.dashboardMetricLabel}>tracking</Text>
+        <View style={styles.flex}>
+          <Text style={styles.clientRouteLabel}>{request.pickupLocation.addressText}</Text>
+          <Text style={styles.clientRouteTo}>to</Text>
+          <Text style={styles.clientRouteLabel}>{request.destinationLocation.addressText}</Text>
         </View>
       </View>
-      <Text style={styles.dashboardSubcopy}>{formatRequestSchedule(request)}</Text>
+      <View style={styles.clientActiveMetaRow}>
+        <View style={styles.clientActiveMetaItem}>
+          <Text style={styles.clientActiveMetaValue}>{requestEstimateLabel(request)}</Text>
+          <Text style={styles.clientActiveMetaLabel}>estimate</Text>
+        </View>
+        <View style={styles.clientActiveMetaItem}>
+          <Text style={styles.clientActiveMetaValue}>{vehicleLabel}</Text>
+          <Text style={styles.clientActiveMetaLabel}>{request.selectedVehicleId ? 'vehicle' : 'dispatch'}</Text>
+        </View>
+        <View style={styles.clientActiveMetaItem}>
+          <Text style={styles.clientActiveMetaValue}>{request.status === 'pending' ? 'Open' : 'Status'}</Text>
+          <Text style={styles.clientActiveMetaLabel}>tracking</Text>
+        </View>
+      </View>
+      <View style={styles.clientActiveSchedule}>
+        <MaterialCommunityIcons name="calendar-clock" color={colors.textSecondary} size={18} />
+        <Text style={styles.dashboardSubcopy}>{formatRequestSchedule(request)}</Text>
+      </View>
       {isWaiting ? <DispatchSearchPanel request={request} /> : <Text style={styles.noticeText}>{nextStepForRequest(request.status)}</Text>}
       <View style={styles.actionRow}>
         <PrimaryButton label={detailsLabel} onPress={onToggleDetails} style={styles.actionButton} />
@@ -3413,7 +3437,7 @@ function ClientActiveRequestCard({
         />
       </View>
       {expanded ? <View style={styles.clientExpandedDetails}>{children || <Text style={styles.muted}>Request details are up to date. Status-based tracking starts after an owner accepts.</Text>}</View> : null}
-    </UiCard>
+    </View>
   );
 }
 
@@ -3421,26 +3445,59 @@ function ClientRecentTripCard({ request, onRequest }: { request: KuliRequest; on
   const noAcceptance = request.status === 'timed_out';
 
   return (
-    <UiCard compact style={styles.recentTripCard}>
-      <View style={styles.cardHeader}>
+    <View style={styles.recentTripCard}>
+      <View style={styles.recentTripIcon}>
+        <MaterialCommunityIcons name={(request.status === 'completed' ? 'check-circle-outline' : request.status === 'cancelled' ? 'close-circle-outline' : 'truck-outline') as never} color={colors.black} size={24} />
+      </View>
+      <View style={styles.recentTripBody}>
         <View style={styles.flex}>
-          <Text style={styles.fieldLabel}>{request.requestCode}</Text>
-          <Text style={styles.dashboardRoute}>{requestRouteLabel(request)}</Text>
+          <Text style={styles.recentTripTitle}>{requestRouteLabel(request)}</Text>
+          <Text style={styles.recentTripMeta}>{formatRequestSchedule(request)}</Text>
         </View>
-        <StatusBadge tone={badgeToneForStatus(request.status)}>{statusLabels[request.status]}</StatusBadge>
-      </View>
-      <View style={styles.recentTripFooter}>
-        <Text style={styles.muted}>{formatRequestSchedule(request)}</Text>
-        <Text style={styles.recentTripPrice}>{requestEstimateLabel(request)}</Text>
-      </View>
-      {noAcceptance ? (
-        <View style={styles.timeoutPanel}>
-          <Text style={styles.fieldLabel}>No truck accepted in time</Text>
-          <Text style={styles.muted}>You can try again with a different truck type, load size, or pickup area.</Text>
-          {onRequest ? <SecondaryButton label="Start new request" onPress={onRequest} /> : null}
+        <View style={styles.recentTripFooter}>
+          <StatusBadge tone={badgeToneForStatus(request.status)}>{statusLabels[request.status]}</StatusBadge>
+          <Text style={styles.recentTripPrice}>{requestEstimateLabel(request)}</Text>
         </View>
-      ) : null}
-    </UiCard>
+        <Text style={styles.recentTripCode}>{request.requestCode}</Text>
+        {noAcceptance ? (
+          <View style={styles.timeoutPanel}>
+            <Text style={styles.fieldLabel}>No truck accepted in time</Text>
+            <Text style={styles.muted}>Try again with a different truck type, load size, or pickup area.</Text>
+            {onRequest ? <SecondaryButton label="Start new request" onPress={onRequest} /> : null}
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function ClientHomeEmptyMove({ onRequest }: { onRequest: () => void }) {
+  return (
+    <View style={styles.clientEmptyMove}>
+      <View style={styles.clientEmptyIllustration}>
+        <MaterialCommunityIcons name="map-search-outline" color={colors.textSecondary} size={54} />
+        <View style={styles.clientEmptyTruckBadge}>
+          <MaterialCommunityIcons name="truck-fast-outline" color={colors.card} size={22} />
+        </View>
+      </View>
+      <View style={styles.flex}>
+        <Text style={styles.clientEmptyTitle}>No active move yet</Text>
+        <Text style={styles.clientEmptyCopy}>Request a quote when you are ready. Owner responses, messages, and status-based tracking will appear here.</Text>
+      </View>
+      <PrimaryButton label="Request a truck" onPress={onRequest} />
+    </View>
+  );
+}
+
+function ClientHomeRecentEmpty() {
+  return (
+    <View style={styles.clientRecentEmpty}>
+      <MaterialCommunityIcons name="history" color={colors.textSecondary} size={24} />
+      <View style={styles.flex}>
+        <Text style={styles.clientRecentEmptyTitle}>Your completed moves will appear here.</Text>
+        <Text style={styles.muted}>Finished, cancelled, and timed-out requests stay compact for follow-up.</Text>
+      </View>
+    </View>
   );
 }
 
@@ -3491,34 +3548,36 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.clientHomeContent}>
+    <>
+      <Screen contentStyle={styles.clientHomeContent}>
         <ClientDashboardHero profile={profile} activeCount={activeRequests.length} onRequest={goToRequest} />
 
         <View style={styles.dashboardSection}>
-          <SectionHeader title="Quick services" description="Choose a starting point. Details stay editable in the request flow." />
+          <View style={styles.clientSectionHead}>
+            <View>
+              <Text style={styles.clientSectionTitle}>Quick services</Text>
+              <Text style={styles.clientSectionSubtitle}>Choose a starting point. You can edit details next.</Text>
+            </View>
+          </View>
           <View style={styles.serviceGrid}>
             {clientServiceOptions.map((service) => (
-              <ClientServiceTile key={service.key} title={service.title} detail={service.detail} symbol={service.symbol} onPress={goToRequest} />
+              <ClientServiceTile key={service.key} title={service.title} detail={service.detail} icon={service.icon} onPress={goToRequest} />
             ))}
           </View>
         </View>
 
         <View style={styles.dashboardSection}>
-          <SectionHeader
-            title="Active requests"
-            description={activeRequests.length ? 'Track current KULI work from request to completion.' : 'Start with a quote, then send a request to verified truck owners.'}
-          />
+          <View style={styles.clientSectionHead}>
+            <View>
+              <Text style={styles.clientSectionTitle}>Active move</Text>
+              <Text style={styles.clientSectionSubtitle}>{activeRequests.length ? 'Follow the latest confirmed backend status.' : 'Start with a quote, then send to verified owners.'}</Text>
+            </View>
+            {activeRequests.length ? <StatusBadge tone="success">{`${activeRequests.length} live`}</StatusBadge> : null}
+          </View>
           {requestsQuery.isError ? <ErrorState message={getErrorMessage(requestsQuery.error)} title="Could not load requests" /> : null}
           {actionError ? <ErrorState message={actionError} title="Action failed" /> : null}
           {requestsQuery.isLoading ? <LoadingState message="Loading active and recent KULI requests." title="Loading requests" /> : null}
-          {activeRequests.length === 0 && !requestsQuery.isLoading && !requestsQuery.isError ? (
-            <EmptyState
-              title="No active move yet"
-              message="When you send a KULI request, owner responses, tracking, and messages will appear here."
-              action={<PrimaryButton label="Request a truck" onPress={goToRequest} />}
-            />
-          ) : null}
+          {activeRequests.length === 0 && !requestsQuery.isLoading && !requestsQuery.isError ? <ClientHomeEmptyMove onRequest={goToRequest} /> : null}
           {activeRequests.map((request) => {
             const detailsOpen = expandedRequestIds.includes(request.id);
 
@@ -3541,20 +3600,25 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
         </View>
 
         <View style={styles.dashboardSection}>
-          <SectionHeader title="Recent trips" description="Completed, cancelled, and timed-out requests stay here for follow-up." />
+          <View style={styles.clientSectionHead}>
+            <View>
+              <Text style={styles.clientSectionTitle}>Recent trips</Text>
+              <Text style={styles.clientSectionSubtitle}>Completed, cancelled, and timed-out moves.</Text>
+            </View>
+          </View>
           {recentRequests.length ? (
-            <View style={styles.roleGrid}>
+            <View style={styles.recentTripList}>
               {recentRequests.map((request) => (
                 <ClientRecentTripCard key={request.id} request={request} onRequest={goToRequest} />
               ))}
             </View>
           ) : (
-            <EmptyState title="No recent trips" message="Completed or cancelled trips will appear here after your first request." />
+            <ClientHomeRecentEmpty />
           )}
         </View>
 
         <SecondaryButton label="Sign out" onPress={onSignOut} />
-      </ScrollView>
+      </Screen>
       <ClientCancelDialog
         request={cancelTarget}
         pending={Boolean(pendingCancelId)}
@@ -3569,7 +3633,7 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
           }
         }}
       />
-    </SafeAreaView>
+    </>
   );
 }
 
@@ -5106,19 +5170,25 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingBottom: 128
   },
-  clientHero: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    gap: spacing.lg,
-    padding: spacing.lg
+  clientHomeHeroStack: {
+    gap: spacing.lg
+  },
+  clientTopBar: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.lg
   },
   clientGreeting: {
     color: colors.textPrimary,
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: '900',
-    lineHeight: 34
+    lineHeight: 36
+  },
+  clientLocationRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginTop: spacing.xs
   },
   clientLocation: {
     color: colors.textSecondary,
@@ -5141,26 +5211,40 @@ const styles = StyleSheet.create({
   },
   clientCtaPanel: {
     backgroundColor: colors.black,
-    borderRadius: radii.lg,
-    gap: spacing.lg,
-    padding: spacing.lg
+    borderRadius: radii.xl,
+    gap: spacing.xl,
+    minHeight: 226,
+    overflow: 'hidden',
+    padding: spacing.xl,
+    position: 'relative'
+  },
+  clientHeroTruckMark: {
+    bottom: -22,
+    opacity: 0.16,
+    position: 'absolute',
+    right: -10,
+    transform: [{ rotate: '-8deg' }]
   },
   clientCtaTitle: {
     color: colors.card,
-    fontSize: 24,
+    fontSize: 30,
     fontWeight: '900',
-    lineHeight: 30
+    lineHeight: 36,
+    maxWidth: 260
   },
   clientCtaCopy: {
     color: '#D1D5DB',
-    fontSize: 14,
-    lineHeight: 21
+    fontSize: 15,
+    lineHeight: 22,
+    maxWidth: 260
   },
   clientCtaButton: {
     alignItems: 'center',
     alignSelf: 'flex-start',
     backgroundColor: colors.card,
     borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.sm,
     justifyContent: 'center',
     minHeight: 52,
     paddingHorizontal: spacing.xl
@@ -5184,6 +5268,24 @@ const styles = StyleSheet.create({
   dashboardSection: {
     gap: spacing.md
   },
+  clientSectionHead: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  clientSectionTitle: {
+    color: colors.textPrimary,
+    fontSize: 21,
+    fontWeight: '900',
+    lineHeight: 28
+  },
+  clientSectionSubtitle: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 2
+  },
   serviceGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -5194,8 +5296,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radii.lg,
     borderWidth: 1,
-    gap: spacing.sm,
-    minHeight: 136,
+    gap: spacing.md,
+    minHeight: 150,
     padding: spacing.lg,
     width: '47.8%'
   },
@@ -5222,6 +5324,165 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 12,
     lineHeight: 17
+  },
+  clientActiveCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    gap: spacing.lg,
+    padding: spacing.lg
+  },
+  clientActiveCardTop: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  clientActiveEyebrow: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0,
+    textTransform: 'uppercase'
+  },
+  clientActiveCode: {
+    color: colors.textPrimary,
+    fontSize: 22,
+    fontWeight: '900',
+    lineHeight: 28
+  },
+  clientRouteCard: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.lg,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  clientRouteRail: {
+    alignItems: 'center',
+    paddingVertical: 2,
+    width: 18
+  },
+  clientRouteDotStart: {
+    backgroundColor: colors.success,
+    borderRadius: 5,
+    height: 10,
+    width: 10
+  },
+  clientRouteLine: {
+    backgroundColor: colors.border,
+    flex: 1,
+    minHeight: 26,
+    width: 2
+  },
+  clientRouteDotEnd: {
+    backgroundColor: colors.black,
+    borderRadius: 5,
+    height: 10,
+    width: 10
+  },
+  clientRouteLabel: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '800',
+    lineHeight: 21
+  },
+  clientRouteTo: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '800',
+    lineHeight: 18,
+    textTransform: 'uppercase'
+  },
+  clientActiveMetaRow: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  clientActiveMetaItem: {
+    backgroundColor: colors.black,
+    borderRadius: radii.md,
+    flex: 1,
+    gap: 2,
+    minHeight: 72,
+    justifyContent: 'center',
+    padding: spacing.md
+  },
+  clientActiveMetaValue: {
+    color: colors.card,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  clientActiveMetaLabel: {
+    color: '#D1D5DB',
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase'
+  },
+  clientActiveSchedule: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  clientEmptyMove: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    gap: spacing.lg,
+    padding: spacing.xl
+  },
+  clientEmptyIllustration: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: 54,
+    height: 108,
+    justifyContent: 'center',
+    position: 'relative',
+    width: 108
+  },
+  clientEmptyTruckBadge: {
+    alignItems: 'center',
+    backgroundColor: colors.black,
+    borderColor: colors.card,
+    borderRadius: 22,
+    borderWidth: 3,
+    bottom: 0,
+    height: 44,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: -4,
+    width: 44
+  },
+  clientEmptyTitle: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '900',
+    textAlign: 'center'
+  },
+  clientEmptyCopy: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: spacing.xs,
+    textAlign: 'center'
+  },
+  clientRecentEmpty: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  clientRecentEmptyTitle: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '900',
+    lineHeight: 20
   },
   dashboardCard: {
     gap: spacing.lg
@@ -5265,8 +5526,42 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     paddingTop: spacing.lg
   },
-  recentTripCard: {
+  recentTripList: {
     gap: spacing.md
+  },
+  recentTripCard: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  recentTripIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: 22,
+    height: 44,
+    justifyContent: 'center',
+    width: 44
+  },
+  recentTripBody: {
+    flex: 1,
+    gap: spacing.sm
+  },
+  recentTripTitle: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '900',
+    lineHeight: 21
+  },
+  recentTripMeta: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 2
   },
   recentTripFooter: {
     alignItems: 'center',
@@ -5278,6 +5573,12 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 14,
     fontWeight: '900'
+  },
+  recentTripCode: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase'
   },
   authHero: {
     backgroundColor: colors.black,
