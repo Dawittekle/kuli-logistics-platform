@@ -1166,35 +1166,253 @@ function ProfileRequiredScreen({ session, onAuthenticated, onSignOut }: { sessio
 }
 
 function HomeOverview({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
-  const isClient = profile.role === 'client';
+  const navigation = useNavigation<any>();
+  const queryClient = useQueryClient();
+  const [availabilityPendingId, setAvailabilityPendingId] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const vehiclesQuery = useQuery({
+    queryKey: ['vehicles', 'mine'],
+    queryFn: async () => ((await kuliApi.request('/vehicles/mine')) as ApiEnvelope<Vehicle[]>).data
+  });
+
+  const ownerRequestsQuery = useQuery({
+    queryKey: ['kuli-requests', 'mine', 'owner'],
+    queryFn: async () => ((await kuliApi.request('/kuli-requests/mine')) as ApiEnvelope<KuliRequest[]>).data,
+    refetchInterval: 15000
+  });
+
+  const offersQuery = useQuery({
+    queryKey: ['owner-offers'],
+    queryFn: async () => ((await kuliApi.request('/owner/offers')) as ApiEnvelope<TripOffer[]>).data,
+    refetchInterval: 15000
+  });
+
+  const ratingsQuery = useQuery({
+    queryKey: ['owners', profile.id, 'ratings'],
+    queryFn: async () => ((await kuliApi.request(`/owners/${profile.id}/ratings`)) as ApiEnvelope<RatingRecord[]>).data
+  });
+
+  const vehicles = vehiclesQuery.data ?? [];
+  const requests = ownerRequestsQuery.data ?? [];
+  const offers = offersQuery.data ?? [];
+  const ratings = ratingsQuery.data ?? [];
+  const approvedVehicles = vehicles.filter((vehicle) => vehicle.verificationStatus === 'approved');
+  const pendingVehicles = vehicles.filter((vehicle) => vehicle.verificationStatus === 'pending' || vehicle.verificationStatus === 'draft');
+  const rejectedVehicles = vehicles.filter((vehicle) => vehicle.verificationStatus === 'rejected');
+  const onlineVehicle = approvedVehicles.find((vehicle) => vehicle.availabilityStatus === 'online_available');
+  const activeVehicle = onlineVehicle ?? approvedVehicles[0] ?? vehicles[0];
+  const activeJobs = requests.filter((request) => activeRequestStatuses.includes(request.status) || isPaymentSettlingRequest(request));
+  const completedJobs = requests.filter((request) => request.status === 'completed');
+  const totalEarnings = completedJobs.reduce((sum, request) => sum + Number(request.quoteSnapshot?.totalEstimate ?? request.payment?.amountConfirmed ?? 0), 0);
+  const averageRating = ratings.length ? ratings.reduce((sum, rating) => sum + rating.rating, 0) / ratings.length : 0;
+  const firstName = (profile.fullName || profile.email || 'there').split(' ')[0];
+  const isOnline = Boolean(onlineVehicle);
+  const readyVehicle = onlineVehicle ?? approvedVehicles[0];
+  const primaryJob = activeJobs[0];
+
+  const readiness = (() => {
+    if (isOnline && onlineVehicle) {
+      return {
+        title: 'You are online',
+        detail: `${onlineVehicle.licensePlate} is visible to nearby requests.`,
+        tone: 'success' as const,
+        icon: 'access-point',
+        action: 'Go offline'
+      };
+    }
+
+    if (approvedVehicles.length > 0 && readyVehicle) {
+      return {
+        title: 'Ready for requests?',
+        detail: `${readyVehicle.licensePlate} is approved and can start receiving offers.`,
+        tone: 'dark' as const,
+        icon: 'truck-check-outline',
+        action: 'Go online'
+      };
+    }
+
+    if (pendingVehicles.length > 0) {
+      return {
+        title: 'Verification in progress',
+        detail: 'KULI reviews your documents before your truck can receive offers.',
+        tone: 'warning' as const,
+        icon: 'shield-clock-outline',
+        action: 'Open vehicles'
+      };
+    }
+
+    if (rejectedVehicles.length > 0) {
+      return {
+        title: 'Vehicle needs attention',
+        detail: rejectedVehicles[0]?.rejectionReason || 'Update rejected documents before going online.',
+        tone: 'error' as const,
+        icon: 'shield-alert-outline',
+        action: 'Fix documents'
+      };
+    }
+
+    return {
+      title: 'Add your first truck',
+      detail: 'Register a vehicle and upload documents to start receiving KULI requests.',
+      tone: 'warning' as const,
+      icon: 'truck-plus-outline',
+      action: 'Register vehicle'
+    };
+  })();
+
+  const toggleAvailability = async () => {
+    if (!readyVehicle || readyVehicle.verificationStatus !== 'approved') {
+      navigation.navigate('Vehicles');
+      return;
+    }
+
+    const nextStatus = readyVehicle.availabilityStatus === 'online_available' ? 'offline' : 'online_available';
+    setAvailabilityPendingId(readyVehicle.id);
+    setError('');
+    setMessage('');
+
+    try {
+      await kuliApi.request(`/vehicles/${readyVehicle.id}/availability`, {
+        method: 'PATCH',
+        body: {
+          availabilityStatus: nextStatus,
+          currentLocation:
+            nextStatus === 'online_available'
+              ? {
+                  addressText: 'Manual standby point, Addis Ababa',
+                  source: 'manual_pin',
+                  point: { type: 'Point', coordinates: [38.746, 9.0128] }
+                }
+              : undefined
+        }
+      });
+      await queryClient.invalidateQueries({ queryKey: ['vehicles', 'mine'] });
+      setMessage(nextStatus === 'online_available' ? 'You are online and ready for offers.' : 'You are offline. New offers are paused.');
+    } catch (availabilityError) {
+      setError(getErrorMessage(availabilityError));
+    } finally {
+      setAvailabilityPendingId('');
+    }
+  };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.cardHeader}>
-          <View style={styles.flex}>
-            <Text style={styles.eyebrow}>Home</Text>
-            <Text style={styles.title}>{isClient ? 'Ready for your next move?' : 'Ready to drive?'}</Text>
-          </View>
-          <StatusPill tone={profile.accountStatus === 'active' ? 'ready' : 'warn'}>{accountStatusLabels[profile.accountStatus]}</StatusPill>
+    <Screen contentStyle={styles.ownerHomeContent}>
+      <View style={styles.ownerHomeHeader}>
+        <View style={styles.ownerAvatar}>
+          <Text style={styles.ownerAvatarText}>{(profile.fullName || profile.email || 'K').slice(0, 1).toUpperCase()}</Text>
         </View>
-        <ShellCard title="Account">
-          <Text style={styles.copy}>{profile.fullName || profile.email}</Text>
-          <Text style={styles.muted}>{profile.email}</Text>
-          {profile.phone ? <Text style={styles.muted}>{profile.phone}</Text> : null}
-        </ShellCard>
-        <ShellCard title={isClient ? 'Start a move' : 'Truck readiness'}>
-          <Text style={styles.copy}>
-            {isClient
-              ? 'Request a quote, choose a verified truck, and follow the trip from pickup to delivery.'
-              : 'Keep your documents complete and your approved vehicle online when you are available.'}
+        <View style={styles.flex}>
+          <Text style={styles.ownerHeaderKicker}>KULI Driver</Text>
+          <Text style={styles.ownerHeaderTitle}>Ready to drive, {firstName}?</Text>
+          <Text style={styles.ownerHeaderCopy}>Addis Ababa requests appear when an approved vehicle is online.</Text>
+        </View>
+      </View>
+
+      <View style={[styles.ownerReadinessCard, readiness.tone === 'success' && styles.ownerReadinessSuccess, readiness.tone === 'warning' && styles.ownerReadinessWarning, readiness.tone === 'error' && styles.ownerReadinessError]}>
+        <View style={styles.ownerReadinessTop}>
+          <View style={[styles.ownerReadinessIcon, readiness.tone === 'success' && styles.ownerReadinessIconSuccess, readiness.tone === 'warning' && styles.ownerReadinessIconWarning, readiness.tone === 'error' && styles.ownerReadinessIconError]}>
+            <MaterialCommunityIcons name={readiness.icon as never} color={readiness.tone === 'dark' ? colors.card : readiness.tone === 'success' ? colors.success : readiness.tone === 'error' ? colors.error : colors.warning} size={30} />
+          </View>
+          <View style={styles.flex}>
+            <Text style={[styles.ownerReadinessTitle, readiness.tone === 'dark' && styles.ownerTextOnDark]}>{readiness.title}</Text>
+            <Text style={[styles.ownerReadinessCopy, readiness.tone === 'dark' && styles.ownerMutedOnDark]}>{readiness.detail}</Text>
+          </View>
+          <StatusBadge tone={isOnline ? 'success' : approvedVehicles.length ? 'neutral' : readiness.tone === 'error' ? 'error' : 'warning'}>
+            {isOnline ? 'Online' : approvedVehicles.length ? 'Offline' : pendingVehicles.length ? 'Pending' : 'Setup'}
+          </StatusBadge>
+        </View>
+        {activeVehicle ? (
+          <View style={[styles.ownerActiveVehicleStrip, readiness.tone === 'dark' && styles.ownerActiveVehicleStripDark]}>
+            <MaterialCommunityIcons name="truck-outline" color={readiness.tone === 'dark' ? colors.card : colors.black} size={22} />
+            <View style={styles.flex}>
+              <Text style={[styles.ownerVehicleStripTitle, readiness.tone === 'dark' && styles.ownerTextOnDark]}>{activeVehicle.licensePlate}</Text>
+              <Text style={[styles.ownerVehicleStripCopy, readiness.tone === 'dark' && styles.ownerMutedOnDark]}>{activeVehicle.vehicleClassSnapshot?.name || 'Registered truck'} / {activeVehicle.capacityKg ?? 0}kg</Text>
+            </View>
+          </View>
+        ) : null}
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {message ? <Text style={readiness.tone === 'dark' ? styles.ownerSuccessOnDark : styles.noticeText}>{message}</Text> : null}
+        {readyVehicle && readyVehicle.verificationStatus === 'approved' ? (
+          readiness.tone === 'dark' ? (
+            <SecondaryButton
+              disabled={Boolean(availabilityPendingId)}
+              label={availabilityPendingId ? 'Updating...' : readiness.action}
+              loading={Boolean(availabilityPendingId)}
+              onPress={toggleAvailability}
+              style={styles.ownerDarkPrimaryButton}
+            />
+          ) : (
+            <PrimaryButton
+              disabled={Boolean(availabilityPendingId)}
+              label={availabilityPendingId ? 'Updating...' : readiness.action}
+              loading={Boolean(availabilityPendingId)}
+              onPress={toggleAvailability}
+            />
+          )
+        ) : (
+          <PrimaryButton label={readiness.action} onPress={() => navigation.navigate('Vehicles')} />
+        )}
+      </View>
+
+      <View style={styles.ownerMetricGrid}>
+        <MetricCard label="Completed jobs" value={String(completedJobs.length)} detail="All completed trips" style={styles.ownerMetricCard} />
+        <MetricCard label="Earnings" value={`ETB ${totalEarnings.toFixed(0)}`} detail="Confirmed and estimated" tone="dark" style={styles.ownerMetricCard} />
+        <MetricCard label="Rating" value={averageRating ? averageRating.toFixed(1) : '-'} detail={`${ratings.length} review${ratings.length === 1 ? '' : 's'}`} style={styles.ownerMetricCard} />
+        <MetricCard label="Open offers" value={String(offers.length)} detail="Waiting in inbox" tone={offers.length ? 'warning' : 'default'} style={styles.ownerMetricCard} />
+      </View>
+
+      <View style={styles.ownerSectionHeader}>
+        <View style={styles.flex}>
+          <Text style={styles.ownerSectionTitle}>Active job</Text>
+          <Text style={styles.ownerSectionCopy}>{primaryJob ? 'Continue the current request from your offer workspace.' : 'Accepted requests and cash-pending trips appear here.'}</Text>
+        </View>
+        <SecondaryButton label="Offers" onPress={() => navigation.navigate('Offers')} style={styles.ownerSmallButton} />
+      </View>
+
+      {ownerRequestsQuery.isLoading ? <LoadingState title="Loading jobs" message="Checking your active requests." /> : null}
+      {ownerRequestsQuery.isError ? <ErrorState title="Jobs could not load" message={getErrorMessage(ownerRequestsQuery.error)} /> : null}
+      {primaryJob ? (
+        <View style={styles.ownerJobCard}>
+          <View style={styles.ownerJobTop}>
+            <View style={styles.flex}>
+              <Text style={styles.ownerJobCode}>{primaryJob.requestCode}</Text>
+              <Text style={styles.ownerJobRoute}>{primaryJob.pickupLocation?.addressText} to {primaryJob.destinationLocation?.addressText}</Text>
+            </View>
+            <StatusBadge tone={primaryJob.status === 'completed' ? 'warning' : 'success'}>{statusLabels[primaryJob.status]}</StatusBadge>
+          </View>
+          <RoutePill pickup={primaryJob.pickupLocation?.addressText ?? 'Pickup'} destination={primaryJob.destinationLocation?.addressText ?? 'Destination'} />
+          <Text style={styles.ownerJobNext}>Next: open the job to update status, message the customer, or confirm payment when complete.</Text>
+          <PrimaryButton label="Open job" onPress={() => navigation.navigate('Offers')} />
+        </View>
+      ) : (
+        <View style={styles.ownerEmptyCard}>
+          <MaterialCommunityIcons name={vehicles.length ? (approvedVehicles.length ? 'radar' : 'shield-search') : 'truck-plus-outline'} color={colors.black} size={42} />
+          <Text style={styles.ownerEmptyTitle}>
+            {vehicles.length === 0 ? 'Register your first vehicle' : approvedVehicles.length ? 'No active job right now' : 'Verification comes first'}
           </Text>
-        </ShellCard>
-        <Pressable accessibilityRole="button" onPress={onSignOut} style={styles.secondaryButton}>
-          <Text style={styles.secondaryButtonText}>Sign out</Text>
-        </Pressable>
-      </ScrollView>
-    </SafeAreaView>
+          <Text style={styles.ownerEmptyCopy}>
+            {vehicles.length === 0
+              ? 'Add truck details and documents so KULI can verify your vehicle.'
+              : approvedVehicles.length
+                ? 'Stay online to receive first-accept-wins offers from nearby customers.'
+                : 'Upload the required documents. Approved vehicles can then go online.'}
+          </Text>
+          <SecondaryButton label={vehicles.length === 0 || !approvedVehicles.length ? 'Open vehicles' : 'View offers'} onPress={() => navigation.navigate(vehicles.length === 0 || !approvedVehicles.length ? 'Vehicles' : 'Offers')} />
+        </View>
+      )}
+
+      <View style={styles.ownerAccountCard}>
+        <View style={styles.flex}>
+          <Text style={styles.ownerAccountTitle}>Account</Text>
+          <Text style={styles.ownerAccountCopy}>{profile.fullName || profile.email}</Text>
+          {profile.email ? <Text style={styles.ownerAccountMuted}>{profile.email}</Text> : null}
+        </View>
+        <StatusBadge tone={profile.accountStatus === 'active' ? 'success' : 'warning'}>{accountStatusLabels[profile.accountStatus]}</StatusBadge>
+      </View>
+      <SecondaryButton label="Sign out" onPress={onSignOut} />
+    </Screen>
   );
 }
 
@@ -1208,7 +1426,7 @@ function VehicleClassPicker({
   onSelect: (id: string) => void;
 }) {
   return (
-    <View style={styles.roleGrid}>
+    <View style={styles.ownerClassGrid}>
       {vehicleClasses.map((vehicleClass) => {
         const selected = vehicleClass.id === selectedVehicleClassId;
 
@@ -1218,13 +1436,19 @@ function VehicleClassPicker({
             accessibilityState={{ selected }}
             key={vehicleClass.id}
             onPress={() => onSelect(vehicleClass.id)}
-            style={[styles.roleOption, selected && styles.roleOptionSelected]}
+            style={[styles.ownerClassCard, selected && styles.ownerClassCardSelected]}
           >
-            <View style={styles.cardHeader}>
-              <Text style={[styles.roleOptionTitle, selected && styles.roleOptionTitleSelected]}>{vehicleClass.name}</Text>
-              <StatusPill tone={selected ? 'ready' : 'warn'}>{vehicleClass.capacityKg ? `${vehicleClass.capacityKg}kg` : 'Class'}</StatusPill>
+            <View style={[styles.ownerClassIcon, selected && styles.ownerClassIconSelected]}>
+              <MaterialCommunityIcons name="truck-cargo-container" color={selected ? colors.card : colors.black} size={26} />
             </View>
-            <Text style={[styles.roleOptionText, selected && styles.roleOptionTextSelected]}>{vehicleClass.description || 'Truck class for matching and pricing.'}</Text>
+            <View style={styles.flex}>
+              <Text style={[styles.ownerClassTitle, selected && styles.ownerTextOnDark]}>{vehicleClass.name}</Text>
+              <Text style={[styles.ownerClassCopy, selected && styles.ownerMutedOnDark]}>{vehicleClass.description || 'Truck class for matching and pricing.'}</Text>
+              <View style={styles.ownerClassMetaRow}>
+                <Text style={[styles.ownerClassMeta, selected && styles.ownerMutedOnDark]}>{vehicleClass.capacityKg ? `${vehicleClass.capacityKg}kg` : 'Capacity'}</Text>
+                {vehicleClass.capacityCubicMeters ? <Text style={[styles.ownerClassMeta, selected && styles.ownerMutedOnDark]}>{vehicleClass.capacityCubicMeters}m3</Text> : null}
+              </View>
+            </View>
           </Pressable>
         );
       })}
@@ -1234,37 +1458,75 @@ function VehicleClassPicker({
 
 function VehicleCard({
   vehicle,
+  selected,
+  onSelect,
   onToggleAvailability
 }: {
   vehicle: Vehicle;
+  selected: boolean;
+  onSelect: (vehicle: Vehicle) => void;
   onToggleAvailability: (vehicle: Vehicle) => void;
 }) {
   const canGoOnline = vehicle.verificationStatus === 'approved' && ['offline', 'online_available'].includes(vehicle.availabilityStatus);
   const nextLabel = vehicle.availabilityStatus === 'online_available' ? 'Go offline' : 'Go online';
+  const online = vehicle.availabilityStatus === 'online_available';
+  const blockedReason =
+    vehicle.verificationStatus === 'approved'
+      ? vehicle.availabilityStatus === 'busy_on_job'
+        ? 'This vehicle is assigned to an active job.'
+        : vehicle.availabilityStatus === 'under_maintenance'
+          ? 'Maintenance vehicles cannot receive requests.'
+          : vehicle.availabilityStatus === 'suspended'
+            ? 'Support paused availability for this vehicle.'
+            : ''
+      : vehicle.verificationStatus === 'rejected'
+        ? vehicle.rejectionReason || 'Update rejected documents before this truck can go online.'
+        : 'Admin approval is required before this truck can receive requests.';
 
   return (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <View style={styles.flex}>
-          <Text style={styles.cardTitle}>{vehicle.licensePlate}</Text>
-          <Text style={styles.muted}>{vehicle.vehicleClassSnapshot?.name || vehicle.vehicleClassId}</Text>
+    <View style={[styles.ownerVehicleCard, selected && styles.ownerVehicleCardSelected]}>
+      <View style={styles.ownerVehicleTop}>
+        <View style={[styles.ownerVehicleIcon, online && styles.ownerVehicleIconOnline]}>
+          <MaterialCommunityIcons name={online ? 'truck-check-outline' : 'truck-outline'} color={online ? colors.success : colors.black} size={28} />
         </View>
-        <StatusPill tone={statusTone(vehicle.verificationStatus)}>{vehicleVerificationLabels[vehicle.verificationStatus]}</StatusPill>
+        <View style={styles.flex}>
+          <Text style={styles.ownerVehicleTitle}>{vehicle.licensePlate}</Text>
+          <Text style={styles.ownerVehicleType}>{vehicle.vehicleClassSnapshot?.name || vehicle.vehicleClassId}</Text>
+        </View>
+        <StatusBadge tone={vehicle.verificationStatus === 'approved' ? 'success' : vehicle.verificationStatus === 'rejected' ? 'error' : 'warning'}>
+          {vehicleVerificationLabels[vehicle.verificationStatus]}
+        </StatusBadge>
       </View>
-      <View style={styles.cardHeader}>
-        <Text style={styles.muted}>{vehicle.capacityKg ?? 0}kg / {vehicle.capacityCubicMeters ?? 0}m3</Text>
-        <StatusPill tone={statusTone(vehicle.availabilityStatus)}>{vehicleAvailabilityLabels[vehicle.availabilityStatus]}</StatusPill>
+      <View style={styles.ownerVehicleMetricRow}>
+        <View style={styles.ownerVehicleMetric}>
+          <Text style={styles.ownerVehicleMetricValue}>{vehicle.capacityKg ?? 0}kg</Text>
+          <Text style={styles.ownerVehicleMetricLabel}>Capacity</Text>
+        </View>
+        <View style={styles.ownerVehicleMetric}>
+          <Text style={styles.ownerVehicleMetricValue}>{vehicle.capacityCubicMeters ?? 0}m3</Text>
+          <Text style={styles.ownerVehicleMetricLabel}>Volume</Text>
+        </View>
+        <View style={styles.ownerVehicleMetric}>
+          <Text style={styles.ownerVehicleMetricValue}>{online ? 'Online' : 'Offline'}</Text>
+          <Text style={styles.ownerVehicleMetricLabel}>Status</Text>
+        </View>
       </View>
-      {vehicle.rejectionReason ? <Text style={styles.errorText}>{vehicle.rejectionReason}</Text> : null}
-      <Text style={styles.muted}>{vehicle.description || 'No description yet.'}</Text>
-      <Pressable
-        accessibilityRole="button"
-        disabled={!canGoOnline}
-        onPress={() => onToggleAvailability(vehicle)}
-        style={[styles.secondaryButton, !canGoOnline && styles.buttonDisabled]}
-      >
-        <Text style={styles.secondaryButtonText}>{vehicle.verificationStatus === 'approved' ? nextLabel : 'Approval required'}</Text>
-      </Pressable>
+      <Text style={styles.ownerVehicleDescription}>{vehicle.description || 'Add a short description so customers understand what this truck is best for.'}</Text>
+      {blockedReason ? (
+        <View style={styles.ownerVehicleBlockReason}>
+          <MaterialCommunityIcons name="information-outline" color={vehicle.verificationStatus === 'rejected' ? colors.error : colors.warning} size={18} />
+          <Text style={[styles.ownerVehicleBlockText, vehicle.verificationStatus === 'rejected' && styles.ownerVehicleBlockTextError]}>{blockedReason}</Text>
+        </View>
+      ) : null}
+      <View style={styles.ownerVehicleActions}>
+        <SecondaryButton label={selected ? 'Selected' : 'Use this truck'} onPress={() => onSelect(vehicle)} style={styles.ownerVehicleActionButton} />
+        <PrimaryButton
+          disabled={!canGoOnline}
+          label={vehicle.verificationStatus === 'approved' ? nextLabel : 'Approval required'}
+          onPress={() => onToggleAvailability(vehicle)}
+          style={styles.ownerVehicleActionButton}
+        />
+      </View>
     </View>
   );
 }
@@ -1419,47 +1681,60 @@ function DocumentUploadField({
   };
 
   return (
-    <ShellCard title="Document upload">
-      <View style={styles.documentUploadHeader}>
+    <View style={styles.ownerVerificationCard}>
+      <View style={styles.ownerVerificationHeader}>
         <View style={styles.flex}>
-          <Text style={styles.muted}>Attach every required vehicle document with a clear image from your library or camera. KULI uses the selected file's real name, MIME type, and size for review metadata.</Text>
-          <Text style={styles.noticeText}>{completedRequiredCount}/{requiredTypes.length} required documents ready</Text>
+          <Text style={styles.ownerSectionTitle}>Verification checklist</Text>
+          <Text style={styles.ownerSectionCopy}>Attach clear document photos from your library or camera. KULI stores upload metadata for admin review.</Text>
         </View>
-        <StatusPill tone={completedRequiredCount === requiredTypes.length ? 'ready' : 'warn'}>
-          {completedRequiredCount === requiredTypes.length ? 'Ready' : 'Missing'}
-        </StatusPill>
+        <StatusBadge tone={completedRequiredCount === requiredTypes.length ? 'success' : 'warning'}>
+          {`${completedRequiredCount}/${requiredTypes.length}`}
+        </StatusBadge>
       </View>
       <View style={styles.documentProgressTrack}>
         <View style={[styles.documentProgressFill, { width: `${Math.round((completedRequiredCount / requiredTypes.length) * 100)}%` }]} />
       </View>
-      <View style={styles.roleGrid}>
+      <View style={styles.ownerDocumentList}>
         {documentTypes.map((doc) => {
           const draft = drafts[doc.type];
           const existingDocument = latestDocumentByType[doc.type];
           const uploaded = Boolean(existingDocument);
           const ready = Boolean(draft);
           const pendingThis = pending && (pendingType === doc.type || pendingType === 'all');
+          const rejected = existingDocument?.status === 'rejected';
+          const approved = existingDocument?.status === 'approved';
+          const statusLabel = rejected ? 'Rejected' : approved ? 'Approved' : uploaded ? 'Pending review' : ready ? 'Ready to attach' : doc.required ? 'Missing' : 'Optional';
+          const statusTone = rejected ? 'error' : approved || ready ? 'success' : uploaded || doc.required ? 'warning' : 'neutral';
 
           return (
-            <View key={doc.type} style={[styles.documentUploadCard, uploaded && styles.documentUploadCardUploaded, ready && styles.documentUploadCardReady]}>
-              <View style={styles.cardHeader}>
-                <View style={styles.flex}>
-                  <Text style={styles.cardTitle}>{doc.label}</Text>
-                  <Text style={styles.muted}>{doc.detail}</Text>
+            <View key={doc.type} style={[styles.ownerDocumentCard, uploaded && styles.ownerDocumentCardUploaded, ready && styles.ownerDocumentCardReady, rejected && styles.ownerDocumentCardRejected]}>
+              <View style={styles.ownerDocumentTop}>
+                <View style={[styles.ownerDocumentIcon, approved && styles.ownerDocumentIconApproved, rejected && styles.ownerDocumentIconRejected]}>
+                  <MaterialCommunityIcons
+                    name={(doc.type === 'identity' ? 'card-account-details-outline' : doc.type === 'driver_license' ? 'card-account-details-star-outline' : doc.type === 'vehicle_registration' ? 'file-document-outline' : doc.type === 'ownership_proof' ? 'shield-key-outline' : 'shield-check-outline') as never}
+                    color={approved ? colors.success : rejected ? colors.error : colors.black}
+                    size={24}
+                  />
                 </View>
-                <StatusPill tone={uploaded || ready ? 'ready' : doc.required ? 'blocked' : 'warn'}>
-                  {uploaded ? 'Uploaded' : ready ? 'Ready' : doc.required ? 'Required' : 'Optional'}
-                </StatusPill>
+                <View style={styles.flex}>
+                  <Text style={styles.ownerDocumentTitle}>{doc.label}</Text>
+                  <Text style={styles.ownerDocumentCopy}>{doc.detail}</Text>
+                </View>
+                <StatusBadge tone={statusTone}>{statusLabel}</StatusBadge>
               </View>
-              <View style={styles.documentGuidelineGrid}>
+              <View style={styles.ownerDocumentTips}>
                 {doc.tips.map((tip) => (
-                  <Text key={tip} style={styles.documentGuideline}>- {tip}</Text>
+                  <View key={tip} style={styles.ownerDocumentTip}>
+                    <MaterialCommunityIcons name="check-circle-outline" color={colors.textSecondary} size={15} />
+                    <Text style={styles.ownerDocumentTipText}>{tip}</Text>
+                  </View>
                 ))}
               </View>
               {existingDocument ? (
-                <View style={styles.fileSummary}>
+                <View style={[styles.fileSummary, rejected && styles.ownerDocumentRejectedSummary]}>
                   <Text style={styles.fieldLabel}>Latest upload</Text>
                   <Text style={styles.muted}>{existingDocument.status} / file {existingDocument.fileId.slice(-8)}</Text>
+                  {rejected ? <Text style={styles.errorText}>Upload a clearer replacement for review.</Text> : null}
                 </View>
               ) : null}
               {draft ? (
@@ -1477,29 +1752,25 @@ function DocumentUploadField({
                 uploadLabel="Upload"
                 takeLabel="Camera"
               />
-              <Pressable
-                accessibilityRole="button"
+              <PrimaryButton
                 disabled={!draft || pendingThis}
+                label={pendingThis ? 'Attaching...' : uploaded ? 'Replace document' : 'Attach document'}
+                loading={pendingThis}
                 onPress={() => submitOne(doc.type)}
-                style={[styles.primaryButton, (!draft || pendingThis) && styles.buttonDisabled]}
-              >
-                <Text style={styles.primaryButtonText}>{pendingThis ? 'Attaching...' : uploaded ? 'Replace document' : 'Attach document'}</Text>
-              </Pressable>
+              />
             </View>
           );
         })}
       </View>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
       {message ? <Text style={styles.noticeText}>{message}</Text> : null}
-      <Pressable
-        accessibilityRole="button"
+      <PrimaryButton
         disabled={pending || readyDraftCount === 0}
+        label={pendingType === 'all' ? 'Submitting...' : `Submit ready documents (${readyDraftCount})`}
+        loading={pendingType === 'all'}
         onPress={submitReadyDocuments}
-        style={[styles.primaryButton, (pending || readyDraftCount === 0) && styles.buttonDisabled]}
-      >
-        <Text style={styles.primaryButtonText}>{pendingType === 'all' ? 'Submitting...' : `Submit ready documents (${readyDraftCount})`}</Text>
-      </Pressable>
-    </ShellCard>
+      />
+    </View>
   );
 }
 
@@ -1528,6 +1799,10 @@ function OwnerVehiclesScreen() {
   const vehicleClasses = vehicleClassesQuery.data ?? [];
   const vehicles = vehiclesQuery.data ?? [];
   const activeVehicle = vehicles.find((vehicle) => vehicle.id === activeVehicleId) ?? vehicles[0];
+  const approvedCount = vehicles.filter((vehicle) => vehicle.verificationStatus === 'approved').length;
+  const onlineCount = vehicles.filter((vehicle) => vehicle.availabilityStatus === 'online_available').length;
+  const pendingCount = vehicles.filter((vehicle) => vehicle.verificationStatus === 'pending' || vehicle.verificationStatus === 'draft').length;
+  const selectedClass = vehicleClasses.find((vehicleClass) => vehicleClass.id === vehicleClassId);
 
   useEffect(() => {
     if (!vehicleClassId && vehicleClasses[0]) {
@@ -1536,6 +1811,19 @@ function OwnerVehiclesScreen() {
       setCapacityCubicMeters(String(vehicleClasses[0].capacityCubicMeters ?? 10));
     }
   }, [vehicleClassId, vehicleClasses]);
+
+  const selectVehicleClass = (nextVehicleClassId: string) => {
+    const nextClass = vehicleClasses.find((vehicleClass) => vehicleClass.id === nextVehicleClassId);
+    setVehicleClassId(nextVehicleClassId);
+
+    if (nextClass?.capacityKg) {
+      setCapacityKg(String(nextClass.capacityKg));
+    }
+
+    if (nextClass?.capacityCubicMeters) {
+      setCapacityCubicMeters(String(nextClass.capacityCubicMeters));
+    }
+  };
 
   const createVehicle = async () => {
     const parsedKg = Number(capacityKg);
@@ -1636,48 +1924,92 @@ function OwnerVehiclesScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>Vehicles</Text>
-        <Text style={styles.title}>Ready to drive?</Text>
-        <Text style={styles.copy}>Approved vehicles can go online. Pending or rejected vehicles stay out of matching.</Text>
+    <Screen contentStyle={styles.ownerVehiclesContent}>
+      <View style={styles.ownerVehiclesHero}>
+        <View style={styles.flex}>
+          <Text style={styles.ownerHeaderKicker}>Fleet readiness</Text>
+          <Text style={styles.ownerVehiclesTitle}>Vehicles</Text>
+          <Text style={styles.ownerVehiclesCopy}>Approved vehicles can go online. Pending or rejected vehicles stay out of matching until review is complete.</Text>
+        </View>
+        <View style={styles.ownerVehiclesHeroIcon}>
+          <MaterialCommunityIcons name="truck-delivery-outline" color={colors.card} size={34} />
+        </View>
+      </View>
 
-        <ShellCard title="Vehicle registration">
-          {vehicleClassesQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(vehicleClassesQuery.error)}</Text> : null}
-          <VehicleClassPicker vehicleClasses={vehicleClasses} selectedVehicleClassId={vehicleClassId} onSelect={setVehicleClassId} />
+      <View style={styles.ownerMetricGrid}>
+        <MetricCard label="Fleet" value={String(vehicles.length)} detail="Registered trucks" tone="dark" style={styles.ownerMetricCard} />
+        <MetricCard label="Approved" value={String(approvedCount)} detail="Can receive offers" tone={approvedCount ? 'success' : 'default'} style={styles.ownerMetricCard} />
+        <MetricCard label="Online" value={String(onlineCount)} detail="Visible now" tone={onlineCount ? 'success' : 'default'} style={styles.ownerMetricCard} />
+        <MetricCard label="In review" value={String(pendingCount)} detail="Waiting approval" tone={pendingCount ? 'warning' : 'default'} style={styles.ownerMetricCard} />
+      </View>
+
+      <View style={styles.ownerVehiclePanel}>
+        <View style={styles.ownerSectionHeader}>
+          <View style={styles.flex}>
+            <Text style={styles.ownerSectionTitle}>Add a vehicle</Text>
+            <Text style={styles.ownerSectionCopy}>Step 1: choose a class. Step 2: confirm capacity. Step 3: upload documents for review.</Text>
+          </View>
+          {selectedClass ? <StatusBadge tone="neutral">{selectedClass.name}</StatusBadge> : null}
+        </View>
+        {vehicleClassesQuery.isLoading ? <LoadingState title="Loading vehicle classes" message="Preparing truck options." /> : null}
+        {vehicleClassesQuery.isError ? <ErrorState title="Vehicle classes unavailable" message={getErrorMessage(vehicleClassesQuery.error)} /> : null}
+        <VehicleClassPicker vehicleClasses={vehicleClasses} selectedVehicleClassId={vehicleClassId} onSelect={selectVehicleClass} />
+        <View style={styles.ownerFormCard}>
           <Field label="License plate" value={licensePlate} onChangeText={setLicensePlate} placeholder="AA-12345" />
-          <Field label="Capacity kg" value={capacityKg} onChangeText={setCapacityKg} placeholder="1200" keyboardType="phone-pad" />
-          <Field label="Volume m3" value={capacityCubicMeters} onChangeText={setCapacityCubicMeters} placeholder="10" keyboardType="phone-pad" />
+          <View style={styles.ownerFormTwoColumn}>
+            <View style={styles.flex}>
+              <Field label="Capacity kg" value={capacityKg} onChangeText={setCapacityKg} placeholder="1200" keyboardType="phone-pad" />
+            </View>
+            <View style={styles.flex}>
+              <Field label="Volume m3" value={capacityCubicMeters} onChangeText={setCapacityCubicMeters} placeholder="10" keyboardType="phone-pad" />
+            </View>
+          </View>
           <Field label="Vehicle notes" value={description} onChangeText={setDescription} placeholder="Clean covered truck, good for furniture" />
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
           {notice ? <Text style={styles.noticeText}>{notice}</Text> : null}
-          <Pressable accessibilityRole="button" disabled={pending} onPress={createVehicle} style={[styles.primaryButton, pending && styles.buttonDisabled]}>
-            <Text style={styles.primaryButtonText}>{pending ? 'Submitting...' : 'Submit vehicle'}</Text>
-          </Pressable>
-        </ShellCard>
+          <PrimaryButton disabled={pending} loading={pending} label={pending ? 'Submitting...' : 'Submit for verification'} onPress={createVehicle} />
+        </View>
+      </View>
 
-        {activeVehicle ? (
-          <DocumentUploadField
-            vehicle={activeVehicle}
-            onUploaded={() => {
-              queryClient.invalidateQueries({ queryKey: ['vehicles', 'mine'] });
-            }}
-          />
-        ) : null}
-
-        <ShellCard title="My vehicles">
-          {vehiclesQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(vehiclesQuery.error)}</Text> : null}
-          {vehicles.length === 0 ? <Text style={styles.muted}>No vehicles submitted yet.</Text> : null}
-          <View style={styles.roleGrid}>
-            {vehicles.map((vehicle) => (
-              <Pressable accessibilityRole="button" disabled={activeVehiclePendingId === vehicle.id} key={vehicle.id} onPress={() => selectActiveVehicle(vehicle.id)}>
-                <VehicleCard vehicle={vehicle} onToggleAvailability={toggleAvailability} />
-              </Pressable>
-            ))}
+      <View style={styles.ownerVehiclePanel}>
+        <View style={styles.ownerSectionHeader}>
+          <View style={styles.flex}>
+            <Text style={styles.ownerSectionTitle}>My vehicles</Text>
+            <Text style={styles.ownerSectionCopy}>Choose a truck to manage documents or availability.</Text>
           </View>
-        </ShellCard>
-      </ScrollView>
-    </SafeAreaView>
+          <SecondaryButton label="Refresh" onPress={() => vehiclesQuery.refetch()} style={styles.ownerSmallButton} />
+        </View>
+        {vehiclesQuery.isLoading ? <LoadingState title="Loading vehicles" message="Checking fleet records." /> : null}
+        {vehiclesQuery.isError ? <ErrorState title="Vehicles could not load" message={getErrorMessage(vehiclesQuery.error)} /> : null}
+        {!vehiclesQuery.isLoading && vehicles.length === 0 ? (
+          <View style={styles.ownerEmptyCard}>
+            <MaterialCommunityIcons name="truck-plus-outline" color={colors.black} size={44} />
+            <Text style={styles.ownerEmptyTitle}>No vehicles yet</Text>
+            <Text style={styles.ownerEmptyCopy}>Submit your first truck above, then attach identity, license, registration, ownership, and insurance documents.</Text>
+          </View>
+        ) : null}
+        <View style={styles.ownerVehicleList}>
+          {vehicles.map((vehicle) => (
+            <VehicleCard
+              key={vehicle.id}
+              vehicle={vehicle}
+              selected={activeVehicle?.id === vehicle.id}
+              onSelect={(nextVehicle) => selectActiveVehicle(nextVehicle.id)}
+              onToggleAvailability={toggleAvailability}
+            />
+          ))}
+        </View>
+      </View>
+
+      {activeVehicle ? (
+        <DocumentUploadField
+          vehicle={activeVehicle}
+          onUploaded={() => {
+            queryClient.invalidateQueries({ queryKey: ['vehicles', 'mine'] });
+          }}
+        />
+      ) : null}
+    </Screen>
   );
 }
 
@@ -6133,6 +6465,520 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 12,
     lineHeight: 17
+  },
+  ownerHomeContent: {
+    gap: spacing.lg,
+    paddingBottom: spacing.xxl
+  },
+  ownerHomeHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md
+  },
+  ownerAvatar: {
+    alignItems: 'center',
+    backgroundColor: colors.black,
+    borderRadius: 26,
+    height: 52,
+    justifyContent: 'center',
+    width: 52
+  },
+  ownerAvatarText: {
+    color: colors.card,
+    fontSize: 20,
+    fontWeight: '900'
+  },
+  ownerHeaderKicker: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  ownerHeaderTitle: {
+    color: colors.textPrimary,
+    fontSize: 28,
+    fontWeight: '900',
+    lineHeight: 34
+  },
+  ownerHeaderCopy: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: spacing.xs
+  },
+  ownerReadinessCard: {
+    backgroundColor: colors.black,
+    borderColor: colors.black,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    gap: spacing.lg,
+    padding: spacing.lg
+  },
+  ownerReadinessSuccess: {
+    backgroundColor: colors.card,
+    borderColor: colors.success
+  },
+  ownerReadinessWarning: {
+    backgroundColor: colors.card,
+    borderColor: colors.warning
+  },
+  ownerReadinessError: {
+    backgroundColor: colors.card,
+    borderColor: colors.error
+  },
+  ownerReadinessTop: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md
+  },
+  ownerReadinessIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.nearBlack,
+    borderRadius: radii.lg,
+    height: 58,
+    justifyContent: 'center',
+    width: 58
+  },
+  ownerReadinessIconSuccess: {
+    backgroundColor: colors.successTint
+  },
+  ownerReadinessIconWarning: {
+    backgroundColor: colors.warningTint
+  },
+  ownerReadinessIconError: {
+    backgroundColor: colors.errorTint
+  },
+  ownerReadinessTitle: {
+    color: colors.textPrimary,
+    fontSize: 22,
+    fontWeight: '900',
+    lineHeight: 28
+  },
+  ownerReadinessCopy: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: spacing.xs
+  },
+  ownerTextOnDark: {
+    color: colors.card
+  },
+  ownerMutedOnDark: {
+    color: '#D1D5DB'
+  },
+  ownerActiveVehicleStrip: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.lg,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ownerActiveVehicleStripDark: {
+    backgroundColor: colors.darkSurface
+  },
+  ownerVehicleStripTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  ownerVehicleStripCopy: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18
+  },
+  ownerDarkPrimaryButton: {
+    backgroundColor: colors.card
+  },
+  ownerSuccessOnDark: {
+    color: '#BBF7D0',
+    fontSize: 14,
+    fontWeight: '800'
+  },
+  ownerMetricGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm
+  },
+  ownerMetricCard: {
+    flexBasis: '48%',
+    flexGrow: 1
+  },
+  ownerSectionHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  ownerSectionTitle: {
+    color: colors.textPrimary,
+    fontSize: 21,
+    fontWeight: '900',
+    lineHeight: 27
+  },
+  ownerSectionCopy: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: spacing.xs
+  },
+  ownerSmallButton: {
+    minHeight: 42,
+    paddingHorizontal: spacing.md
+  },
+  ownerJobCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  ownerJobTop: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  ownerJobCode: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '900'
+  },
+  ownerJobRoute: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: spacing.xs
+  },
+  ownerJobNext: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '800',
+    lineHeight: 20
+  },
+  ownerEmptyCard: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.xl
+  },
+  ownerEmptyTitle: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '900',
+    textAlign: 'center'
+  },
+  ownerEmptyCopy: {
+    color: colors.textSecondary,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center'
+  },
+  ownerAccountCard: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between',
+    padding: spacing.lg
+  },
+  ownerAccountTitle: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '900'
+  },
+  ownerAccountCopy: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '800',
+    marginTop: spacing.xs
+  },
+  ownerAccountMuted: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    marginTop: 2
+  },
+  ownerVehiclesContent: {
+    gap: spacing.lg,
+    paddingBottom: spacing.xxl
+  },
+  ownerVehiclesHero: {
+    alignItems: 'center',
+    backgroundColor: colors.black,
+    borderRadius: radii.xl,
+    flexDirection: 'row',
+    gap: spacing.lg,
+    padding: spacing.xl
+  },
+  ownerVehiclesTitle: {
+    color: colors.card,
+    fontSize: 34,
+    fontWeight: '900',
+    lineHeight: 39
+  },
+  ownerVehiclesCopy: {
+    color: '#E5E7EB',
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: spacing.sm
+  },
+  ownerVehiclesHeroIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.darkSurface,
+    borderRadius: radii.lg,
+    height: 62,
+    justifyContent: 'center',
+    width: 62
+  },
+  ownerVehiclePanel: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.lg,
+    padding: spacing.lg
+  },
+  ownerClassGrid: {
+    gap: spacing.md
+  },
+  ownerClassCard: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ownerClassCardSelected: {
+    backgroundColor: colors.black,
+    borderColor: colors.black
+  },
+  ownerClassIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    height: 48,
+    justifyContent: 'center',
+    width: 48
+  },
+  ownerClassIconSelected: {
+    backgroundColor: colors.darkSurface
+  },
+  ownerClassTitle: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '900'
+  },
+  ownerClassCopy: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 2
+  },
+  ownerClassMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.sm
+  },
+  ownerClassMeta: {
+    color: colors.black,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  ownerFormCard: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.lg,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ownerFormTwoColumn: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  ownerVehicleList: {
+    gap: spacing.md
+  },
+  ownerVehicleCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ownerVehicleCardSelected: {
+    borderColor: colors.black,
+    borderWidth: 2
+  },
+  ownerVehicleTop: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md
+  },
+  ownerVehicleIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    height: 52,
+    justifyContent: 'center',
+    width: 52
+  },
+  ownerVehicleIconOnline: {
+    backgroundColor: colors.successTint
+  },
+  ownerVehicleTitle: {
+    color: colors.textPrimary,
+    fontSize: 19,
+    fontWeight: '900'
+  },
+  ownerVehicleType: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    marginTop: 2
+  },
+  ownerVehicleMetricRow: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  ownerVehicleMetric: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flex: 1,
+    minHeight: 66,
+    justifyContent: 'center',
+    padding: spacing.sm
+  },
+  ownerVehicleMetricValue: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  ownerVehicleMetricLabel: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '900',
+    marginTop: 2
+  },
+  ownerVehicleDescription: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20
+  },
+  ownerVehicleBlockReason: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.warningTint,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  ownerVehicleBlockText: {
+    color: colors.warning,
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '800',
+    lineHeight: 18
+  },
+  ownerVehicleBlockTextError: {
+    color: colors.error
+  },
+  ownerVehicleActions: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  ownerVehicleActionButton: {
+    flex: 1
+  },
+  ownerVerificationCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.lg,
+    padding: spacing.lg
+  },
+  ownerVerificationHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  ownerDocumentList: {
+    gap: spacing.md
+  },
+  ownerDocumentCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ownerDocumentCardUploaded: {
+    borderColor: colors.warning
+  },
+  ownerDocumentCardReady: {
+    borderColor: colors.success
+  },
+  ownerDocumentCardRejected: {
+    borderColor: colors.error
+  },
+  ownerDocumentTop: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md
+  },
+  ownerDocumentIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    height: 48,
+    justifyContent: 'center',
+    width: 48
+  },
+  ownerDocumentIconApproved: {
+    backgroundColor: colors.successTint
+  },
+  ownerDocumentIconRejected: {
+    backgroundColor: colors.errorTint
+  },
+  ownerDocumentTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  ownerDocumentCopy: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 2
+  },
+  ownerDocumentTips: {
+    gap: spacing.xs
+  },
+  ownerDocumentTip: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs
+  },
+  ownerDocumentTipText: {
+    color: colors.textSecondary,
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17
+  },
+  ownerDocumentRejectedSummary: {
+    backgroundColor: colors.errorTint,
+    borderColor: colors.error
   },
   reasonOption: {
     backgroundColor: colors.card,
