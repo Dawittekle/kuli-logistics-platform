@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
@@ -462,36 +462,6 @@ function ShellCard({ title, children }: { title: string; children: ReactNode }) 
       <Text style={styles.cardTitle}>{title}</Text>
       {children}
     </View>
-  );
-}
-
-function HealthCard() {
-  const [state, setState] = useState<'idle' | 'checking' | 'ready' | 'blocked'>('idle');
-  const [message, setMessage] = useState(runtimeConfig.apiBaseUrl);
-
-  const checkHealth = async () => {
-    setState('checking');
-
-    try {
-      await kuliApi.health();
-      setState('ready');
-      setMessage('Backend health check succeeded.');
-    } catch (error) {
-      setState('blocked');
-      setMessage(getErrorMessage(error));
-    }
-  };
-
-  return (
-    <UiCard style={styles.authCard}>
-      <View style={styles.cardHeader}>
-        <SectionHeader eyebrow="Diagnostics" title="API connection" description={message} style={styles.flex} />
-        <StatusBadge tone={state === 'ready' ? 'success' : state === 'blocked' ? 'error' : 'warning'}>
-          {state === 'ready' ? 'Ready' : state === 'blocked' ? 'Check API' : state === 'checking' ? 'Checking' : 'Idle'}
-        </StatusBadge>
-      </View>
-      <SecondaryButton label="Check health" onPress={checkHealth} />
-    </UiCard>
   );
 }
 
@@ -1219,12 +1189,6 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
             </>
           )}
 
-          {runtimeConfig.demoAuthEnabled ? (
-            <>
-              <HealthCard />
-              <RuntimeReadiness />
-            </>
-          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -5758,34 +5722,6 @@ function OwnerTabs({ profile, onSignOut }: { profile: UserProfile; onSignOut: ()
   );
 }
 
-function RuntimeReadiness() {
-  const readinessItems = useMemo(
-    () => [
-      { label: 'API base URL', ready: runtimeReadiness.hasApiBaseUrl },
-      { label: 'Supabase URL', ready: runtimeReadiness.hasSupabaseUrl },
-      { label: 'Supabase anon key', ready: runtimeReadiness.hasSupabaseAnonKey },
-      { label: 'Local demo auth', ready: runtimeReadiness.demoAuthEnabled }
-    ],
-    []
-  );
-
-  return (
-    <UiCard style={styles.authCard}>
-      <SectionHeader
-        eyebrow="Development readiness"
-        title="Runtime configuration"
-        description="These values help verify local mobile web and Expo builds before testing auth flows."
-      />
-      {readinessItems.map((item) => (
-        <View key={item.label} style={styles.readinessRow}>
-          <Text style={styles.readinessText}>{item.label}</Text>
-          <StatusBadge tone={item.ready ? 'success' : 'error'}>{item.ready ? 'Set' : 'Missing'}</StatusBadge>
-        </View>
-      ))}
-    </UiCard>
-  );
-}
-
 function AppContent() {
   const query = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
@@ -5794,23 +5730,41 @@ function AppContent() {
   const [profileMissing, setProfileMissing] = useState(false);
   const [splashReady, setSplashReady] = useState(false);
   const [splashSeen, setSplashSeen] = useState(true);
+  const activeSessionUserIdRef = useRef<string | null>(null);
 
   const loadCurrentProfile = useCallback(async (nextSession: Session | null) => {
+    const nextUserId = nextSession?.user.id ?? null;
+    const sameUser = Boolean(nextUserId && activeSessionUserIdRef.current === nextUserId);
+
     setSession(nextSession);
-    setProfile(null);
     setProfileMissing(false);
 
     if (!nextSession) {
+      activeSessionUserIdRef.current = null;
+      setProfile(null);
       setLoading(false);
       return;
     }
 
+    if (!sameUser) {
+      setProfile(null);
+      setLoading(true);
+    }
+
     try {
       const result = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
+      activeSessionUserIdRef.current = nextUserId;
       setProfile(result.data);
+      setProfileMissing(false);
     } catch (error) {
       if ((error as { code?: string }).code === 'PROFILE_NOT_FOUND') {
+        activeSessionUserIdRef.current = nextUserId;
+        if (!sameUser) {
+          setProfile(null);
+        }
         setProfileMissing(true);
+      } else if (!sameUser) {
+        setProfile(null);
       }
     } finally {
       setLoading(false);
@@ -5866,6 +5820,7 @@ function AppContent() {
 
   const handleAuthenticated = (nextProfile: UserProfile, nextSession: Session) => {
     AsyncStorage.setItem(AUTH_ONBOARDING_COMPLETED_KEY, 'true').catch(() => undefined);
+    activeSessionUserIdRef.current = nextSession.user.id ?? null;
     setSession(nextSession);
     setProfile(nextProfile);
     setProfileMissing(false);
@@ -5876,6 +5831,7 @@ function AppContent() {
     clearDemoAccessToken();
     await supabase.auth.signOut();
     query.clear();
+    activeSessionUserIdRef.current = null;
     setSession(null);
     setProfile(null);
     setProfileMissing(false);
