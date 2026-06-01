@@ -12,7 +12,9 @@ import { assertVehicleAvailabilityTransition } from './vehicle-state.mjs';
 const createId = (prefix) => `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 
 const supportedVehicleDocumentMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+const supportedVehiclePhotoMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
 const maxVehicleDocumentSizeBytes = 10 * 1024 * 1024;
+const vehiclePhotoUploadType = 'vehicle_photo';
 const requiredDocumentTypes = [
   vehicleDocumentTypes.identity,
   vehicleDocumentTypes.driverLicense,
@@ -243,12 +245,31 @@ export class VehicleRegistryService {
       throw new AppError(422, 'APPROVED_VEHICLE_LOCKED', 'Approved vehicle details require admin review before changes.');
     }
 
+    let photo = vehicle.photo;
+
+    if (input.photo) {
+      const file = await this.fileRepository.findById(input.photo.fileId);
+
+      if (!file || file.ownerId !== actor.id) {
+        throw new AppError(404, 'FILE_NOT_FOUND', 'Vehicle photo metadata was not found.');
+      }
+
+      photo = {
+        fileId: file.id,
+        originalFileName: file.originalFileName,
+        mimeType: file.mimeType,
+        sizeBytes: file.sizeBytes,
+        previewUrl: input.photo.previewUrl
+      };
+    }
+
     return this.vehicleRepository.save({
       ...vehicle,
       licensePlate: input.licensePlate ? normalizeLicensePlate(input.licensePlate) : vehicle.licensePlate,
       capacityKg: input.capacityKg ?? vehicle.capacityKg,
       capacityCubicMeters: input.capacityCubicMeters ?? vehicle.capacityCubicMeters,
       description: input.description ?? vehicle.description,
+      photo,
       currentLocation: input.currentLocation ?? vehicle.currentLocation,
       currentLocationUpdatedAt: input.currentLocation ? new Date().toISOString() : vehicle.currentLocationUpdatedAt,
       verificationStatus: verificationStatuses.pending,
@@ -259,12 +280,16 @@ export class VehicleRegistryService {
   async createUploadIntent({ actor, input }) {
     assertTruckOwner(actor);
 
-    if (!Object.values(vehicleDocumentTypes).includes(input.type)) {
+    const isVehiclePhoto = input.type === vehiclePhotoUploadType;
+
+    if (!isVehiclePhoto && !Object.values(vehicleDocumentTypes).includes(input.type)) {
       throw new AppError(422, 'INVALID_DOCUMENT_TYPE', 'Unsupported vehicle document type.');
     }
 
-    if (!supportedVehicleDocumentMimeTypes.includes(input.mimeType)) {
-      throw new AppError(422, 'DOCUMENT_UPLOAD_INVALID', 'Vehicle documents must be an image or PDF.', {
+    const allowedMimeTypes = isVehiclePhoto ? supportedVehiclePhotoMimeTypes : supportedVehicleDocumentMimeTypes;
+
+    if (!allowedMimeTypes.includes(input.mimeType)) {
+      throw new AppError(422, 'DOCUMENT_UPLOAD_INVALID', isVehiclePhoto ? 'Vehicle photo must be an image.' : 'Vehicle documents must be an image or PDF.', {
         mimeType: input.mimeType
       });
     }
@@ -284,11 +309,11 @@ export class VehicleRegistryService {
       linkedEntityType: fileLinkedEntityTypes.vehicle,
       linkedEntityId: input.vehicleId,
       storageProvider: 'local_dev',
-      storageKey: `local-dev/vehicle-documents/${actor.id}/${fileId}-${originalFileName}`,
+      storageKey: `local-dev/${isVehiclePhoto ? 'vehicle-photos' : 'vehicle-documents'}/${actor.id}/${fileId}-${originalFileName}`,
       originalFileName,
       mimeType: input.mimeType,
       sizeBytes: input.sizeBytes,
-      visibility: 'staff_only'
+      visibility: isVehiclePhoto ? 'public' : 'staff_only'
     });
 
     return {

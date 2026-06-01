@@ -30,7 +30,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     flexDirection: 'row',
     gap: spacing.md,
-    justifyContent: 'space-between'
+    justifyContent: 'space-between',
+    minHeight: 44
   },
   copy: {
     flex: 1,
@@ -47,7 +48,7 @@ const styles = StyleSheet.create({
   title: {
     color: colors.textPrimary,
     fontSize: typography.sectionTitle.fontSize,
-    fontWeight: typography.sectionTitle.fontWeight,
+    fontWeight: '900',
     lineHeight: typography.sectionTitle.lineHeight
   },
   description: {
@@ -56,4 +57,3 @@ const styles = StyleSheet.create({
     lineHeight: typography.body.lineHeight
   }
 });
-

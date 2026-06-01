@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -25,6 +26,8 @@ import { clearDemoAccessToken, kuliApi, setDemoAccessToken } from './lib/api';
 import { supabase } from './lib/supabase';
 import { runtimeConfig, runtimeReadiness } from './config/runtime';
 import { colors, radii, spacing } from './theme';
+import { BottomTabIcon } from './components/navigation/BottomTabIcon';
+import { ActionSheetCard } from './components/ui/ActionSheetCard';
 import { AppHeader } from './components/ui/AppHeader';
 import { Card as UiCard } from './components/ui/Card';
 import { EmptyState } from './components/ui/EmptyState';
@@ -35,6 +38,8 @@ import { Screen } from './components/ui/Screen';
 import { SecondaryButton } from './components/ui/SecondaryButton';
 import { SectionHeader } from './components/ui/SectionHeader';
 import { StatusBadge } from './components/ui/StatusBadge';
+import { MetricCard } from './components/visual/MetricCard';
+import { RoutePill } from './components/visual/RoutePill';
 
 type Role = 'client' | 'truck_owner' | 'assistant' | 'admin';
 type AccountStatus = 'active' | 'pending_verification' | 'suspended' | 'banned' | 'deleted';
@@ -91,6 +96,7 @@ type QuoteCandidate = {
     slug: string;
   };
   licensePlate: string;
+  photo?: VehiclePhoto;
   distanceKm: number;
   rating: number;
   rankingScore: number;
@@ -277,6 +283,7 @@ type Vehicle = {
   capacityKg?: number;
   capacityCubicMeters?: number;
   description?: string;
+  photo?: VehiclePhoto;
   verificationStatus: 'draft' | 'pending' | 'approved' | 'rejected';
   availabilityStatus: 'offline' | 'online_available' | 'busy_on_job' | 'under_maintenance' | 'suspended';
   rejectionReason?: string;
@@ -290,6 +297,13 @@ type PickedFile = {
   mimeType: string;
   sizeBytes: number;
   source: 'camera' | 'library';
+};
+type VehiclePhoto = {
+  fileId?: string;
+  originalFileName?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  previewUrl?: string;
 };
 
 const queryClient = new QueryClient({
@@ -308,6 +322,46 @@ const roleLabels: Record<Role, string> = {
   truck_owner: 'Truck owner',
   assistant: 'Assistant',
   admin: 'Admin'
+};
+
+const accountStatusLabels: Record<AccountStatus, string> = {
+  active: 'Active',
+  pending_verification: 'Pending',
+  suspended: 'Suspended',
+  banned: 'Blocked',
+  deleted: 'Closed'
+};
+
+const paymentStatusLabels: Record<PaymentRecord['status'], string> = {
+  pending: 'Payment pending',
+  confirmed_by_owner: 'Payment confirmed',
+  disputed: 'In review',
+  resolved: 'Resolved',
+  cancelled: 'Cancelled'
+};
+
+const vehicleVerificationLabels: Record<Vehicle['verificationStatus'], string> = {
+  draft: 'Draft',
+  pending: 'Pending',
+  approved: 'Approved',
+  rejected: 'Rejected'
+};
+
+const vehicleAvailabilityLabels: Record<Vehicle['availabilityStatus'], string> = {
+  offline: 'Offline',
+  online_available: 'Online',
+  busy_on_job: 'Busy',
+  under_maintenance: 'Maintenance',
+  suspended: 'Paused'
+};
+
+const offerStatusLabels: Record<TripOffer['status'], string> = {
+  sent: 'New',
+  viewed: 'Viewed',
+  accepted: 'Accepted',
+  declined: 'Declined',
+  expired: 'Expired',
+  cancelled: 'Cancelled'
 };
 
 const isBlockedStatus = (status: AccountStatus) => ['suspended', 'banned', 'deleted'].includes(status);
@@ -503,7 +557,7 @@ function AuthBrandPanel({ mode }: { mode: AuthMode }) {
       <Text style={styles.authHeroCopy}>
         {mode === 'forgot'
           ? 'Enter your email and Supabase will send a secure password reset link.'
-          : 'Book, verify, accept, and track logistics work with backend-confirmed KULI profiles.'}
+          : 'Book, verify, accept, and track logistics work with your KULI account.'}
       </Text>
       {runtimeConfig.demoAuthEnabled ? <StatusBadge tone="warning">Local demo mode</StatusBadge> : null}
     </View>
@@ -935,12 +989,12 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
 
               <UiCard style={styles.authCard}>
                 <SectionHeader
-                  eyebrow={mode === 'login' ? 'Secure sign in' : 'Public registration'}
+                  eyebrow={mode === 'login' ? 'Secure sign in' : 'Create account'}
                   title={mode === 'login' ? 'Use your KULI account.' : 'Tell us who is moving.'}
                   description={
                     mode === 'login'
-                      ? 'Your role and dashboard are loaded from the backend profile after authentication.'
-                      : 'Clients and truck owners can self-register. Staff accounts stay on the admin dashboard.'
+                      ? 'Sign in to continue to your KULI workspace.'
+                      : 'Create a customer or truck-owner account for the KULI marketplace.'
                   }
                 />
                 {mode === 'register' ? <Field label="Full name" value={fullName} onChangeText={setFullName} placeholder="Abebe Bekele" /> : null}
@@ -1000,8 +1054,12 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
             </>
           )}
 
-          <HealthCard />
-          <RuntimeReadiness />
+          {runtimeConfig.demoAuthEnabled ? (
+            <>
+              <HealthCard />
+              <RuntimeReadiness />
+            </>
+          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -1013,8 +1071,8 @@ function SessionLoadingScreen() {
     <SafeAreaView style={styles.screen}>
       <View style={styles.centered}>
         <ActivityIndicator color={colors.primary} size="large" />
-        <Text style={styles.cardTitle}>Checking your KULI session</Text>
-        <Text style={styles.muted}>Supabase session first, backend profile second.</Text>
+        <Text style={styles.cardTitle}>Opening KULI</Text>
+        <Text style={styles.muted}>Checking your account details.</Text>
       </View>
     </SafeAreaView>
   );
@@ -1027,9 +1085,7 @@ function ForbiddenScreen({ profile, onSignOut }: { profile: UserProfile; onSignO
         <Text style={styles.eyebrow}>Role mismatch</Text>
         <Text style={styles.title}>Use the right workspace.</Text>
         <ShellCard title="Mobile access blocked">
-          <Text style={styles.copy}>
-            {roleLabels[profile.role]} accounts are not mobile marketplace accounts. Use the admin web dashboard for staff workflows.
-          </Text>
+          <Text style={styles.copy}>This account belongs in the web dashboard. Sign out here and continue from the staff workspace.</Text>
           <Pressable accessibilityRole="button" onPress={onSignOut} style={styles.secondaryButton}>
             <Text style={styles.secondaryButtonText}>Sign out</Text>
           </Pressable>
@@ -1045,12 +1101,12 @@ function AccountBlockedScreen({ profile, onSignOut }: { profile: UserProfile; on
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.eyebrow}>Account status</Text>
         <Text style={styles.title}>Your account needs support.</Text>
-        <ShellCard title="Commands are blocked">
+        <ShellCard title="Account paused">
           <View style={styles.cardHeader}>
             <Text style={styles.copy}>{profile.fullName || profile.email}</Text>
-            <StatusPill tone="blocked">{profile.accountStatus}</StatusPill>
+            <StatusPill tone="blocked">{accountStatusLabels[profile.accountStatus]}</StatusPill>
           </View>
-          <Text style={styles.muted}>Authentication can succeed, but KULI blocks business actions for suspended, banned, or deleted accounts.</Text>
+          <Text style={styles.muted}>You can sign in, but KULI actions are paused until support reviews the account.</Text>
           <Pressable accessibilityRole="button" onPress={onSignOut} style={styles.secondaryButton}>
             <Text style={styles.secondaryButtonText}>Sign out</Text>
           </Pressable>
@@ -1096,8 +1152,8 @@ function ProfileRequiredScreen({ session, onAuthenticated, onSignOut }: { sessio
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.eyebrow}>Profile required</Text>
-        <Text style={styles.title}>Finish your public profile.</Text>
-        <Text style={styles.copy}>Supabase authenticated you, but KULI still needs a MongoDB application profile before routing.</Text>
+        <Text style={styles.title}>Finish your profile.</Text>
+        <Text style={styles.copy}>Add the details KULI needs to set up your mobile account.</Text>
         <View style={styles.roleGrid}>
           <RoleOption role="client" selected={role === 'client'} onPress={() => setRole('client')} />
           <RoleOption role="truck_owner" selected={role === 'truck_owner'} onPress={() => setRole('truck_owner')} />
@@ -1119,36 +1175,253 @@ function ProfileRequiredScreen({ session, onAuthenticated, onSignOut }: { sessio
 }
 
 function HomeOverview({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
-  const isClient = profile.role === 'client';
+  const navigation = useNavigation<any>();
+  const queryClient = useQueryClient();
+  const [availabilityPendingId, setAvailabilityPendingId] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const vehiclesQuery = useQuery({
+    queryKey: ['vehicles', 'mine'],
+    queryFn: async () => ((await kuliApi.request('/vehicles/mine')) as ApiEnvelope<Vehicle[]>).data
+  });
+
+  const ownerRequestsQuery = useQuery({
+    queryKey: ['kuli-requests', 'mine', 'owner'],
+    queryFn: async () => ((await kuliApi.request('/kuli-requests/mine')) as ApiEnvelope<KuliRequest[]>).data,
+    refetchInterval: 15000
+  });
+
+  const offersQuery = useQuery({
+    queryKey: ['owner-offers'],
+    queryFn: async () => ((await kuliApi.request('/owner/offers')) as ApiEnvelope<TripOffer[]>).data,
+    refetchInterval: 15000
+  });
+
+  const ratingsQuery = useQuery({
+    queryKey: ['owners', profile.id, 'ratings'],
+    queryFn: async () => ((await kuliApi.request(`/owners/${profile.id}/ratings`)) as ApiEnvelope<RatingRecord[]>).data
+  });
+
+  const vehicles = vehiclesQuery.data ?? [];
+  const requests = ownerRequestsQuery.data ?? [];
+  const offers = offersQuery.data ?? [];
+  const ratings = ratingsQuery.data ?? [];
+  const approvedVehicles = vehicles.filter((vehicle) => vehicle.verificationStatus === 'approved');
+  const pendingVehicles = vehicles.filter((vehicle) => vehicle.verificationStatus === 'pending' || vehicle.verificationStatus === 'draft');
+  const rejectedVehicles = vehicles.filter((vehicle) => vehicle.verificationStatus === 'rejected');
+  const onlineVehicle = approvedVehicles.find((vehicle) => vehicle.availabilityStatus === 'online_available');
+  const activeVehicle = onlineVehicle ?? approvedVehicles[0] ?? vehicles[0];
+  const activeJobs = requests.filter((request) => activeRequestStatuses.includes(request.status) || isPaymentSettlingRequest(request));
+  const completedJobs = requests.filter((request) => request.status === 'completed');
+  const totalEarnings = completedJobs.reduce((sum, request) => sum + Number(request.quoteSnapshot?.totalEstimate ?? request.payment?.amountConfirmed ?? 0), 0);
+  const averageRating = ratings.length ? ratings.reduce((sum, rating) => sum + rating.rating, 0) / ratings.length : 0;
+  const firstName = (profile.fullName || profile.email || 'there').split(' ')[0];
+  const isOnline = Boolean(onlineVehicle);
+  const readyVehicle = onlineVehicle ?? approvedVehicles[0];
+  const primaryJob = activeJobs[0];
+
+  const readiness = (() => {
+    if (isOnline && onlineVehicle) {
+      return {
+        title: 'You are online',
+        detail: `${onlineVehicle.licensePlate} is visible to nearby requests.`,
+        tone: 'success' as const,
+        icon: 'access-point',
+        action: 'Go offline'
+      };
+    }
+
+    if (approvedVehicles.length > 0 && readyVehicle) {
+      return {
+        title: 'Ready for requests?',
+        detail: `${readyVehicle.licensePlate} is approved and can start receiving offers.`,
+        tone: 'dark' as const,
+        icon: 'truck-check-outline',
+        action: 'Go online'
+      };
+    }
+
+    if (pendingVehicles.length > 0) {
+      return {
+        title: 'Verification in progress',
+        detail: 'KULI reviews your documents before your truck can receive offers.',
+        tone: 'warning' as const,
+        icon: 'shield-clock-outline',
+        action: 'Open vehicles'
+      };
+    }
+
+    if (rejectedVehicles.length > 0) {
+      return {
+        title: 'Vehicle needs attention',
+        detail: rejectedVehicles[0]?.rejectionReason || 'Update rejected documents before going online.',
+        tone: 'error' as const,
+        icon: 'shield-alert-outline',
+        action: 'Fix documents'
+      };
+    }
+
+    return {
+      title: 'Add your first truck',
+      detail: 'Register a vehicle and upload documents to start receiving KULI requests.',
+      tone: 'warning' as const,
+      icon: 'truck-plus-outline',
+      action: 'Register vehicle'
+    };
+  })();
+
+  const toggleAvailability = async () => {
+    if (!readyVehicle || readyVehicle.verificationStatus !== 'approved') {
+      navigation.navigate('Vehicles');
+      return;
+    }
+
+    const nextStatus = readyVehicle.availabilityStatus === 'online_available' ? 'offline' : 'online_available';
+    setAvailabilityPendingId(readyVehicle.id);
+    setError('');
+    setMessage('');
+
+    try {
+      await kuliApi.request(`/vehicles/${readyVehicle.id}/availability`, {
+        method: 'PATCH',
+        body: {
+          availabilityStatus: nextStatus,
+          currentLocation:
+            nextStatus === 'online_available'
+              ? {
+                  addressText: 'Manual standby point, Addis Ababa',
+                  source: 'manual_pin',
+                  point: { type: 'Point', coordinates: [38.746, 9.0128] }
+                }
+              : undefined
+        }
+      });
+      await queryClient.invalidateQueries({ queryKey: ['vehicles', 'mine'] });
+      setMessage(nextStatus === 'online_available' ? 'You are online and ready for offers.' : 'You are offline. New offers are paused.');
+    } catch (availabilityError) {
+      setError(getErrorMessage(availabilityError));
+    } finally {
+      setAvailabilityPendingId('');
+    }
+  };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.cardHeader}>
-          <View style={styles.flex}>
-            <Text style={styles.eyebrow}>{isClient ? '/client/home' : '/owner/home'}</Text>
-            <Text style={styles.title}>{isClient ? 'Ready to book with confidence.' : 'Keep your truck ready for work.'}</Text>
-          </View>
-          <StatusPill tone={profile.accountStatus === 'active' ? 'ready' : 'warn'}>{profile.accountStatus}</StatusPill>
+    <Screen contentStyle={styles.ownerHomeContent}>
+      <View style={styles.ownerHomeHeader}>
+        <View style={styles.ownerAvatar}>
+          <Text style={styles.ownerAvatarText}>{(profile.fullName || profile.email || 'K').slice(0, 1).toUpperCase()}</Text>
         </View>
-        <ShellCard title="Authenticated profile">
-          <Text style={styles.copy}>{profile.fullName || profile.email}</Text>
-          <Text style={styles.muted}>{roleLabels[profile.role]} routed from backend `/me`.</Text>
-          <Text style={styles.muted}>{profile.email}</Text>
-          {profile.phone ? <Text style={styles.muted}>{profile.phone}</Text> : null}
-        </ShellCard>
-        <ShellCard title={isClient ? 'Next client workflow' : 'Next owner workflow'}>
-          <Text style={styles.copy}>
-            {isClient
-              ? 'Phase 2 and 3 will add quote creation, nearby candidates, and active request visibility here.'
-              : 'Phase 2 will add vehicle registration, document upload, verification status, and availability prompts here.'}
+        <View style={styles.flex}>
+          <Text style={styles.ownerHeaderKicker}>KULI Driver</Text>
+          <Text style={styles.ownerHeaderTitle}>Ready to drive, {firstName}?</Text>
+          <Text style={styles.ownerHeaderCopy}>Addis Ababa requests appear when an approved vehicle is online.</Text>
+        </View>
+      </View>
+
+      <View style={[styles.ownerReadinessCard, readiness.tone === 'success' && styles.ownerReadinessSuccess, readiness.tone === 'warning' && styles.ownerReadinessWarning, readiness.tone === 'error' && styles.ownerReadinessError]}>
+        <View style={styles.ownerReadinessTop}>
+          <View style={[styles.ownerReadinessIcon, readiness.tone === 'success' && styles.ownerReadinessIconSuccess, readiness.tone === 'warning' && styles.ownerReadinessIconWarning, readiness.tone === 'error' && styles.ownerReadinessIconError]}>
+            <MaterialCommunityIcons name={readiness.icon as never} color={readiness.tone === 'dark' ? colors.card : readiness.tone === 'success' ? colors.success : readiness.tone === 'error' ? colors.error : colors.warning} size={30} />
+          </View>
+          <View style={styles.flex}>
+            <Text style={[styles.ownerReadinessTitle, readiness.tone === 'dark' && styles.ownerTextOnDark]}>{readiness.title}</Text>
+            <Text style={[styles.ownerReadinessCopy, readiness.tone === 'dark' && styles.ownerMutedOnDark]}>{readiness.detail}</Text>
+          </View>
+          <StatusBadge tone={isOnline ? 'success' : approvedVehicles.length ? 'neutral' : readiness.tone === 'error' ? 'error' : 'warning'}>
+            {isOnline ? 'Online' : approvedVehicles.length ? 'Offline' : pendingVehicles.length ? 'Pending' : 'Setup'}
+          </StatusBadge>
+        </View>
+        {activeVehicle ? (
+          <View style={[styles.ownerActiveVehicleStrip, readiness.tone === 'dark' && styles.ownerActiveVehicleStripDark]}>
+            <MaterialCommunityIcons name="truck-outline" color={readiness.tone === 'dark' ? colors.card : colors.black} size={22} />
+            <View style={styles.flex}>
+              <Text style={[styles.ownerVehicleStripTitle, readiness.tone === 'dark' && styles.ownerTextOnDark]}>{activeVehicle.licensePlate}</Text>
+              <Text style={[styles.ownerVehicleStripCopy, readiness.tone === 'dark' && styles.ownerMutedOnDark]}>{activeVehicle.vehicleClassSnapshot?.name || 'Registered truck'} / {activeVehicle.capacityKg ?? 0}kg</Text>
+            </View>
+          </View>
+        ) : null}
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {message ? <Text style={readiness.tone === 'dark' ? styles.ownerSuccessOnDark : styles.noticeText}>{message}</Text> : null}
+        {readyVehicle && readyVehicle.verificationStatus === 'approved' ? (
+          readiness.tone === 'dark' ? (
+            <SecondaryButton
+              disabled={Boolean(availabilityPendingId)}
+              label={availabilityPendingId ? 'Updating...' : readiness.action}
+              loading={Boolean(availabilityPendingId)}
+              onPress={toggleAvailability}
+              style={styles.ownerDarkPrimaryButton}
+            />
+          ) : (
+            <PrimaryButton
+              disabled={Boolean(availabilityPendingId)}
+              label={availabilityPendingId ? 'Updating...' : readiness.action}
+              loading={Boolean(availabilityPendingId)}
+              onPress={toggleAvailability}
+            />
+          )
+        ) : (
+          <PrimaryButton label={readiness.action} onPress={() => navigation.navigate('Vehicles')} />
+        )}
+      </View>
+
+      <View style={styles.ownerMetricGrid}>
+        <MetricCard label="Completed jobs" value={String(completedJobs.length)} detail="All completed trips" style={styles.ownerMetricCard} />
+        <MetricCard label="Earnings" value={`ETB ${totalEarnings.toFixed(0)}`} detail="Confirmed and estimated" tone="dark" style={styles.ownerMetricCard} />
+        <MetricCard label="Rating" value={averageRating ? averageRating.toFixed(1) : '-'} detail={`${ratings.length} review${ratings.length === 1 ? '' : 's'}`} style={styles.ownerMetricCard} />
+        <MetricCard label="Open offers" value={String(offers.length)} detail="Waiting in inbox" tone={offers.length ? 'warning' : 'default'} style={styles.ownerMetricCard} />
+      </View>
+
+      <View style={styles.ownerSectionHeader}>
+        <View style={styles.flex}>
+          <Text style={styles.ownerSectionTitle}>Active job</Text>
+          <Text style={styles.ownerSectionCopy}>{primaryJob ? 'Continue the current request from your offer workspace.' : 'Accepted requests and cash-pending trips appear here.'}</Text>
+        </View>
+        <SecondaryButton label="Offers" onPress={() => navigation.navigate('Offers')} style={styles.ownerSmallButton} />
+      </View>
+
+      {ownerRequestsQuery.isLoading ? <LoadingState title="Loading jobs" message="Checking your active requests." /> : null}
+      {ownerRequestsQuery.isError ? <ErrorState title="Jobs could not load" message={getErrorMessage(ownerRequestsQuery.error)} /> : null}
+      {primaryJob ? (
+        <View style={styles.ownerJobCard}>
+          <View style={styles.ownerJobTop}>
+            <View style={styles.flex}>
+              <Text style={styles.ownerJobCode}>{primaryJob.requestCode}</Text>
+              <Text style={styles.ownerJobRoute}>{primaryJob.pickupLocation?.addressText} to {primaryJob.destinationLocation?.addressText}</Text>
+            </View>
+            <StatusBadge tone={primaryJob.status === 'completed' ? 'warning' : 'success'}>{statusLabels[primaryJob.status]}</StatusBadge>
+          </View>
+          <RoutePill pickup={primaryJob.pickupLocation?.addressText ?? 'Pickup'} destination={primaryJob.destinationLocation?.addressText ?? 'Destination'} />
+          <Text style={styles.ownerJobNext}>Next: open the job to update status, message the customer, or confirm payment when complete.</Text>
+          <PrimaryButton label="Open job" onPress={() => navigation.navigate('Offers')} />
+        </View>
+      ) : (
+        <View style={styles.ownerEmptyCard}>
+          <MaterialCommunityIcons name={vehicles.length ? (approvedVehicles.length ? 'radar' : 'shield-search') : 'truck-plus-outline'} color={colors.black} size={42} />
+          <Text style={styles.ownerEmptyTitle}>
+            {vehicles.length === 0 ? 'Register your first vehicle' : approvedVehicles.length ? 'No active job right now' : 'Verification comes first'}
           </Text>
-        </ShellCard>
-        <Pressable accessibilityRole="button" onPress={onSignOut} style={styles.secondaryButton}>
-          <Text style={styles.secondaryButtonText}>Sign out</Text>
-        </Pressable>
-      </ScrollView>
-    </SafeAreaView>
+          <Text style={styles.ownerEmptyCopy}>
+            {vehicles.length === 0
+              ? 'Add truck details and documents so KULI can verify your vehicle.'
+              : approvedVehicles.length
+                ? 'Stay online to receive first-accept-wins offers from nearby customers.'
+                : 'Upload the required documents. Approved vehicles can then go online.'}
+          </Text>
+          <SecondaryButton label={vehicles.length === 0 || !approvedVehicles.length ? 'Open vehicles' : 'View offers'} onPress={() => navigation.navigate(vehicles.length === 0 || !approvedVehicles.length ? 'Vehicles' : 'Offers')} />
+        </View>
+      )}
+
+      <View style={styles.ownerAccountCard}>
+        <View style={styles.flex}>
+          <Text style={styles.ownerAccountTitle}>Account</Text>
+          <Text style={styles.ownerAccountCopy}>{profile.fullName || profile.email}</Text>
+          {profile.email ? <Text style={styles.ownerAccountMuted}>{profile.email}</Text> : null}
+        </View>
+        <StatusBadge tone={profile.accountStatus === 'active' ? 'success' : 'warning'}>{accountStatusLabels[profile.accountStatus]}</StatusBadge>
+      </View>
+      <SecondaryButton label="Sign out" onPress={onSignOut} />
+    </Screen>
   );
 }
 
@@ -1162,7 +1435,7 @@ function VehicleClassPicker({
   onSelect: (id: string) => void;
 }) {
   return (
-    <View style={styles.roleGrid}>
+    <View style={styles.ownerClassGrid}>
       {vehicleClasses.map((vehicleClass) => {
         const selected = vehicleClass.id === selectedVehicleClassId;
 
@@ -1172,13 +1445,19 @@ function VehicleClassPicker({
             accessibilityState={{ selected }}
             key={vehicleClass.id}
             onPress={() => onSelect(vehicleClass.id)}
-            style={[styles.roleOption, selected && styles.roleOptionSelected]}
+            style={[styles.ownerClassCard, selected && styles.ownerClassCardSelected]}
           >
-            <View style={styles.cardHeader}>
-              <Text style={[styles.roleOptionTitle, selected && styles.roleOptionTitleSelected]}>{vehicleClass.name}</Text>
-              <StatusPill tone={selected ? 'ready' : 'warn'}>{vehicleClass.capacityKg ? `${vehicleClass.capacityKg}kg` : 'Class'}</StatusPill>
+            <View style={[styles.ownerClassIcon, selected && styles.ownerClassIconSelected]}>
+              <MaterialCommunityIcons name="truck-cargo-container" color={selected ? colors.card : colors.black} size={26} />
             </View>
-            <Text style={[styles.roleOptionText, selected && styles.roleOptionTextSelected]}>{vehicleClass.description || 'Truck class for matching and pricing.'}</Text>
+            <View style={styles.flex}>
+              <Text style={[styles.ownerClassTitle, selected && styles.ownerTextOnDark]}>{vehicleClass.name}</Text>
+              <Text style={[styles.ownerClassCopy, selected && styles.ownerMutedOnDark]}>{vehicleClass.description || 'Truck class for matching and pricing.'}</Text>
+              <View style={styles.ownerClassMetaRow}>
+                <Text style={[styles.ownerClassMeta, selected && styles.ownerMutedOnDark]}>{vehicleClass.capacityKg ? `${vehicleClass.capacityKg}kg` : 'Capacity'}</Text>
+                {vehicleClass.capacityCubicMeters ? <Text style={[styles.ownerClassMeta, selected && styles.ownerMutedOnDark]}>{vehicleClass.capacityCubicMeters}m3</Text> : null}
+              </View>
+            </View>
           </Pressable>
         );
       })}
@@ -1188,37 +1467,75 @@ function VehicleClassPicker({
 
 function VehicleCard({
   vehicle,
+  selected,
+  previewUri,
+  onSelect,
   onToggleAvailability
 }: {
   vehicle: Vehicle;
+  selected: boolean;
+  previewUri?: string;
+  onSelect: (vehicle: Vehicle) => void;
   onToggleAvailability: (vehicle: Vehicle) => void;
 }) {
   const canGoOnline = vehicle.verificationStatus === 'approved' && ['offline', 'online_available'].includes(vehicle.availabilityStatus);
   const nextLabel = vehicle.availabilityStatus === 'online_available' ? 'Go offline' : 'Go online';
+  const online = vehicle.availabilityStatus === 'online_available';
+  const blockedReason =
+    vehicle.verificationStatus === 'approved'
+      ? vehicle.availabilityStatus === 'busy_on_job'
+        ? 'This vehicle is assigned to an active job.'
+        : vehicle.availabilityStatus === 'under_maintenance'
+          ? 'Maintenance vehicles cannot receive requests.'
+          : vehicle.availabilityStatus === 'suspended'
+            ? 'Support paused availability for this vehicle.'
+            : ''
+      : vehicle.verificationStatus === 'rejected'
+        ? vehicle.rejectionReason || 'Update rejected documents before this truck can go online.'
+        : 'KULI approval is required before this truck can receive requests.';
 
   return (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
+    <View style={[styles.ownerVehicleCard, selected && styles.ownerVehicleCardSelected]}>
+      <View style={styles.ownerVehicleTop}>
+        <VehicleImageFrame photo={vehicle.photo} previewUri={previewUri} selected={selected} online={online} />
         <View style={styles.flex}>
-          <Text style={styles.cardTitle}>{vehicle.licensePlate}</Text>
-          <Text style={styles.muted}>{vehicle.vehicleClassSnapshot?.name || vehicle.vehicleClassId}</Text>
+          <Text style={styles.ownerVehicleTitle}>{vehicle.licensePlate}</Text>
+          <Text style={styles.ownerVehicleType}>{vehicle.vehicleClassSnapshot?.name || vehicle.vehicleClassId}</Text>
         </View>
-        <StatusPill tone={statusTone(vehicle.verificationStatus)}>{vehicle.verificationStatus}</StatusPill>
+        <StatusBadge tone={vehicle.verificationStatus === 'approved' ? 'success' : vehicle.verificationStatus === 'rejected' ? 'error' : 'warning'}>
+          {vehicleVerificationLabels[vehicle.verificationStatus]}
+        </StatusBadge>
       </View>
-      <View style={styles.cardHeader}>
-        <Text style={styles.muted}>{vehicle.capacityKg ?? 0}kg / {vehicle.capacityCubicMeters ?? 0}m3</Text>
-        <StatusPill tone={statusTone(vehicle.availabilityStatus)}>{vehicle.availabilityStatus}</StatusPill>
+      <View style={styles.ownerVehicleMetricRow}>
+        <View style={styles.ownerVehicleMetric}>
+          <Text style={styles.ownerVehicleMetricValue}>{vehicle.capacityKg ?? 0}kg</Text>
+          <Text style={styles.ownerVehicleMetricLabel}>Capacity</Text>
+        </View>
+        <View style={styles.ownerVehicleMetric}>
+          <Text style={styles.ownerVehicleMetricValue}>{vehicle.capacityCubicMeters ?? 0}m3</Text>
+          <Text style={styles.ownerVehicleMetricLabel}>Volume</Text>
+        </View>
+        <View style={styles.ownerVehicleMetric}>
+          <Text style={styles.ownerVehicleMetricValue}>{online ? 'Online' : 'Offline'}</Text>
+          <Text style={styles.ownerVehicleMetricLabel}>Status</Text>
+        </View>
       </View>
-      {vehicle.rejectionReason ? <Text style={styles.errorText}>{vehicle.rejectionReason}</Text> : null}
-      <Text style={styles.muted}>{vehicle.description || 'No description yet.'}</Text>
-      <Pressable
-        accessibilityRole="button"
-        disabled={!canGoOnline}
-        onPress={() => onToggleAvailability(vehicle)}
-        style={[styles.secondaryButton, !canGoOnline && styles.buttonDisabled]}
-      >
-        <Text style={styles.secondaryButtonText}>{vehicle.verificationStatus === 'approved' ? nextLabel : 'Approval required'}</Text>
-      </Pressable>
+      <Text style={styles.ownerVehicleDescription}>{vehicle.description || 'Add a short description so customers understand what this truck is best for.'}</Text>
+      {blockedReason ? (
+        <View style={styles.ownerVehicleBlockReason}>
+          <MaterialCommunityIcons name="information-outline" color={vehicle.verificationStatus === 'rejected' ? colors.error : colors.warning} size={18} />
+          <Text style={[styles.ownerVehicleBlockText, vehicle.verificationStatus === 'rejected' && styles.ownerVehicleBlockTextError]}>{blockedReason}</Text>
+        </View>
+      ) : null}
+      <View style={styles.ownerVehicleActions}>
+        <SecondaryButton label={selected ? 'Selected' : 'Use this truck'} onPress={() => onSelect(vehicle)} style={styles.ownerVehicleActionButton} />
+        <PrimaryButton
+          disabled={!canGoOnline}
+          label={vehicle.verificationStatus === 'approved' ? nextLabel : 'Approval required'}
+          onPress={() => onToggleAvailability(vehicle)}
+          style={styles.ownerVehicleActionButton}
+        />
+      </View>
     </View>
   );
 }
@@ -1270,49 +1587,13 @@ function DocumentUploadField({
       throw new Error(`Choose a clear ${documentTypes.find((entry) => entry.type === documentType)?.label ?? 'document'} photo first.`);
     }
 
-    const intent = (await kuliApi.request('/files/upload-intent', {
-      method: 'POST',
-      body: {
-        vehicleId: vehicle.id,
-        type: documentType,
-        originalFileName: file.name,
-        mimeType: file.mimeType,
-        sizeBytes: file.sizeBytes
-      }
-    })) as ApiEnvelope<{ file: { id: string }; upload: { url: string; method?: string } }>;
-
-    if (intent.data.upload.url.startsWith('http')) {
-      if (!file.uri) {
-        throw new Error(`Could not read ${file.name} for upload. Choose the file again.`);
-      }
-
-      const fileResponse = await fetch(file.uri);
-      const fileBlob = await fileResponse.blob();
-      const uploadResponse = await fetch(intent.data.upload.url, {
-        method: intent.data.upload.method ?? 'PUT',
-        headers: {
-          'content-type': file.mimeType
-        },
-        body: fileBlob
-      });
-
-      if (!uploadResponse.ok) {
-        throw new Error(`Storage upload failed for ${file.name}.`);
-      }
-    }
-
-    await kuliApi.request(`/files/${intent.data.file.id}/complete`, {
-      method: 'POST',
-      body: {
-        uploadedSizeBytes: file.sizeBytes
-      }
-    });
+    const uploadedFile = await uploadVehicleFile(vehicle.id, documentType, file);
 
     await kuliApi.request(`/vehicles/${vehicle.id}/documents`, {
       method: 'POST',
       body: {
         type: documentType,
-        fileId: intent.data.file.id
+        fileId: uploadedFile.id
       }
     });
 
@@ -1328,7 +1609,7 @@ function DocumentUploadField({
     try {
       await uploadDocument(documentType);
       const label = documentTypes.find((entry) => entry.type === documentType)?.label ?? 'Document';
-      setMessage(`${label} attached for admin review.`);
+      setMessage(`${label} attached for KULI review.`);
       onUploaded();
     } catch (uploadError) {
       setError(getErrorMessage(uploadError));
@@ -1362,7 +1643,7 @@ function DocumentUploadField({
         await uploadDocument(documentType);
       }
 
-      setMessage(`${readyTypes.length} document${readyTypes.length === 1 ? '' : 's'} attached for admin review.`);
+      setMessage(`${readyTypes.length} document${readyTypes.length === 1 ? '' : 's'} attached for KULI review.`);
       onUploaded();
     } catch (uploadError) {
       setError(getErrorMessage(uploadError));
@@ -1373,47 +1654,60 @@ function DocumentUploadField({
   };
 
   return (
-    <ShellCard title="Document upload">
-      <View style={styles.documentUploadHeader}>
+    <View style={styles.ownerVerificationCard}>
+      <View style={styles.ownerVerificationHeader}>
         <View style={styles.flex}>
-          <Text style={styles.muted}>Attach every required vehicle document with a clear image from your library or camera. KULI uses the selected file's real name, MIME type, and size for review metadata.</Text>
-          <Text style={styles.noticeText}>{completedRequiredCount}/{requiredTypes.length} required documents ready</Text>
+          <Text style={styles.ownerSectionTitle}>Verification checklist</Text>
+          <Text style={styles.ownerSectionCopy}>Attach clear document photos from your library or camera. KULI stores upload details for review.</Text>
         </View>
-        <StatusPill tone={completedRequiredCount === requiredTypes.length ? 'ready' : 'warn'}>
-          {completedRequiredCount === requiredTypes.length ? 'Ready' : 'Missing'}
-        </StatusPill>
+        <StatusBadge tone={completedRequiredCount === requiredTypes.length ? 'success' : 'warning'}>
+          {`${completedRequiredCount}/${requiredTypes.length}`}
+        </StatusBadge>
       </View>
       <View style={styles.documentProgressTrack}>
         <View style={[styles.documentProgressFill, { width: `${Math.round((completedRequiredCount / requiredTypes.length) * 100)}%` }]} />
       </View>
-      <View style={styles.roleGrid}>
+      <View style={styles.ownerDocumentList}>
         {documentTypes.map((doc) => {
           const draft = drafts[doc.type];
           const existingDocument = latestDocumentByType[doc.type];
           const uploaded = Boolean(existingDocument);
           const ready = Boolean(draft);
           const pendingThis = pending && (pendingType === doc.type || pendingType === 'all');
+          const rejected = existingDocument?.status === 'rejected';
+          const approved = existingDocument?.status === 'approved';
+          const statusLabel = rejected ? 'Rejected' : approved ? 'Approved' : uploaded ? 'Pending review' : ready ? 'Ready to attach' : doc.required ? 'Missing' : 'Optional';
+          const statusTone = rejected ? 'error' : approved || ready ? 'success' : uploaded || doc.required ? 'warning' : 'neutral';
 
           return (
-            <View key={doc.type} style={[styles.documentUploadCard, uploaded && styles.documentUploadCardUploaded, ready && styles.documentUploadCardReady]}>
-              <View style={styles.cardHeader}>
-                <View style={styles.flex}>
-                  <Text style={styles.cardTitle}>{doc.label}</Text>
-                  <Text style={styles.muted}>{doc.detail}</Text>
+            <View key={doc.type} style={[styles.ownerDocumentCard, uploaded && styles.ownerDocumentCardUploaded, ready && styles.ownerDocumentCardReady, rejected && styles.ownerDocumentCardRejected]}>
+              <View style={styles.ownerDocumentTop}>
+                <View style={[styles.ownerDocumentIcon, approved && styles.ownerDocumentIconApproved, rejected && styles.ownerDocumentIconRejected]}>
+                  <MaterialCommunityIcons
+                    name={(doc.type === 'identity' ? 'card-account-details-outline' : doc.type === 'driver_license' ? 'card-account-details-star-outline' : doc.type === 'vehicle_registration' ? 'file-document-outline' : doc.type === 'ownership_proof' ? 'shield-key-outline' : 'shield-check-outline') as never}
+                    color={approved ? colors.success : rejected ? colors.error : colors.black}
+                    size={24}
+                  />
                 </View>
-                <StatusPill tone={uploaded || ready ? 'ready' : doc.required ? 'blocked' : 'warn'}>
-                  {uploaded ? 'Uploaded' : ready ? 'Ready' : doc.required ? 'Required' : 'Optional'}
-                </StatusPill>
+                <View style={styles.flex}>
+                  <Text style={styles.ownerDocumentTitle}>{doc.label}</Text>
+                  <Text style={styles.ownerDocumentCopy}>{doc.detail}</Text>
+                </View>
+                <StatusBadge tone={statusTone}>{statusLabel}</StatusBadge>
               </View>
-              <View style={styles.documentGuidelineGrid}>
+              <View style={styles.ownerDocumentTips}>
                 {doc.tips.map((tip) => (
-                  <Text key={tip} style={styles.documentGuideline}>- {tip}</Text>
+                  <View key={tip} style={styles.ownerDocumentTip}>
+                    <MaterialCommunityIcons name="check-circle-outline" color={colors.textSecondary} size={15} />
+                    <Text style={styles.ownerDocumentTipText}>{tip}</Text>
+                  </View>
                 ))}
               </View>
               {existingDocument ? (
-                <View style={styles.fileSummary}>
+                <View style={[styles.fileSummary, rejected && styles.ownerDocumentRejectedSummary]}>
                   <Text style={styles.fieldLabel}>Latest upload</Text>
                   <Text style={styles.muted}>{existingDocument.status} / file {existingDocument.fileId.slice(-8)}</Text>
+                  {rejected ? <Text style={styles.errorText}>Upload a clearer replacement for review.</Text> : null}
                 </View>
               ) : null}
               {draft ? (
@@ -1426,34 +1720,30 @@ function DocumentUploadField({
                 label={`${doc.label} file`}
                 value={draft}
                 onChange={(file) => setDraft(doc.type, file)}
-                emptyText={doc.required ? 'Required for admin verification. Use a clear, original document image.' : 'Optional, but useful where an insurance policy is available.'}
+                emptyText={doc.required ? 'Required for KULI verification. Use a clear, original document image.' : 'Optional, but useful where an insurance policy is available.'}
                 emptyTone={doc.required ? 'blocked' : 'warn'}
                 uploadLabel="Upload"
                 takeLabel="Camera"
               />
-              <Pressable
-                accessibilityRole="button"
+              <PrimaryButton
                 disabled={!draft || pendingThis}
+                label={pendingThis ? 'Attaching...' : uploaded ? 'Replace document' : 'Attach document'}
+                loading={pendingThis}
                 onPress={() => submitOne(doc.type)}
-                style={[styles.primaryButton, (!draft || pendingThis) && styles.buttonDisabled]}
-              >
-                <Text style={styles.primaryButtonText}>{pendingThis ? 'Attaching...' : uploaded ? 'Replace document' : 'Attach document'}</Text>
-              </Pressable>
+              />
             </View>
           );
         })}
       </View>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
       {message ? <Text style={styles.noticeText}>{message}</Text> : null}
-      <Pressable
-        accessibilityRole="button"
+      <PrimaryButton
         disabled={pending || readyDraftCount === 0}
+        label={pendingType === 'all' ? 'Submitting...' : `Submit ready documents (${readyDraftCount})`}
+        loading={pendingType === 'all'}
         onPress={submitReadyDocuments}
-        style={[styles.primaryButton, (pending || readyDraftCount === 0) && styles.buttonDisabled]}
-      >
-        <Text style={styles.primaryButtonText}>{pendingType === 'all' ? 'Submitting...' : `Submit ready documents (${readyDraftCount})`}</Text>
-      </Pressable>
-    </ShellCard>
+      />
+    </View>
   );
 }
 
@@ -1464,6 +1754,9 @@ function OwnerVehiclesScreen() {
   const [capacityKg, setCapacityKg] = useState('1200');
   const [capacityCubicMeters, setCapacityCubicMeters] = useState('10');
   const [description, setDescription] = useState('');
+  const [vehicleImage, setVehicleImage] = useState<PickedFile | null>(null);
+  const [vehiclePhotoPreviews, setVehiclePhotoPreviews] = useState<Record<string, string>>({});
+  const [showAddVehicleForm, setShowAddVehicleForm] = useState(false);
   const [activeVehicleId, setActiveVehicleId] = useState('');
   const [activeVehiclePendingId, setActiveVehiclePendingId] = useState('');
   const [pending, setPending] = useState(false);
@@ -1482,6 +1775,11 @@ function OwnerVehiclesScreen() {
   const vehicleClasses = vehicleClassesQuery.data ?? [];
   const vehicles = vehiclesQuery.data ?? [];
   const activeVehicle = vehicles.find((vehicle) => vehicle.id === activeVehicleId) ?? vehicles[0];
+  const shouldShowAddVehicleForm = showAddVehicleForm || vehicles.length === 0;
+  const approvedCount = vehicles.filter((vehicle) => vehicle.verificationStatus === 'approved').length;
+  const onlineCount = vehicles.filter((vehicle) => vehicle.availabilityStatus === 'online_available').length;
+  const pendingCount = vehicles.filter((vehicle) => vehicle.verificationStatus === 'pending' || vehicle.verificationStatus === 'draft').length;
+  const selectedClass = vehicleClasses.find((vehicleClass) => vehicleClass.id === vehicleClassId);
 
   useEffect(() => {
     if (!vehicleClassId && vehicleClasses[0]) {
@@ -1490,6 +1788,19 @@ function OwnerVehiclesScreen() {
       setCapacityCubicMeters(String(vehicleClasses[0].capacityCubicMeters ?? 10));
     }
   }, [vehicleClassId, vehicleClasses]);
+
+  const selectVehicleClass = (nextVehicleClassId: string) => {
+    const nextClass = vehicleClasses.find((vehicleClass) => vehicleClass.id === nextVehicleClassId);
+    setVehicleClassId(nextVehicleClassId);
+
+    if (nextClass?.capacityKg) {
+      setCapacityKg(String(nextClass.capacityKg));
+    }
+
+    if (nextClass?.capacityCubicMeters) {
+      setCapacityCubicMeters(String(nextClass.capacityCubicMeters));
+    }
+  };
 
   const createVehicle = async () => {
     const parsedKg = Number(capacityKg);
@@ -1527,16 +1838,39 @@ function OwnerVehiclesScreen() {
       })) as ApiEnvelope<Vehicle>;
 
       setActiveVehicleId(result.data.id);
+      if (vehicleImage) {
+        const uploadedPhoto = await uploadVehicleFile(result.data.id, 'vehicle_photo', vehicleImage);
+        await kuliApi.request(`/vehicles/${result.data.id}`, {
+          method: 'PATCH',
+          body: {
+            photo: {
+              fileId: uploadedPhoto.id,
+              previewUrl: vehicleImage.uri
+            }
+          }
+        });
+
+        if (vehicleImage.uri) {
+          setVehiclePhotoPreviews((current) => ({
+            ...current,
+            [result.data.id]: vehicleImage.uri ?? ''
+          }));
+        }
+      }
+
       await kuliApi.request('/owners/me/active-vehicle', {
         method: 'PATCH',
         body: {
           activeVehicleId: result.data.id
         }
       });
-      setNotice('Vehicle submitted for admin verification.');
+      setNotice('Vehicle submitted for KULI verification.');
       setLicensePlate('');
       setDescription('');
+      setVehicleImage(null);
+      setShowAddVehicleForm(false);
       await queryClient.invalidateQueries({ queryKey: ['vehicles', 'mine'] });
+      await vehiclesQuery.refetch();
     } catch (createError) {
       setError(getErrorMessage(createError));
     } finally {
@@ -1557,7 +1891,7 @@ function OwnerVehiclesScreen() {
         }
       });
       setActiveVehicleId(vehicleId);
-      setNotice('Active vehicle updated for owner workflows.');
+      setNotice('Active vehicle updated.');
     } catch (activeVehicleError) {
       setError(getErrorMessage(activeVehicleError));
     } finally {
@@ -1590,48 +1924,122 @@ function OwnerVehiclesScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>/owner/vehicles</Text>
-        <Text style={styles.title}>Register, document, and verify your truck.</Text>
-        <Text style={styles.copy}>Approved vehicles can go online. Pending or rejected vehicles stay out of matching.</Text>
+    <Screen contentStyle={styles.ownerVehiclesContent}>
+      <View style={styles.ownerVehiclesHero}>
+        <View style={styles.flex}>
+          <Text style={styles.ownerHeaderKicker}>Fleet readiness</Text>
+          <Text style={styles.ownerVehiclesTitle}>Vehicles</Text>
+          <Text style={styles.ownerVehiclesCopy}>Approved vehicles can go online. Pending or rejected vehicles stay out of matching until review is complete.</Text>
+        </View>
+        <View style={styles.ownerVehiclesHeroIcon}>
+          <MaterialCommunityIcons name="truck-delivery-outline" color={colors.card} size={34} />
+        </View>
+      </View>
 
-        <ShellCard title="Vehicle registration">
-          {vehicleClassesQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(vehicleClassesQuery.error)}</Text> : null}
-          <VehicleClassPicker vehicleClasses={vehicleClasses} selectedVehicleClassId={vehicleClassId} onSelect={setVehicleClassId} />
-          <Field label="License plate" value={licensePlate} onChangeText={setLicensePlate} placeholder="AA-12345" />
-          <Field label="Capacity kg" value={capacityKg} onChangeText={setCapacityKg} placeholder="1200" keyboardType="phone-pad" />
-          <Field label="Volume m3" value={capacityCubicMeters} onChangeText={setCapacityCubicMeters} placeholder="10" keyboardType="phone-pad" />
-          <Field label="Vehicle notes" value={description} onChangeText={setDescription} placeholder="Clean covered truck, good for furniture" />
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          {notice ? <Text style={styles.noticeText}>{notice}</Text> : null}
-          <Pressable accessibilityRole="button" disabled={pending} onPress={createVehicle} style={[styles.primaryButton, pending && styles.buttonDisabled]}>
-            <Text style={styles.primaryButtonText}>{pending ? 'Submitting...' : 'Submit vehicle'}</Text>
-          </Pressable>
-        </ShellCard>
+      <View style={styles.ownerMetricGrid}>
+        <MetricCard label="Fleet" value={String(vehicles.length)} detail="Registered trucks" tone="dark" style={styles.ownerMetricCard} />
+        <MetricCard label="Approved" value={String(approvedCount)} detail="Can receive offers" tone={approvedCount ? 'success' : 'default'} style={styles.ownerMetricCard} />
+        <MetricCard label="Online" value={String(onlineCount)} detail="Visible now" tone={onlineCount ? 'success' : 'default'} style={styles.ownerMetricCard} />
+        <MetricCard label="In review" value={String(pendingCount)} detail="Waiting approval" tone={pendingCount ? 'warning' : 'default'} style={styles.ownerMetricCard} />
+      </View>
 
-        {activeVehicle ? (
-          <DocumentUploadField
-            vehicle={activeVehicle}
-            onUploaded={() => {
-              queryClient.invalidateQueries({ queryKey: ['vehicles', 'mine'] });
-            }}
-          />
-        ) : null}
-
-        <ShellCard title="My vehicles">
-          {vehiclesQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(vehiclesQuery.error)}</Text> : null}
-          {vehicles.length === 0 ? <Text style={styles.muted}>No vehicles submitted yet.</Text> : null}
-          <View style={styles.roleGrid}>
-            {vehicles.map((vehicle) => (
-              <Pressable accessibilityRole="button" disabled={activeVehiclePendingId === vehicle.id} key={vehicle.id} onPress={() => selectActiveVehicle(vehicle.id)}>
-                <VehicleCard vehicle={vehicle} onToggleAvailability={toggleAvailability} />
-              </Pressable>
-            ))}
+      {shouldShowAddVehicleForm ? (
+        <View style={styles.ownerVehiclePanel}>
+          <View style={styles.ownerSectionHeader}>
+            <View style={styles.flex}>
+              <Text style={styles.ownerSectionTitle}>Add a vehicle</Text>
+              <Text style={styles.ownerSectionCopy}>Step 1: choose a class. Step 2: add details and photo. Step 3: complete verification.</Text>
+            </View>
+            {selectedClass ? <StatusBadge tone="neutral">{selectedClass.name}</StatusBadge> : null}
           </View>
-        </ShellCard>
-      </ScrollView>
-    </SafeAreaView>
+          {vehicleClassesQuery.isLoading ? <LoadingState title="Loading vehicle classes" message="Preparing truck options." /> : null}
+          {vehicleClassesQuery.isError ? <ErrorState title="Vehicle classes unavailable" message={getErrorMessage(vehicleClassesQuery.error)} /> : null}
+          <VehicleClassPicker vehicleClasses={vehicleClasses} selectedVehicleClassId={vehicleClassId} onSelect={selectVehicleClass} />
+          <View style={styles.ownerFormCard}>
+            <Field label="License plate" value={licensePlate} onChangeText={setLicensePlate} placeholder="AA-12345" />
+            <View style={styles.ownerFormTwoColumn}>
+              <View style={styles.flex}>
+                <Field label="Capacity kg" value={capacityKg} onChangeText={setCapacityKg} placeholder="1200" keyboardType="phone-pad" />
+              </View>
+              <View style={styles.flex}>
+                <Field label="Volume m3" value={capacityCubicMeters} onChangeText={setCapacityCubicMeters} placeholder="10" keyboardType="phone-pad" />
+              </View>
+            </View>
+            <Field label="Vehicle notes" value={description} onChangeText={setDescription} placeholder="Clean covered truck, good for furniture" />
+            <View style={styles.vehiclePhotoPickerCard}>
+              <VehicleImageFrame previewUri={vehicleImage?.uri} size="large" />
+              <View style={styles.flex}>
+                <Text style={styles.ownerSectionTitle}>Vehicle photo</Text>
+                <Text style={styles.ownerSectionCopy}>Add a clear side or front photo so customers recognize the truck. Existing vehicles use a default image until a photo is added.</Text>
+              </View>
+            </View>
+            <FilePickerField
+              label="Vehicle image"
+              value={vehicleImage}
+              onChange={setVehicleImage}
+              emptyText="Optional for now, recommended before demo."
+              emptyTone="warn"
+              uploadLabel="Upload"
+              takeLabel="Camera"
+            />
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {notice ? <Text style={styles.noticeText}>{notice}</Text> : null}
+            <PrimaryButton disabled={pending} loading={pending} label={pending ? 'Submitting...' : 'Submit for verification'} onPress={createVehicle} />
+          </View>
+        </View>
+      ) : (
+        <View style={styles.ownerVehiclePanel}>
+          <View style={styles.ownerSectionHeader}>
+            <View style={styles.flex}>
+              <Text style={styles.ownerSectionTitle}>Vehicle verification</Text>
+              <Text style={styles.ownerSectionCopy}>Your selected vehicle is ready for document upload. Add another truck only when you need a separate vehicle profile.</Text>
+            </View>
+            <SecondaryButton label="Add another" onPress={() => setShowAddVehicleForm(true)} style={styles.ownerSmallButton} />
+          </View>
+        </View>
+      )}
+
+      {activeVehicle ? (
+        <DocumentUploadField
+          vehicle={activeVehicle}
+          onUploaded={() => {
+            queryClient.invalidateQueries({ queryKey: ['vehicles', 'mine'] });
+          }}
+        />
+      ) : null}
+
+      <View style={styles.ownerVehiclePanel}>
+        <View style={styles.ownerSectionHeader}>
+          <View style={styles.flex}>
+            <Text style={styles.ownerSectionTitle}>My vehicles</Text>
+            <Text style={styles.ownerSectionCopy}>Choose a truck to manage documents or availability.</Text>
+          </View>
+          <SecondaryButton label="Refresh" onPress={() => vehiclesQuery.refetch()} style={styles.ownerSmallButton} />
+        </View>
+        {vehiclesQuery.isLoading ? <LoadingState title="Loading vehicles" message="Checking fleet records." /> : null}
+        {vehiclesQuery.isError ? <ErrorState title="Vehicles could not load" message={getErrorMessage(vehiclesQuery.error)} /> : null}
+        {!vehiclesQuery.isLoading && vehicles.length === 0 ? (
+          <View style={styles.ownerEmptyCard}>
+            <MaterialCommunityIcons name="truck-plus-outline" color={colors.black} size={44} />
+            <Text style={styles.ownerEmptyTitle}>No vehicles yet</Text>
+            <Text style={styles.ownerEmptyCopy}>Submit your first truck above, then attach identity, license, registration, ownership, and insurance documents.</Text>
+          </View>
+        ) : null}
+        <View style={styles.ownerVehicleList}>
+          {vehicles.map((vehicle) => (
+            <VehicleCard
+              key={vehicle.id}
+              vehicle={vehicle}
+              previewUri={vehiclePhotoPreviews[vehicle.id]}
+              selected={activeVehicle?.id === vehicle.id}
+              onSelect={(nextVehicle) => selectActiveVehicle(nextVehicle.id)}
+              onToggleAvailability={toggleAvailability}
+            />
+          ))}
+        </View>
+      </View>
+
+    </Screen>
   );
 }
 
@@ -1747,7 +2155,7 @@ const cancellationReasons = [
   { key: 'safety_or_contact_issue', label: 'Safety or contact issue', detail: 'Something feels wrong or I cannot reach the owner.' }
 ];
 const statusLabels: Record<KuliStatus, string> = {
-  pending: 'Waiting',
+  pending: 'Pending',
   accepted: 'Accepted',
   en_route_to_pickup: 'En route',
   arrived_at_pickup: 'Arrived',
@@ -1787,6 +2195,79 @@ const normalizePickedAsset = (asset: ImagePicker.ImagePickerAsset, source: Picke
   };
 };
 
+const canPreviewVehiclePhoto = (uri?: string) => Boolean(uri && /^(https?:|file:|blob:|data:)/.test(uri));
+
+async function uploadVehicleFile(vehicleId: string, type: string, file: PickedFile) {
+  const intent = (await kuliApi.request('/files/upload-intent', {
+    method: 'POST',
+    body: {
+      vehicleId,
+      type,
+      originalFileName: file.name,
+      mimeType: file.mimeType,
+      sizeBytes: file.sizeBytes
+    }
+  })) as ApiEnvelope<{ file: { id: string; originalFileName?: string; mimeType?: string; sizeBytes?: number }; upload: { url: string; method?: string } }>;
+
+  if (intent.data.upload.url.startsWith('http')) {
+    if (!file.uri) {
+      throw new Error(`Could not read ${file.name} for upload. Choose the file again.`);
+    }
+
+    const fileResponse = await fetch(file.uri);
+    const fileBlob = await fileResponse.blob();
+    const uploadResponse = await fetch(intent.data.upload.url, {
+      method: intent.data.upload.method ?? 'PUT',
+      headers: {
+        'content-type': file.mimeType
+      },
+      body: fileBlob
+    });
+
+    if (!uploadResponse.ok) {
+      throw new Error(`Storage upload failed for ${file.name}.`);
+    }
+  }
+
+  await kuliApi.request(`/files/${intent.data.file.id}/complete`, {
+    method: 'POST',
+    body: {
+      uploadedSizeBytes: file.sizeBytes
+    }
+  });
+
+  return intent.data.file;
+}
+
+function VehicleImageFrame({
+  photo,
+  previewUri,
+  selected = false,
+  online = false,
+  size = 'regular'
+}: {
+  photo?: VehiclePhoto;
+  previewUri?: string;
+  selected?: boolean;
+  online?: boolean;
+  size?: 'regular' | 'large';
+}) {
+  const uri = previewUri ?? photo?.previewUrl;
+  const showImage = canPreviewVehiclePhoto(uri);
+
+  return (
+    <View style={[styles.vehicleImageFrame, size === 'large' && styles.vehicleImageFrameLarge, selected && styles.vehicleImageFrameSelected, online && styles.vehicleImageFrameOnline]}>
+      {showImage ? (
+        <Image source={{ uri }} style={styles.vehicleImage} resizeMode="cover" />
+      ) : (
+        <View style={styles.vehicleDefaultArt}>
+          <MaterialCommunityIcons name="truck-outline" color={selected ? colors.card : colors.black} size={size === 'large' ? 38 : 28} />
+        </View>
+      )}
+    </View>
+  );
+}
+
 function PriceLine({ label, value, currency }: { label: string; value: number; currency: string }) {
   return (
     <View style={styles.priceLine}>
@@ -1814,6 +2295,7 @@ function CandidateCard({ candidate, capacityLabel }: { candidate: QuoteCandidate
   return (
     <View style={styles.candidateCard}>
       <View style={styles.cardHeader}>
+        <VehicleImageFrame photo={candidate.photo} />
         <View style={styles.flex}>
           <Text style={styles.cardTitle}>{candidate.licensePlate}</Text>
           <Text style={styles.muted}>{candidate.vehicleClassSnapshot?.name || 'Available vehicle'}</Text>
@@ -1824,7 +2306,7 @@ function CandidateCard({ candidate, capacityLabel }: { candidate: QuoteCandidate
       <View style={styles.metricGrid}>
         <View style={styles.metricBox}>
           <Text style={styles.metricValue}>{candidate.rating.toFixed(1)}</Text>
-          <Text style={styles.metricLabel}>owner rating</Text>
+          <Text style={styles.metricLabel}>rating</Text>
         </View>
         <View style={styles.metricBox}>
           <Text style={styles.metricValue}>{candidate.rankingScore.toFixed(1)}</Text>
@@ -2049,12 +2531,14 @@ function RouteMapPreview({
   pickup,
   destination,
   truck,
-  statusLabel
+  statusLabel,
+  style
 }: {
   pickup: MapLocationInput;
   destination: MapLocationInput;
   truck?: QuoteLocation;
   statusLabel?: string;
+  style?: StyleProp<ViewStyle>;
 }) {
   const [zoom, setZoom] = useState(12);
   const [expanded, setExpanded] = useState(false);
@@ -2077,7 +2561,7 @@ function RouteMapPreview({
   };
 
   const renderMap = (fullScreen = false) => (
-    <View style={[styles.mapPreview, fullScreen && styles.mapPreviewFullScreen]}>
+    <View style={[styles.mapPreview, !fullScreen && style, fullScreen && styles.mapPreviewFullScreen]}>
       <Image source={{ uri: googleMapUrl || fallbackTileUrl }} resizeMode="cover" style={styles.mapTile} />
       <View style={styles.mapScrim} />
       <View style={styles.mapGridLineVertical} />
@@ -2136,6 +2620,71 @@ function RouteMapPreview({
   );
 }
 
+type RequestFlowStep = 'route' | 'load' | 'quote' | 'sent';
+
+const requestFlowSteps: Array<{ key: RequestFlowStep; label: string }> = [
+  { key: 'route', label: 'Route' },
+  { key: 'load', label: 'Truck' },
+  { key: 'quote', label: 'Quote' },
+  { key: 'sent', label: 'Sent' }
+];
+
+const truckIconForClass = (vehicleClass: VehicleClass) => {
+  const source = `${vehicleClass.slug ?? ''} ${vehicleClass.name}`.toLowerCase();
+
+  if (source.includes('large') || source.includes('heavy') || source.includes('cargo')) {
+    return 'truck-cargo-container';
+  }
+
+  if (source.includes('medium') || source.includes('box')) {
+    return 'truck';
+  }
+
+  if (source.includes('pickup') || source.includes('small')) {
+    return 'truck-pickup';
+  }
+
+  return 'truck-outline';
+};
+
+const loadIconForType = (key: string) => {
+  if (key.includes('household')) {
+    return 'home-city-outline';
+  }
+
+  if (key.includes('furniture')) {
+    return 'sofa-outline';
+  }
+
+  if (key.includes('appliance')) {
+    return 'fridge-outline';
+  }
+
+  return 'storefront-outline';
+};
+
+function RequestStepIndicator({ currentStep }: { currentStep: RequestFlowStep }) {
+  const currentIndex = requestFlowSteps.findIndex((step) => step.key === currentStep);
+
+  return (
+    <View style={styles.requestStepRail}>
+      {requestFlowSteps.map((step, index) => {
+        const active = step.key === currentStep;
+        const complete = index < currentIndex;
+
+        return (
+          <View key={step.key} style={styles.requestStepItem}>
+            <View style={[styles.requestStepDot, complete && styles.requestStepDotComplete, active && styles.requestStepDotActive]}>
+              <Text style={[styles.requestStepDotText, (active || complete) && styles.requestStepDotTextActive]}>{index + 1}</Text>
+            </View>
+            <Text style={[styles.requestStepLabel, active && styles.requestStepLabelActive]}>{step.label}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 function RequestTruckTypeCards({
   vehicleClasses,
   selectedVehicleClassId,
@@ -2160,6 +2709,9 @@ function RequestTruckTypeCards({
             onPress={() => onSelect(vehicleClass.id)}
             style={[styles.requestTruckCard, selected && styles.requestTruckCardSelected]}
           >
+            <View style={[styles.requestTruckIcon, selected && styles.requestTruckIconSelected]}>
+              <MaterialCommunityIcons name={truckIconForClass(vehicleClass) as never} color={selected ? colors.card : colors.black} size={30} />
+            </View>
             <View style={styles.cardHeader}>
               <View style={styles.flex}>
                 <Text style={[styles.requestTruckTitle, selected && styles.requestTextOnDark]}>{vehicleClass.name}</Text>
@@ -2205,6 +2757,7 @@ function RequestCandidateOption({
       style={[styles.requestCandidateCard, selected && styles.requestCandidateCardSelected]}
     >
       <View style={styles.cardHeader}>
+        <VehicleImageFrame photo={candidate.photo} selected={selected} size="large" />
         <View style={styles.flex}>
           <Text style={[styles.requestCandidateTitle, selected && styles.requestTextOnDark]}>{candidate.licensePlate}</Text>
           <Text style={[styles.requestCandidateSubtitle, selected && styles.requestMutedOnDark]}>{candidate.vehicleClassSnapshot?.name || 'Available vehicle'}</Text>
@@ -2234,6 +2787,7 @@ function RequestCandidateOption({
 
 function ClientQuoteScreen() {
   const queryClient = useQueryClient();
+  const navigation = useNavigation();
   const [vehicleClassId, setVehicleClassId] = useState('');
   const [pickupLocationKey, setPickupLocationKey] = useState('bole-medhanialem');
   const [pickupAddressNote, setPickupAddressNote] = useState('');
@@ -2259,6 +2813,7 @@ function ClientQuoteScreen() {
   const [pending, setPending] = useState(false);
   const [requestPending, setRequestPending] = useState(false);
   const [error, setError] = useState('');
+  const [requestStep, setRequestStep] = useState<RequestFlowStep>('route');
 
   const vehicleClassesQuery = useQuery({
     queryKey: ['vehicle-classes'],
@@ -2337,6 +2892,7 @@ function ClientQuoteScreen() {
       setQuote(result.data);
       setQuoteInput(nextQuoteInput);
       setSelectedVehicleIds(result.data.candidates.slice(0, 3).map((candidate) => candidate.vehicleId));
+      setRequestStep('quote');
     } catch (quoteError) {
       setError(getErrorMessage(quoteError));
     } finally {
@@ -2368,6 +2924,7 @@ function ClientQuoteScreen() {
       })) as ApiEnvelope<RequestCreateResult>;
 
       setRequestResult(result.data);
+      setRequestStep('sent');
       await queryClient.invalidateQueries({ queryKey: ['kuli-requests', 'mine'] });
     } catch (requestError) {
       setError(getErrorMessage(requestError));
@@ -2377,239 +2934,274 @@ function ClientQuoteScreen() {
   };
 
   const snapshot = quote?.quoteSnapshot;
+  const routeSummaryPickup = formatLocationAddress(pickupOption);
+  const routeSummaryDestination = formatLocationAddress(destinationOption);
+
+  const setStep = (step: RequestFlowStep) => {
+    setError('');
+    setRequestStep(step);
+  };
+
+  const continueToTruckAndLoad = () => {
+    if (pickupLocationKey === destinationLocationKey) {
+      setError('Choose different pickup and drop-off areas.');
+      return;
+    }
+
+    setStep('load');
+  };
+
+  const goToHome = () => {
+    (navigation as { navigate: (screen: string) => void }).navigate('Home');
+  };
 
   return (
-    <Screen contentStyle={styles.requestContent}>
-      <AppHeader
-        eyebrow="Request"
-        title="Book a truck."
-        subtitle="Choose a route, load, truck type, and quote before owners receive the request."
-      />
-
-      <UiCard style={styles.requestSection}>
-        <SectionHeader
-          eyebrow="Route"
-          title="Where should the truck go?"
-          description="Pick familiar Addis Ababa areas and add building or landmark notes for the owner."
-          action={<StatusBadge tone="dark">Addis Ababa</StatusBadge>}
-        />
-        <RouteMapPreview pickup={pickupOption} destination={destinationOption} />
-        <View style={styles.requestLocationStack}>
-          <LocationDropdown
-            label="Pickup area"
-            selectedKey={pickupLocationKey}
-            avoidKey={destinationLocationKey}
-            onSelect={(option) => {
-              setPickupLocationKey(option.key);
-              setPickupLon(option.lon);
-              setPickupLat(option.lat);
-            }}
+    <Screen padded={false} contentStyle={styles.requestFlowContent}>
+      <View style={styles.requestMapStage}>
+        <RouteMapPreview pickup={pickupOption} destination={destinationOption} style={styles.requestHeroMap} />
+        <View style={styles.requestFloatingHeader}>
+          <AppHeader
+            eyebrow="KULI Request"
+            title="Plan your move."
+            subtitle="Static route preview with Addis Ababa area selection."
+            dark
+            boxed
+            trailing={<StatusBadge tone="warning">{formatPickupWindow(pickupDateKey, pickupTime)}</StatusBadge>}
           />
-          <Field label="Pickup note" value={pickupAddressNote} onChangeText={setPickupAddressNote} placeholder="Building, gate, floor, or nearby landmark" />
-          <LocationDropdown
-            label="Drop-off area"
-            selectedKey={destinationLocationKey}
-            avoidKey={pickupLocationKey}
-            onSelect={(option) => {
-              setDestinationLocationKey(option.key);
-              setDestinationLon(option.lon);
-              setDestinationLat(option.lat);
-            }}
-          />
-          <Field label="Drop-off note" value={destinationAddressNote} onChangeText={setDestinationAddressNote} placeholder="Building, gate, floor, or nearby landmark" />
         </View>
-        <SecondaryButton
-          label={showManualCoordinates ? 'Hide pin details' : 'Adjust map pin'}
-          onPress={() => setShowManualCoordinates((value) => !value)}
-        />
-        {showManualCoordinates ? (
-          <View style={styles.requestManualPanel}>
-            <Text style={styles.muted}>Fine tune generated coordinates only when the selected area is not close enough.</Text>
-            <View style={styles.inlineFields}>
-              <Field containerStyle={styles.inlineField} label="Pickup lon" value={pickupLon} onChangeText={setPickupLon} placeholder="38.7903" keyboardType="decimal-pad" />
-              <Field containerStyle={styles.inlineField} label="Pickup lat" value={pickupLat} onChangeText={setPickupLat} placeholder="8.9806" keyboardType="decimal-pad" />
-            </View>
-            <View style={styles.inlineFields}>
-              <Field containerStyle={styles.inlineField} label="Drop-off lon" value={destinationLon} onChangeText={setDestinationLon} placeholder="38.7578" keyboardType="decimal-pad" />
-              <Field containerStyle={styles.inlineField} label="Drop-off lat" value={destinationLat} onChangeText={setDestinationLat} placeholder="9.0350" keyboardType="decimal-pad" />
-            </View>
-          </View>
-        ) : null}
-      </UiCard>
+      </View>
 
-      <UiCard style={styles.requestSection}>
-        <SectionHeader
-          eyebrow="Truck type"
-          title="Choose the right size."
-          description="Vehicle classes come from the backend, so pricing and matching stay consistent."
-        />
-        {vehicleClassesQuery.isLoading ? (
-          <LoadingState title="Loading truck types" message="Checking approved KULI vehicle classes." />
-        ) : vehicleClassesQuery.isError ? (
-          <ErrorState title="Could not load truck types" message={getErrorMessage(vehicleClassesQuery.error)} />
-        ) : vehicleClasses.length === 0 ? (
-          <EmptyState title="No truck types available" message="Ask an administrator to create vehicle classes before requesting a truck." />
-        ) : (
-          <RequestTruckTypeCards vehicleClasses={vehicleClasses} selectedVehicleClassId={vehicleClassId} onSelect={setVehicleClassId} />
-        )}
-      </UiCard>
+      <ActionSheetCard style={styles.requestFlowSheet}>
+        <RequestStepIndicator currentStep={requestStep} />
+        {error ? <ErrorState title="Request needs attention" message={error} /> : null}
 
-      <UiCard style={styles.requestSection}>
-        <SectionHeader
-          eyebrow="Load details"
-          title="What are you moving?"
-          description="These details help KULI calculate a fair quote and rank nearby trucks."
-        />
-        <View style={styles.requestLoadGrid}>
-          {loadTypeOptions.map((option) => {
-            const selected = itemType === option.key;
-
-            return (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-                key={option.key}
-                onPress={() => setItemType(option.key)}
-                style={[styles.requestLoadOption, selected && styles.requestLoadOptionSelected]}
-              >
-                <Text style={[styles.requestLoadTitle, selected && styles.requestTextOnDark]}>{option.label}</Text>
-                <Text style={[styles.requestLoadDetail, selected && styles.requestMutedOnDark]}>{option.detail}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-        <View style={styles.inlineFields}>
-          <Field containerStyle={styles.inlineField} label="Weight kg" value={estimatedWeightKg} onChangeText={setEstimatedWeightKg} placeholder="800" keyboardType="numeric" />
-          <Field containerStyle={styles.inlineField} label="Volume m3" value={estimatedVolumeCubicMeters} onChangeText={setEstimatedVolumeCubicMeters} placeholder="8" keyboardType="decimal-pad" />
-        </View>
-        <Pressable
-          accessibilityRole="switch"
-          accessibilityState={{ checked: loadingAssistanceRequested }}
-          onPress={() => setLoadingAssistanceRequested((value) => !value)}
-          style={[styles.requestSwitchRow, loadingAssistanceRequested && styles.requestSwitchRowActive]}
-        >
-          <View style={styles.flex}>
-            <Text style={[styles.requestSwitchText, loadingAssistanceRequested && styles.requestSwitchTextActive]}>Loading help</Text>
-            <Text style={styles.muted}>Owner should expect help loading or unloading.</Text>
-          </View>
-          <StatusBadge tone={loadingAssistanceRequested ? 'success' : 'warning'}>{loadingAssistanceRequested ? 'Yes' : 'No'}</StatusBadge>
-        </Pressable>
-        <Field label="Special handling" value={specialHandlingInstructions} onChangeText={setSpecialHandlingInstructions} placeholder="Fragile wardrobe, narrow stairs" />
-        <Field label="Tip ETB" value={tip} onChangeText={setTip} placeholder="0" keyboardType="numeric" />
-      </UiCard>
-
-      <UiCard style={styles.requestSection}>
-        <SectionHeader
-          eyebrow="Schedule"
-          title="When should pickup happen?"
-          description="Choose a pickup window owners can plan around."
-          action={<StatusBadge tone="warning">{formatPickupWindow(pickupDateKey, pickupTime)}</StatusBadge>}
-        />
-        <PickupSchedulePicker
-          dateKey={pickupDateKey}
-          time={pickupTime}
-          onChange={(next) => {
-            if (next.dateKey) {
-              setPickupDateKey(next.dateKey);
-            }
-
-            if (next.time) {
-              setPickupTime(next.time);
-            }
-          }}
-        />
-      </UiCard>
-
-      {error ? <ErrorState title="Request needs attention" message={error} /> : null}
-      <PrimaryButton label="Get quote" loading={pending} disabled={vehicleClasses.length === 0} onPress={submitQuote} />
-      {pending ? <LoadingState title="Calculating quote" message="Checking route distance, pricing, and nearby approved trucks." /> : null}
-
-      {quote && snapshot ? (
-        <UiCard style={styles.requestSection}>
-          <SectionHeader
-            eyebrow="Quote"
-            title="Review your estimate."
-            description="Confirm the estimate before selected owners receive the request."
-            action={<StatusBadge tone={quote.search.noResults ? 'warning' : 'success'}>{`${quote.search.radiusKmUsed}km radius`}</StatusBadge>}
-          />
-          <View style={styles.requestQuoteHero}>
-            <Text style={styles.requestQuoteLabel}>Total estimate</Text>
-            <Text style={styles.requestQuoteTotal}>{snapshot.currency} {snapshot.totalEstimate.toFixed(2)}</Text>
-            <Text style={styles.requestQuoteMeta}>{quote.route.distanceKm.toFixed(2)}km / about {Math.round(quote.route.etaMinutes)} min / pricing v{snapshot.pricingRuleVersion}</Text>
-          </View>
-          {quote.search.expanded ? <StatusBadge tone="warning">Search expanded</StatusBadge> : null}
-          <View style={styles.priceBox}>
-            <PriceLine label="Base fare" value={snapshot.baseFare} currency={snapshot.currency} />
-            <PriceLine label="Distance" value={snapshot.distanceCharge} currency={snapshot.currency} />
-            <PriceLine label="Time" value={snapshot.durationCharge} currency={snapshot.currency} />
-            <PriceLine label="Load adjustment" value={snapshot.loadAdjustment} currency={snapshot.currency} />
-            <PriceLine label="Fuel surcharge" value={snapshot.fuelSurcharge} currency={snapshot.currency} />
-            <PriceLine label="Tip" value={snapshot.tip} currency={snapshot.currency} />
-          </View>
-          <View style={styles.requestPaymentNote}>
-            <Text style={styles.noticeText}>Payment is handled after delivery in the current KULI flow. Keep final payment coordination inside the trip chat.</Text>
-          </View>
-        </UiCard>
-      ) : null}
-
-      {quote && snapshot ? (
-        <UiCard style={styles.requestSection}>
-          <SectionHeader
-            eyebrow="Dispatch"
-            title="Nearby candidates."
-            description="Select one or more trucks. The first owner to accept gets the trip and other offers close automatically."
-          />
-          {quote.candidates.length === 0 ? (
-            <EmptyState
-              title="No nearby approved trucks yet"
-              message="Try a smaller load, another truck type, or a different pickup area after more owners come online."
-              action={<SecondaryButton label="Adjust request" onPress={() => setQuote(null)} />}
+        {requestStep === 'route' ? (
+          <>
+            <SectionHeader
+              eyebrow="Step 1"
+              title="Set your route."
+              description="Choose pickup and drop-off areas. You can fine tune map pins when needed."
+              action={<StatusBadge tone="dark">Addis Ababa</StatusBadge>}
             />
-          ) : (
-            <>
-              <View style={styles.requestCandidateList}>
-                {quote.candidates.map((candidate) => (
-                  <RequestCandidateOption
-                    key={candidate.vehicleId}
-                    candidate={candidate}
-                    capacityLabel={selectedCapacityLabel}
-                    selected={selectedVehicleIds.includes(candidate.vehicleId)}
-                    onPress={() => toggleCandidateSelection(candidate.vehicleId)}
-                  />
-                ))}
-              </View>
-              <Text style={styles.muted}>{selectedVehicleIds.length} selected for dispatch. Owners receive first-accept-wins offers.</Text>
-              <PrimaryButton
-                label="Send KULI request"
-                loading={requestPending}
-                disabled={selectedVehicleIds.length === 0}
-                onPress={createRequest}
-              />
-            </>
-          )}
-        </UiCard>
-      ) : null}
-
-      {requestResult ? (
-        <UiCard style={styles.requestSection}>
-          <SectionHeader
-            eyebrow="Waiting for owner"
-            title={requestResult.request.requestCode}
-            description={`${requestResult.offers.length} offer${requestResult.offers.length === 1 ? '' : 's'} sent`}
-            action={<StatusBadge tone={statusTone(requestResult.request.status) === 'ready' ? 'success' : statusTone(requestResult.request.status) === 'blocked' ? 'error' : 'warning'}>{requestResult.request.status}</StatusBadge>}
-          />
-          <View style={styles.requestWaitingPanel}>
-            <View style={styles.flex}>
-              <Text style={styles.fieldLabel}>Offer expiry</Text>
-              <Text style={styles.muted}>
-                {requestResult.waitingState?.expiresAt ? new Date(requestResult.waitingState.expiresAt).toLocaleTimeString() : 'Soon'}
-              </Text>
+            <RoutePill pickup={routeSummaryPickup} destination={routeSummaryDestination} />
+            <View style={styles.requestSuggestionRow}>
+              {addisLocationOptions.slice(0, 6).map((option) => (
+                <Pressable
+                  accessibilityRole="button"
+                  key={option.key}
+                  onPress={() => {
+                    setPickupLocationKey(option.key);
+                    setPickupLon(option.lon);
+                    setPickupLat(option.lat);
+                  }}
+                  style={[styles.requestSuggestionChip, pickupLocationKey === option.key && styles.requestSuggestionChipActive]}
+                >
+                  <Text style={[styles.requestSuggestionText, pickupLocationKey === option.key && styles.requestSuggestionTextActive]}>{option.label}</Text>
+                </Pressable>
+              ))}
             </View>
-            <StatusBadge tone="warning">Pending</StatusBadge>
-          </View>
-          <Text style={styles.noticeText}>Follow or cancel this request from Home while it is still cancellable. Once a truck accepts, other offers are released automatically.</Text>
-        </UiCard>
-      ) : null}
+            <LocationDropdown
+              label="Pickup area"
+              selectedKey={pickupLocationKey}
+              avoidKey={destinationLocationKey}
+              onSelect={(option) => {
+                setPickupLocationKey(option.key);
+                setPickupLon(option.lon);
+                setPickupLat(option.lat);
+              }}
+            />
+            <Field label="Pickup note" value={pickupAddressNote} onChangeText={setPickupAddressNote} placeholder="Building, gate, floor, or nearby landmark" />
+            <LocationDropdown
+              label="Drop-off area"
+              selectedKey={destinationLocationKey}
+              avoidKey={pickupLocationKey}
+              onSelect={(option) => {
+                setDestinationLocationKey(option.key);
+                setDestinationLon(option.lon);
+                setDestinationLat(option.lat);
+              }}
+            />
+            <Field label="Drop-off note" value={destinationAddressNote} onChangeText={setDestinationAddressNote} placeholder="Building, gate, floor, or nearby landmark" />
+            <SecondaryButton
+              label={showManualCoordinates ? 'Hide pin details' : 'Adjust map pin'}
+              onPress={() => setShowManualCoordinates((value) => !value)}
+            />
+            {showManualCoordinates ? (
+              <View style={styles.requestManualPanel}>
+                <Text style={styles.muted}>Fine tune generated coordinates only when the selected area is not close enough.</Text>
+                <View style={styles.inlineFields}>
+                  <Field containerStyle={styles.inlineField} label="Pickup lon" value={pickupLon} onChangeText={setPickupLon} placeholder="38.7903" keyboardType="decimal-pad" />
+                  <Field containerStyle={styles.inlineField} label="Pickup lat" value={pickupLat} onChangeText={setPickupLat} placeholder="8.9806" keyboardType="decimal-pad" />
+                </View>
+                <View style={styles.inlineFields}>
+                  <Field containerStyle={styles.inlineField} label="Drop-off lon" value={destinationLon} onChangeText={setDestinationLon} placeholder="38.7578" keyboardType="decimal-pad" />
+                  <Field containerStyle={styles.inlineField} label="Drop-off lat" value={destinationLat} onChangeText={setDestinationLat} placeholder="9.0350" keyboardType="decimal-pad" />
+                </View>
+              </View>
+            ) : null}
+            <PrimaryButton label="Continue" onPress={continueToTruckAndLoad} />
+          </>
+        ) : null}
+
+        {requestStep === 'load' ? (
+          <>
+            <SectionHeader
+              eyebrow="Step 2"
+              title="Truck and load."
+              description="Pick a truck class, describe the load, then get your quote."
+            />
+            {vehicleClassesQuery.isLoading ? (
+              <LoadingState title="Loading truck types" message="Checking approved KULI vehicle classes." />
+            ) : vehicleClassesQuery.isError ? (
+              <ErrorState title="Could not load truck types" message={getErrorMessage(vehicleClassesQuery.error)} />
+            ) : vehicleClasses.length === 0 ? (
+              <EmptyState title="No truck types available" message="KULI needs at least one active truck type before requests can be priced." />
+            ) : (
+              <RequestTruckTypeCards vehicleClasses={vehicleClasses} selectedVehicleClassId={vehicleClassId} onSelect={setVehicleClassId} />
+            )}
+            <View style={styles.requestLoadGrid}>
+              {loadTypeOptions.map((option) => {
+                const selected = itemType === option.key;
+
+                return (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    key={option.key}
+                    onPress={() => setItemType(option.key)}
+                    style={[styles.requestLoadOption, selected && styles.requestLoadOptionSelected]}
+                  >
+                    <View style={[styles.requestLoadIcon, selected && styles.requestLoadIconSelected]}>
+                      <MaterialCommunityIcons name={loadIconForType(option.key) as never} color={selected ? colors.card : colors.black} size={24} />
+                    </View>
+                    <Text style={[styles.requestLoadTitle, selected && styles.requestTextOnDark]}>{option.label}</Text>
+                    <Text style={[styles.requestLoadDetail, selected && styles.requestMutedOnDark]}>{option.detail}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <View style={styles.inlineFields}>
+              <Field containerStyle={styles.inlineField} label="Weight kg" value={estimatedWeightKg} onChangeText={setEstimatedWeightKg} placeholder="800" keyboardType="numeric" />
+              <Field containerStyle={styles.inlineField} label="Volume m3" value={estimatedVolumeCubicMeters} onChangeText={setEstimatedVolumeCubicMeters} placeholder="8" keyboardType="decimal-pad" />
+            </View>
+            <PickupSchedulePicker
+              dateKey={pickupDateKey}
+              time={pickupTime}
+              onChange={(next) => {
+                if (next.dateKey) {
+                  setPickupDateKey(next.dateKey);
+                }
+
+                if (next.time) {
+                  setPickupTime(next.time);
+                }
+              }}
+            />
+            <Pressable
+              accessibilityRole="switch"
+              accessibilityState={{ checked: loadingAssistanceRequested }}
+              onPress={() => setLoadingAssistanceRequested((value) => !value)}
+              style={[styles.requestSwitchRow, loadingAssistanceRequested && styles.requestSwitchRowActive]}
+            >
+              <View style={styles.flex}>
+                <Text style={[styles.requestSwitchText, loadingAssistanceRequested && styles.requestSwitchTextActive]}>Loading help</Text>
+                <Text style={styles.muted}>Add loading or unloading help to this request.</Text>
+              </View>
+              <StatusBadge tone={loadingAssistanceRequested ? 'success' : 'warning'}>{loadingAssistanceRequested ? 'Yes' : 'No'}</StatusBadge>
+            </Pressable>
+            <Field label="Handling notes" value={specialHandlingInstructions} onChangeText={setSpecialHandlingInstructions} placeholder="Fragile wardrobe, narrow stairs" />
+            <Field label="Tip ETB" value={tip} onChangeText={setTip} placeholder="0" keyboardType="numeric" />
+            <View style={styles.actionRow}>
+              <SecondaryButton label="Back" onPress={() => setStep('route')} style={styles.actionButton} />
+              <PrimaryButton label="Get quote" loading={pending} disabled={vehicleClasses.length === 0} onPress={submitQuote} style={styles.actionButton} />
+            </View>
+            {pending ? <LoadingState title="Calculating quote" message="Checking route distance, pricing, and nearby approved trucks." /> : null}
+          </>
+        ) : null}
+
+        {requestStep === 'quote' && quote && snapshot ? (
+          <>
+            <SectionHeader
+              eyebrow="Step 3"
+              title="Confirm your quote."
+              description="Review ETB pricing, route, and nearby candidates before dispatch."
+              action={<StatusBadge tone={quote.search.noResults ? 'warning' : 'success'}>{`${quote.search.radiusKmUsed}km radius`}</StatusBadge>}
+            />
+            <View style={styles.requestCheckoutHero}>
+              <Text style={styles.requestQuoteLabel}>Total estimate</Text>
+              <Text style={styles.requestQuoteTotal}>{snapshot.currency} {snapshot.totalEstimate.toFixed(2)}</Text>
+              <Text style={styles.requestQuoteMeta}>{quote.route.distanceKm.toFixed(2)}km / about {Math.round(quote.route.etaMinutes)} min / {selectedVehicleClass?.name ?? quote.requestedVehicleClass.name}</Text>
+            </View>
+            <RoutePill pickup={routeSummaryPickup} destination={routeSummaryDestination} />
+            <View style={styles.requestMetricGrid}>
+              <MetricCard label="truck type" value={selectedVehicleClass?.name ?? quote.requestedVehicleClass.name} />
+              <MetricCard label="payment" value="Cash" detail="Pay after delivery" tone="warning" />
+            </View>
+            {quote.search.expanded ? <StatusBadge tone="warning">Search expanded</StatusBadge> : null}
+            <View style={styles.priceBox}>
+              <PriceLine label="Base fare" value={snapshot.baseFare} currency={snapshot.currency} />
+              <PriceLine label="Distance" value={snapshot.distanceCharge} currency={snapshot.currency} />
+              <PriceLine label="Time" value={snapshot.durationCharge} currency={snapshot.currency} />
+              <PriceLine label="Load adjustment" value={snapshot.loadAdjustment} currency={snapshot.currency} />
+              <PriceLine label="Fuel surcharge" value={snapshot.fuelSurcharge} currency={snapshot.currency} />
+              <PriceLine label="Tip" value={snapshot.tip} currency={snapshot.currency} />
+            </View>
+            <View style={styles.requestPaymentNote}>
+              <Text style={styles.noticeText}>Payment is handled after delivery in the current KULI flow. Keep final payment coordination inside the trip chat.</Text>
+            </View>
+            <SectionHeader title="Nearby verified trucks" description="Select one or more. The first truck to accept gets the trip." />
+            {quote.candidates.length === 0 ? (
+              <EmptyState
+                title="No nearby approved trucks yet"
+                message="Try a smaller load, another truck type, or a different pickup area when more trucks are online."
+                action={<SecondaryButton label="Adjust request" onPress={() => setStep('load')} />}
+              />
+            ) : (
+              <>
+                <View style={styles.requestCandidateList}>
+                  {quote.candidates.map((candidate) => (
+                    <RequestCandidateOption
+                      key={candidate.vehicleId}
+                      candidate={candidate}
+                      capacityLabel={selectedCapacityLabel}
+                      selected={selectedVehicleIds.includes(candidate.vehicleId)}
+                      onPress={() => toggleCandidateSelection(candidate.vehicleId)}
+                    />
+                  ))}
+                </View>
+                <Text style={styles.muted}>{selectedVehicleIds.length} selected. KULI will send the request to those trucks.</Text>
+              </>
+            )}
+            <View style={styles.actionRow}>
+              <SecondaryButton label="Edit" onPress={() => setStep('load')} style={styles.actionButton} />
+              <PrimaryButton label="Send request" loading={requestPending} disabled={selectedVehicleIds.length === 0} onPress={createRequest} style={styles.actionButton} />
+            </View>
+          </>
+        ) : null}
+
+        {requestStep === 'quote' && !quote ? (
+          <EmptyState title="No quote yet" message="Add truck and load details, then generate a quote before dispatch." action={<PrimaryButton label="Build quote" onPress={() => setStep('load')} />} />
+        ) : null}
+
+        {requestStep === 'sent' && requestResult ? (
+          <>
+            <DispatchSearchPanel request={requestResult.request} />
+            <View style={styles.requestWaitingPanel}>
+              <View style={styles.flex}>
+                <Text style={styles.fieldLabel}>Offer expiry</Text>
+                <Text style={styles.muted}>
+                  {requestResult.waitingState?.expiresAt ? new Date(requestResult.waitingState.expiresAt).toLocaleTimeString() : 'Soon'}
+                </Text>
+              </View>
+              <StatusBadge tone="warning">Pending</StatusBadge>
+            </View>
+            <View style={styles.actionRow}>
+              <SecondaryButton label="Review quote" onPress={() => setStep('quote')} style={styles.actionButton} />
+              <PrimaryButton label="Go to Home" onPress={goToHome} style={styles.actionButton} />
+            </View>
+          </>
+        ) : null}
+      </ActionSheetCard>
     </Screen>
   );
 }
@@ -2645,8 +3237,8 @@ function RequestSummaryCard({
           <Text style={styles.metricLabel}>offers</Text>
         </View>
       </View>
-      {request.status === 'pending' ? <Text style={styles.noticeText}>Waiting for an owner to accept. The first accepted truck gets the trip, and all other open offers close automatically.</Text> : null}
-      {request.status === 'accepted' ? <Text style={styles.noticeText}>A truck owner accepted. Other offers are closed, the truck is assigned, and messages stay attached to this request.</Text> : null}
+      {request.status === 'pending' ? <Text style={styles.noticeText}>Waiting for a truck to accept. The first accepted truck gets the trip, and all other open offers close automatically.</Text> : null}
+      {request.status === 'accepted' ? <Text style={styles.noticeText}>Your truck accepted. Other offers are closed, the truck is assigned, and messages stay attached to this request.</Text> : null}
       {isPaymentSettlingRequest(request) ? <Text style={styles.noticeText}>Payment is still open. Keep any final cash/payment coordination in chat until it is confirmed.</Text> : null}
       {children}
       <Pressable
@@ -2705,7 +3297,7 @@ function TripTimeline({ requestId }: { requestId: string }) {
       </View>
       {eventsQuery.isLoading ? <LoadingState title="Loading timeline" message="Checking the latest trip status events." /> : null}
       {eventsQuery.isError ? <ErrorState title="Could not refresh timeline" message={getErrorMessage(eventsQuery.error)} /> : null}
-      {events.length === 0 && !eventsQuery.isLoading ? <EmptyState title="No status events yet" message="The acceptance event appears after the owner accepts." /> : null}
+      {events.length === 0 && !eventsQuery.isLoading ? <EmptyState title="No status updates yet" message="Updates appear after a truck accepts the request." /> : null}
       <View style={styles.timelineList}>
         {events.map((event, index) => (
           <TimelineEventRow event={event} isLast={index === events.length - 1} key={event.id} />
@@ -2722,7 +3314,7 @@ function ArchivedMessagePanel({ request }: { request: KuliRequest }) {
         <Text style={styles.trackingPanelTitle}>Messages archived</Text>
         <StatusBadge tone="error">{statusLabels[request.status]}</StatusBadge>
       </View>
-      <Text style={styles.muted}>Trip messaging is archived after cancellation or timeout. Use History or support actions for any follow-up.</Text>
+      <Text style={styles.muted}>Trip messaging is archived after cancellation or timeout. Use Activity or support actions for any follow-up.</Text>
     </View>
   );
 }
@@ -2848,7 +3440,7 @@ function OwnerStatusControls({
   const [error, setError] = useState('');
   const nextStatus = request.status === 'accepted' ? 'en_route_to_pickup' : ownerForwardStatuses[ownerForwardStatuses.indexOf(request.status) + 1];
   const canAdvance = Boolean(nextStatus) && !terminalRequestStatuses.includes(request.status);
-  const nextStatusActionLabel = request.status === 'accepted' ? 'Start moving' : nextStatus ? statusLabels[nextStatus] : 'No next step';
+  const nextStatusActionLabel = ownerNextStatusLabel(request.status);
 
   const updateStatus = async (status: KuliStatus, reason = `owner_${status}`) => {
     setPendingStatus(status);
@@ -2874,31 +3466,33 @@ function OwnerStatusControls({
   };
 
   return (
-    <View style={styles.subsection}>
-      <Text style={styles.fieldLabel}>Owner trip controls</Text>
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-      <View style={styles.actionRow}>
-        <Pressable
-          accessibilityRole="button"
-          disabled={!canAdvance || Boolean(pendingStatus)}
-          onPress={() => {
-            if (nextStatus) {
-              updateStatus(nextStatus);
-            }
-          }}
-          style={[styles.primaryButton, styles.actionButton, (!canAdvance || Boolean(pendingStatus)) && styles.buttonDisabled]}
-        >
-          <Text style={styles.primaryButtonText}>{pendingStatus ? 'Updating...' : nextStatusActionLabel}</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          disabled={terminalRequestStatuses.includes(request.status) || Boolean(pendingStatus)}
-          onPress={() => updateStatus('cancelled', 'owner_cancelled')}
-          style={[styles.secondaryButton, styles.actionButton, (terminalRequestStatuses.includes(request.status) || Boolean(pendingStatus)) && styles.buttonDisabled]}
-        >
-          <Text style={styles.secondaryButtonText}>Cancel trip</Text>
-        </Pressable>
+    <View style={styles.ownerControlPanel}>
+      <View style={styles.ownerControlHeader}>
+        <View style={styles.ownerControlIcon}>
+          <MaterialCommunityIcons name="steering" color={colors.card} size={24} />
+        </View>
+        <View style={styles.flex}>
+          <Text style={styles.ownerControlTitle}>Job controls</Text>
+          <Text style={styles.ownerControlCopy}>{ownerNextStepCopy(request.status)}</Text>
+        </View>
       </View>
+      {error ? <ErrorState title="Status update failed" message={error} /> : null}
+      <PrimaryButton
+        disabled={!canAdvance || Boolean(pendingStatus)}
+        label={pendingStatus ? 'Updating...' : nextStatusActionLabel}
+        loading={Boolean(pendingStatus)}
+        onPress={() => {
+          if (nextStatus) {
+            updateStatus(nextStatus);
+          }
+        }}
+      />
+      <SecondaryButton
+        disabled={terminalRequestStatuses.includes(request.status) || Boolean(pendingStatus)}
+        label="Cancel job"
+        onPress={() => updateStatus('cancelled', 'owner_cancelled')}
+        tone="danger"
+      />
     </View>
   );
 }
@@ -2928,7 +3522,7 @@ function ActiveTripWorkspace({
           statusLabel={request.status === 'completed' ? request.payment?.status ?? 'payment pending' : statusLabels[request.status]}
         />
       </View>
-      <ActiveTripSummary request={request} />
+      <ActiveTripSummary request={request} ownerView={ownerControls} />
       {paymentSettling ? (
         <View style={styles.requestPaymentNote}>
           <Text style={styles.noticeText}>Trip is complete, but this chat stays open until the cash/manual payment is confirmed or resolved.</Text>
@@ -3016,10 +3610,10 @@ function ClientCancelDialog({
 type BadgeTone = 'success' | 'warning' | 'error' | 'neutral' | 'dark';
 
 const clientServiceOptions = [
-  { key: 'house_move', title: 'House move', detail: 'Full relocation support', symbol: 'H' },
-  { key: 'furniture_delivery', title: 'Furniture delivery', detail: 'Sofas, beds, tables', symbol: 'F' },
-  { key: 'appliance_transport', title: 'Appliance transport', detail: 'Large item handling', symbol: 'A' },
-  { key: 'business_goods', title: 'Business goods', detail: 'Commercial logistics', symbol: 'B' }
+  { key: 'house_move', title: 'House move', detail: 'Apartments and room moves', icon: 'home-city-outline' },
+  { key: 'furniture_delivery', title: 'Furniture delivery', detail: 'Sofas, beds, office sets', icon: 'sofa-outline' },
+  { key: 'appliance_transport', title: 'Appliance transport', detail: 'Fridges, washers, cookers', icon: 'fridge-outline' },
+  { key: 'business_goods', title: 'Business goods', detail: 'Shop stock and packages', icon: 'package-variant-closed' }
 ];
 
 const badgeToneForStatus = (status: string): BadgeTone => {
@@ -3044,20 +3638,100 @@ const requestRouteLabel = (request: KuliRequest) =>
 
 const formatRequestSchedule = (request: KuliRequest) => request.requestedPickupTime || 'Pickup time pending';
 
+const shortAreaLabel = (address?: string) => {
+  if (!address) {
+    return 'Addis Ababa';
+  }
+
+  return address.split('/')[0]?.split(',')[0]?.trim() || address;
+};
+
+const offerExpiryLabel = (expiresAt?: string) => {
+  if (!expiresAt) {
+    return 'Expires soon';
+  }
+
+  const expiry = new Date(expiresAt);
+  const diffMs = expiry.getTime() - Date.now();
+
+  if (Number.isNaN(expiry.getTime())) {
+    return 'Expires soon';
+  }
+
+  if (diffMs <= 0) {
+    return 'Expiring now';
+  }
+
+  const minutes = Math.floor(diffMs / 60000);
+  const seconds = Math.max(0, Math.floor((diffMs % 60000) / 1000));
+
+  if (minutes <= 0) {
+    return `${seconds}s left`;
+  }
+
+  return `${minutes}m ${seconds}s left`;
+};
+
+const loadSummaryLabel = (request?: KuliRequest) => {
+  const load = request?.loadDetails;
+
+  if (!load) {
+    return 'General load';
+  }
+
+  return [
+    load.itemType?.replace(/_/g, ' ') || 'General load',
+    load.estimatedWeightKg ? `${load.estimatedWeightKg}kg` : '',
+    load.estimatedVolumeCubicMeters ? `${load.estimatedVolumeCubicMeters}m3` : ''
+  ].filter(Boolean).join(' / ');
+};
+
+const ownerNextStatusLabel = (status: KuliStatus) => {
+  const nextStatus = status === 'accepted' ? 'en_route_to_pickup' : ownerForwardStatuses[ownerForwardStatuses.indexOf(status) + 1];
+
+  const labels: Partial<Record<KuliStatus, string>> = {
+    en_route_to_pickup: 'Start heading to pickup',
+    arrived_at_pickup: 'I have arrived',
+    loading: 'Start loading',
+    in_transit: 'Start trip',
+    unloading: 'Start unloading',
+    completed: 'Complete job'
+  };
+
+  return nextStatus ? labels[nextStatus] ?? statusLabels[nextStatus] : 'No next step';
+};
+
+const ownerNextStepCopy = (status: KuliStatus) => {
+  const copy: Record<KuliStatus, string> = {
+    pending: 'This request is waiting for an owner to accept.',
+    accepted: 'Head to the pickup when you are ready.',
+    en_route_to_pickup: 'Mark arrival when you reach the pickup point.',
+    arrived_at_pickup: 'Coordinate loading details with the customer in chat.',
+    loading: 'Start the trip once the load is secured.',
+    in_transit: 'Keep status updates moving as the delivery progresses.',
+    unloading: 'Complete the job after unloading is finished.',
+    completed: 'Confirm cash payment from Earnings when the customer has paid.',
+    cancelled: 'This job is cancelled and archived.',
+    timed_out: 'This request expired before acceptance.'
+  };
+
+  return copy[status];
+};
+
 const activeTrackingStatuses: KuliStatus[] = ['accepted', 'en_route_to_pickup', 'arrived_at_pickup', 'loading', 'in_transit', 'unloading', 'completed'];
 
 const nextStepForRequest = (status: KuliStatus) => {
   const nextStepByStatus: Record<KuliStatus, string> = {
-    pending: 'Waiting for a verified truck owner to accept.',
-    accepted: 'Owner accepted. Watch status updates and coordinate pickup details in chat.',
-    en_route_to_pickup: 'Truck is marked en route to pickup. This is status-based tracking, not live GPS.',
+    pending: 'Waiting for a verified truck to accept.',
+    accepted: 'Your truck accepted. Watch status updates and coordinate pickup details in chat.',
+    en_route_to_pickup: 'Truck is marked en route to pickup. Live GPS is not shown.',
     arrived_at_pickup: 'Truck is marked arrived. Confirm gate, floor, or loading details in chat.',
     loading: 'Loading is in progress. Keep fragile or access notes in chat.',
     in_transit: 'Items are marked in transit. Follow status updates until arrival.',
     unloading: 'Unloading is in progress. Confirm final delivery details before payment.',
-    completed: 'Trip is complete. Payment and trust actions are available from History.',
+    completed: 'Trip is complete. Payment and trust actions are available from Activity.',
     cancelled: 'This request was cancelled and archived.',
-    timed_out: 'No owner accepted in time. Start a new request when you are ready.'
+    timed_out: 'No truck accepted in time. Start a new request when you are ready.'
   };
 
   return nextStepByStatus[status];
@@ -3096,11 +3770,11 @@ const greetingForNow = () => {
   return 'Good evening';
 };
 
-function ClientServiceTile({ title, detail, symbol, onPress }: { title: string; detail: string; symbol: string; onPress: () => void }) {
+function ClientServiceTile({ title, detail, icon, onPress }: { title: string; detail: string; icon: string; onPress: () => void }) {
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={styles.serviceTile}>
       <View style={styles.serviceIcon}>
-        <Text style={styles.serviceIconText}>{symbol}</Text>
+        <MaterialCommunityIcons name={icon as never} color={colors.black} size={26} />
       </View>
       <Text style={styles.serviceTitle}>{title}</Text>
       <Text style={styles.serviceDetail}>{detail}</Text>
@@ -3112,7 +3786,7 @@ function DispatchSearchPanel({ request }: { request: KuliRequest }) {
   const offerCount = request.offers?.length ?? 0;
   const steps = [
     { key: 'sent', label: 'Request sent', detail: request.requestCode },
-    { key: 'notified', label: 'Owners notified', detail: `${offerCount} offer${offerCount === 1 ? '' : 's'} open` },
+    { key: 'notified', label: 'Trucks notified', detail: `${offerCount} offer${offerCount === 1 ? '' : 's'} open` },
     { key: 'waiting', label: 'Waiting for acceptance', detail: 'First accepted truck wins the trip' }
   ];
 
@@ -3122,7 +3796,7 @@ function DispatchSearchPanel({ request }: { request: KuliRequest }) {
         <Text style={styles.dispatchPulseText}>...</Text>
       </View>
       <Text style={styles.dispatchTitle}>Finding nearby verified trucks</Text>
-      <Text style={styles.dispatchCopy}>KULI sent this request to selected owners. Tracking begins after backend-confirmed acceptance.</Text>
+      <Text style={styles.dispatchCopy}>KULI sent this request to the selected trucks. Tracking begins after one accepts.</Text>
       <View style={styles.dispatchSummaryRow}>
         <View style={styles.dispatchSummaryItem}>
           <Text style={styles.dispatchSummaryValue}>{requestEstimateLabel(request)}</Text>
@@ -3146,7 +3820,7 @@ function DispatchSearchPanel({ request }: { request: KuliRequest }) {
           </View>
         ))}
       </View>
-      <Text style={styles.noticeText}>You can cancel while this request is waiting. If no owner accepts, create a new request with adjusted details.</Text>
+      <Text style={styles.noticeText}>You can cancel while this request is waiting. If no truck accepts, create a new request with adjusted details.</Text>
     </View>
   );
 }
@@ -3172,11 +3846,13 @@ function TrackingStatusStrip({ status }: { status: KuliStatus }) {
   );
 }
 
-function ActiveTripSummary({ request }: { request: KuliRequest }) {
+function ActiveTripSummary({ request, ownerView = false }: { request: KuliRequest; ownerView?: boolean }) {
   return (
-    <View style={styles.activeTripSheet}>
+    <View style={[styles.activeTripSheet, ownerView && styles.ownerActiveJobSheet]}>
+      {ownerView ? <View style={styles.ownerJobHandle} /> : null}
       <View style={styles.cardHeader}>
         <View style={styles.flex}>
+          <Text style={styles.ownerActiveJobEyebrow}>{ownerView ? 'Active job' : 'Active move'}</Text>
           <Text style={styles.activeTripTitle}>{request.requestCode}</Text>
           <Text style={styles.dashboardRoute}>{requestRouteLabel(request)}</Text>
         </View>
@@ -3189,18 +3865,29 @@ function ActiveTripSummary({ request }: { request: KuliRequest }) {
           <Text style={styles.dashboardMetricLabel}>estimate</Text>
         </View>
         <View style={styles.dashboardMetric}>
-          <Text style={styles.dashboardMetricValue}>{request.selectedVehicleId ? request.selectedVehicleId.slice(-6).toUpperCase() : 'Pending'}</Text>
-          <Text style={styles.dashboardMetricLabel}>vehicle</Text>
+          <Text style={styles.dashboardMetricValue}>{ownerView ? 'Cash' : request.selectedVehicleId ? request.selectedVehicleId.slice(-6).toUpperCase() : 'Pending'}</Text>
+          <Text style={styles.dashboardMetricLabel}>{ownerView ? 'payment' : 'vehicle'}</Text>
         </View>
       </View>
+      {ownerView ? (
+        <View style={styles.ownerJobContactCard}>
+          <View style={styles.ownerJobContactIcon}>
+            <MaterialCommunityIcons name="account-outline" color={colors.black} size={24} />
+          </View>
+          <View style={styles.flex}>
+            <Text style={styles.ownerJobContactTitle}>KULI customer</Text>
+            <Text style={styles.ownerJobContactCopy}>Use trip chat for pickup, loading, and delivery details.</Text>
+          </View>
+        </View>
+      ) : null}
       <View style={styles.activeNextStep}>
-        <Text style={styles.fieldLabel}>Next expected step</Text>
-        <Text style={styles.muted}>{nextStepForRequest(request.status)}</Text>
+        <Text style={styles.fieldLabel}>{ownerView ? 'Next driver action' : 'Next expected step'}</Text>
+        <Text style={styles.muted}>{ownerView ? ownerNextStepCopy(request.status) : nextStepForRequest(request.status)}</Text>
       </View>
       {request.selectedVehicleLocationUpdatedAt ? (
         <Text style={styles.muted}>Last truck status location update: {new Date(request.selectedVehicleLocationUpdatedAt).toLocaleString()}</Text>
       ) : (
-        <Text style={styles.muted}>KULI v1 uses status-based tracking and static map previews. Live GPS movement is not shown.</Text>
+        <Text style={styles.muted}>KULI v1 uses confirmed status updates and static map previews. Live GPS movement is not shown.</Text>
       )}
     </View>
   );
@@ -3216,30 +3903,38 @@ function ClientDashboardHero({
   onRequest: () => void;
 }) {
   const displayName = profile.fullName?.split(' ')[0] || profile.fullName || profile.email?.split('@')[0] || 'there';
+  const initial = displayName.slice(0, 1).toUpperCase();
 
   return (
-    <View style={styles.clientHero}>
-      <View style={styles.cardHeader}>
+    <View style={styles.clientHomeHeroStack}>
+      <View style={styles.clientTopBar}>
         <View style={styles.flex}>
           <Text style={styles.clientGreeting}>{greetingForNow()}, {displayName}</Text>
-          <Text style={styles.clientLocation}>Addis Ababa</Text>
+          <View style={styles.clientLocationRow}>
+            <MaterialCommunityIcons name="map-marker" color={colors.textSecondary} size={18} />
+            <Text style={styles.clientLocation}>Addis Ababa</Text>
+          </View>
         </View>
         <View style={styles.clientAvatar}>
-          <Text style={styles.clientAvatarText}>{displayName.slice(0, 1).toUpperCase()}</Text>
+          <Text style={styles.clientAvatarText}>{initial}</Text>
         </View>
       </View>
       <View style={styles.clientCtaPanel}>
+        <View style={styles.clientHeroTruckMark}>
+          <MaterialCommunityIcons name="truck-fast-outline" color={colors.card} size={104} />
+        </View>
         <View style={styles.flex}>
           <Text style={styles.clientCtaTitle}>Move something today?</Text>
-          <Text style={styles.clientCtaCopy}>Get a quote, compare verified trucks, and send a KULI request when you are ready.</Text>
+          <Text style={styles.clientCtaCopy}>Get an upfront quote, compare verified trucks, and send your request when you are ready.</Text>
         </View>
         <Pressable accessibilityRole="button" onPress={onRequest} style={styles.clientCtaButton}>
           <Text style={styles.clientCtaButtonText}>Request a truck</Text>
+          <MaterialCommunityIcons name="arrow-right" color={colors.black} size={20} />
         </Pressable>
       </View>
       <View style={styles.clientHeroMeta}>
         <StatusBadge tone={profile.accountStatus === 'active' ? 'success' : 'warning'}>{profile.accountStatus}</StatusBadge>
-        <Text style={styles.clientHeroMetaText}>{activeCount ? `${activeCount} active request${activeCount === 1 ? '' : 's'}` : 'No active request'}</Text>
+        <Text style={styles.clientHeroMetaText}>{activeCount ? `${activeCount} active move${activeCount === 1 ? '' : 's'}` : 'Ready for your next move'}</Text>
       </View>
     </View>
   );
@@ -3262,31 +3957,47 @@ function ClientActiveRequestCard({
   const cancelLabel = request.status === 'pending' ? 'Cancel request' : 'Cancel trip';
   const detailsLabel = expanded ? 'Hide details' : request.status === 'pending' ? 'View details' : 'Track request';
   const isWaiting = request.status === 'pending';
+  const vehicleLabel = request.selectedVehicleId ? request.selectedVehicleId.slice(-6).toUpperCase() : request.offers?.length ? `${request.offers.length} offer${request.offers.length === 1 ? '' : 's'}` : 'Matching';
 
   return (
-    <UiCard style={styles.dashboardCard}>
-      <View style={styles.cardHeader}>
+    <View style={styles.clientActiveCard}>
+      <View style={styles.clientActiveCardTop}>
         <View style={styles.flex}>
-          <Text style={styles.cardTitle}>{request.requestCode}</Text>
-          <Text style={styles.dashboardRoute}>{requestRouteLabel(request)}</Text>
+          <Text style={styles.clientActiveEyebrow}>Active move</Text>
+          <Text style={styles.clientActiveCode}>{request.requestCode}</Text>
         </View>
         <StatusBadge tone={badgeToneForStatus(request.status)}>{statusLabels[request.status]}</StatusBadge>
       </View>
-      <View style={styles.dashboardMetricRow}>
-        <View style={styles.dashboardMetric}>
-          <Text style={styles.dashboardMetricValue}>{requestEstimateLabel(request)}</Text>
-          <Text style={styles.dashboardMetricLabel}>estimate</Text>
+      <View style={styles.clientRouteCard}>
+        <View style={styles.clientRouteRail}>
+          <View style={styles.clientRouteDotStart} />
+          <View style={styles.clientRouteLine} />
+          <View style={styles.clientRouteDotEnd} />
         </View>
-        <View style={styles.dashboardMetric}>
-          <Text style={styles.dashboardMetricValue}>{request.offers?.length ?? 0}</Text>
-          <Text style={styles.dashboardMetricLabel}>offers</Text>
-        </View>
-        <View style={styles.dashboardMetric}>
-          <Text style={styles.dashboardMetricValue}>{request.status === 'pending' ? 'Open' : 'Live'}</Text>
-          <Text style={styles.dashboardMetricLabel}>tracking</Text>
+        <View style={styles.flex}>
+          <Text style={styles.clientRouteLabel}>{request.pickupLocation.addressText}</Text>
+          <Text style={styles.clientRouteTo}>to</Text>
+          <Text style={styles.clientRouteLabel}>{request.destinationLocation.addressText}</Text>
         </View>
       </View>
-      <Text style={styles.dashboardSubcopy}>{formatRequestSchedule(request)}</Text>
+      <View style={styles.clientActiveMetaRow}>
+        <View style={styles.clientActiveMetaItem}>
+          <Text style={styles.clientActiveMetaValue}>{requestEstimateLabel(request)}</Text>
+          <Text style={styles.clientActiveMetaLabel}>estimate</Text>
+        </View>
+        <View style={styles.clientActiveMetaItem}>
+          <Text style={styles.clientActiveMetaValue}>{vehicleLabel}</Text>
+          <Text style={styles.clientActiveMetaLabel}>{request.selectedVehicleId ? 'vehicle' : 'dispatch'}</Text>
+        </View>
+        <View style={styles.clientActiveMetaItem}>
+          <Text style={styles.clientActiveMetaValue}>{request.status === 'pending' ? 'Open' : 'Status'}</Text>
+          <Text style={styles.clientActiveMetaLabel}>tracking</Text>
+        </View>
+      </View>
+      <View style={styles.clientActiveSchedule}>
+        <MaterialCommunityIcons name="calendar-clock" color={colors.textSecondary} size={18} />
+        <Text style={styles.dashboardSubcopy}>{formatRequestSchedule(request)}</Text>
+      </View>
       {isWaiting ? <DispatchSearchPanel request={request} /> : <Text style={styles.noticeText}>{nextStepForRequest(request.status)}</Text>}
       <View style={styles.actionRow}>
         <PrimaryButton label={detailsLabel} onPress={onToggleDetails} style={styles.actionButton} />
@@ -3298,8 +4009,8 @@ function ClientActiveRequestCard({
           tone={isCancellable ? 'danger' : 'default'}
         />
       </View>
-      {expanded ? <View style={styles.clientExpandedDetails}>{children || <Text style={styles.muted}>Request details are up to date. Status-based tracking starts after an owner accepts.</Text>}</View> : null}
-    </UiCard>
+      {expanded ? <View style={styles.clientExpandedDetails}>{children || <Text style={styles.muted}>Request details are up to date. Tracking starts after a truck accepts.</Text>}</View> : null}
+    </View>
   );
 }
 
@@ -3307,26 +4018,59 @@ function ClientRecentTripCard({ request, onRequest }: { request: KuliRequest; on
   const noAcceptance = request.status === 'timed_out';
 
   return (
-    <UiCard compact style={styles.recentTripCard}>
-      <View style={styles.cardHeader}>
+    <View style={styles.recentTripCard}>
+      <View style={styles.recentTripIcon}>
+        <MaterialCommunityIcons name={(request.status === 'completed' ? 'check-circle-outline' : request.status === 'cancelled' ? 'close-circle-outline' : 'truck-outline') as never} color={colors.black} size={24} />
+      </View>
+      <View style={styles.recentTripBody}>
         <View style={styles.flex}>
-          <Text style={styles.fieldLabel}>{request.requestCode}</Text>
-          <Text style={styles.dashboardRoute}>{requestRouteLabel(request)}</Text>
+          <Text style={styles.recentTripTitle}>{requestRouteLabel(request)}</Text>
+          <Text style={styles.recentTripMeta}>{formatRequestSchedule(request)}</Text>
         </View>
-        <StatusBadge tone={badgeToneForStatus(request.status)}>{statusLabels[request.status]}</StatusBadge>
-      </View>
-      <View style={styles.recentTripFooter}>
-        <Text style={styles.muted}>{formatRequestSchedule(request)}</Text>
-        <Text style={styles.recentTripPrice}>{requestEstimateLabel(request)}</Text>
-      </View>
-      {noAcceptance ? (
-        <View style={styles.timeoutPanel}>
-          <Text style={styles.fieldLabel}>No truck accepted in time</Text>
-          <Text style={styles.muted}>You can try again with a different truck type, load size, or pickup area.</Text>
-          {onRequest ? <SecondaryButton label="Start new request" onPress={onRequest} /> : null}
+        <View style={styles.recentTripFooter}>
+          <StatusBadge tone={badgeToneForStatus(request.status)}>{statusLabels[request.status]}</StatusBadge>
+          <Text style={styles.recentTripPrice}>{requestEstimateLabel(request)}</Text>
         </View>
-      ) : null}
-    </UiCard>
+        <Text style={styles.recentTripCode}>{request.requestCode}</Text>
+        {noAcceptance ? (
+          <View style={styles.timeoutPanel}>
+            <Text style={styles.fieldLabel}>No truck accepted in time</Text>
+            <Text style={styles.muted}>Try again with a different truck type, load size, or pickup area.</Text>
+            {onRequest ? <SecondaryButton label="Start new request" onPress={onRequest} /> : null}
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function ClientHomeEmptyMove({ onRequest }: { onRequest: () => void }) {
+  return (
+    <View style={styles.clientEmptyMove}>
+      <View style={styles.clientEmptyIllustration}>
+        <MaterialCommunityIcons name="map-search-outline" color={colors.textSecondary} size={54} />
+        <View style={styles.clientEmptyTruckBadge}>
+          <MaterialCommunityIcons name="truck-fast-outline" color={colors.card} size={22} />
+        </View>
+      </View>
+      <View style={styles.flex}>
+        <Text style={styles.clientEmptyTitle}>No active move yet</Text>
+        <Text style={styles.clientEmptyCopy}>Request a quote when you are ready. Responses, messages, and trip tracking will appear here.</Text>
+      </View>
+      <PrimaryButton label="Request a truck" onPress={onRequest} />
+    </View>
+  );
+}
+
+function ClientHomeRecentEmpty() {
+  return (
+    <View style={styles.clientRecentEmpty}>
+      <MaterialCommunityIcons name="history" color={colors.textSecondary} size={24} />
+      <View style={styles.flex}>
+        <Text style={styles.clientRecentEmptyTitle}>Your completed moves will appear here.</Text>
+        <Text style={styles.muted}>Finished, cancelled, and timed-out requests stay compact for follow-up.</Text>
+      </View>
+    </View>
   );
 }
 
@@ -3377,34 +4121,36 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.clientHomeContent}>
+    <>
+      <Screen contentStyle={styles.clientHomeContent}>
         <ClientDashboardHero profile={profile} activeCount={activeRequests.length} onRequest={goToRequest} />
 
         <View style={styles.dashboardSection}>
-          <SectionHeader title="Quick services" description="Choose a starting point. Details stay editable in the request flow." />
+          <View style={styles.clientSectionHead}>
+            <View>
+              <Text style={styles.clientSectionTitle}>Quick services</Text>
+              <Text style={styles.clientSectionSubtitle}>Choose a starting point. You can edit details next.</Text>
+            </View>
+          </View>
           <View style={styles.serviceGrid}>
             {clientServiceOptions.map((service) => (
-              <ClientServiceTile key={service.key} title={service.title} detail={service.detail} symbol={service.symbol} onPress={goToRequest} />
+              <ClientServiceTile key={service.key} title={service.title} detail={service.detail} icon={service.icon} onPress={goToRequest} />
             ))}
           </View>
         </View>
 
         <View style={styles.dashboardSection}>
-          <SectionHeader
-            title="Active requests"
-            description={activeRequests.length ? 'Track current KULI work from request to completion.' : 'Start with a quote, then send a request to verified truck owners.'}
-          />
+          <View style={styles.clientSectionHead}>
+            <View>
+              <Text style={styles.clientSectionTitle}>Active move</Text>
+              <Text style={styles.clientSectionSubtitle}>{activeRequests.length ? 'Follow the latest confirmed trip status.' : 'Start with a quote, then send to verified trucks.'}</Text>
+            </View>
+            {activeRequests.length ? <StatusBadge tone="success">{`${activeRequests.length} live`}</StatusBadge> : null}
+          </View>
           {requestsQuery.isError ? <ErrorState message={getErrorMessage(requestsQuery.error)} title="Could not load requests" /> : null}
           {actionError ? <ErrorState message={actionError} title="Action failed" /> : null}
           {requestsQuery.isLoading ? <LoadingState message="Loading active and recent KULI requests." title="Loading requests" /> : null}
-          {activeRequests.length === 0 && !requestsQuery.isLoading && !requestsQuery.isError ? (
-            <EmptyState
-              title="No active move yet"
-              message="When you send a KULI request, owner responses, tracking, and messages will appear here."
-              action={<PrimaryButton label="Request a truck" onPress={goToRequest} />}
-            />
-          ) : null}
+          {activeRequests.length === 0 && !requestsQuery.isLoading && !requestsQuery.isError ? <ClientHomeEmptyMove onRequest={goToRequest} /> : null}
           {activeRequests.map((request) => {
             const detailsOpen = expandedRequestIds.includes(request.id);
 
@@ -3427,20 +4173,25 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
         </View>
 
         <View style={styles.dashboardSection}>
-          <SectionHeader title="Recent trips" description="Completed, cancelled, and timed-out requests stay here for follow-up." />
+          <View style={styles.clientSectionHead}>
+            <View>
+              <Text style={styles.clientSectionTitle}>Recent trips</Text>
+              <Text style={styles.clientSectionSubtitle}>Completed, cancelled, and timed-out moves.</Text>
+            </View>
+          </View>
           {recentRequests.length ? (
-            <View style={styles.roleGrid}>
+            <View style={styles.recentTripList}>
               {recentRequests.map((request) => (
                 <ClientRecentTripCard key={request.id} request={request} onRequest={goToRequest} />
               ))}
             </View>
           ) : (
-            <EmptyState title="No recent trips" message="Completed or cancelled trips will appear here after your first request." />
+            <ClientHomeRecentEmpty />
           )}
         </View>
 
         <SecondaryButton label="Sign out" onPress={onSignOut} />
-      </ScrollView>
+      </Screen>
       <ClientCancelDialog
         request={cancelTarget}
         pending={Boolean(pendingCancelId)}
@@ -3455,7 +4206,7 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
           }
         }}
       />
-    </SafeAreaView>
+    </>
   );
 }
 
@@ -3475,53 +4226,88 @@ function OwnerOfferCard({
   onToggleExpanded: (offer: TripOffer) => void;
 }) {
   const isPending = pendingOfferId === offer.id;
-  const expiresAt = offer.expiresAt ? new Date(offer.expiresAt).toLocaleTimeString() : 'soon';
   const request = offer.request;
   const loadDetails = request?.loadDetails;
   const quoteSnapshot = request?.quoteSnapshot;
+  const pickup = shortAreaLabel(request?.pickupLocation?.addressText);
+  const destination = shortAreaLabel(request?.destinationLocation?.addressText);
+  const estimate = quoteSnapshot ? `${quoteSnapshot.currency} ${Number(quoteSnapshot.totalEstimate ?? 0).toFixed(0)}` : 'Estimate pending';
 
   return (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <View style={styles.flex}>
-          <Text style={styles.cardTitle}>{request?.requestCode ?? `Offer ${offer.id.slice(-6).toUpperCase()}`}</Text>
-          <Text style={styles.muted}>{request ? `${request.pickupLocation?.addressText} to ${request.destinationLocation?.addressText}` : `Request ${offer.requestId}`}</Text>
-        </View>
-        <StatusPill tone={statusTone(offer.status)}>{offer.status}</StatusPill>
+    <View style={styles.ownerOfferCard}>
+      <View style={styles.ownerOfferTimerBar}>
+        <View style={styles.ownerOfferTimerFill} />
       </View>
-      <View style={styles.metricGrid}>
-        <View style={styles.metricBox}>
-          <Text style={styles.metricValue}>{Number(offer.distanceKmAtOffer ?? 0).toFixed(1)}km</Text>
-          <Text style={styles.metricLabel}>pickup distance</Text>
+      <View style={styles.ownerOfferHeader}>
+        <View style={styles.flex}>
+          <Text style={styles.ownerOfferEyebrow}>Estimated earnings</Text>
+          <Text style={styles.ownerOfferPrice}>{estimate}</Text>
         </View>
-        <View style={styles.metricBox}>
-          <Text style={styles.metricValue}>{quoteSnapshot ? `${quoteSnapshot.currency} ${Number(quoteSnapshot.totalEstimate ?? 0).toFixed(0)}` : Math.round(offer.etaMinutesAtOffer ?? 0)}</Text>
-          <Text style={styles.metricLabel}>{quoteSnapshot ? 'estimate' : 'route minutes'}</Text>
+        <View style={styles.ownerOfferHeaderBadges}>
+          <StatusBadge tone={badgeToneForStatus(offer.status)}>{offerStatusLabels[offer.status]}</StatusBadge>
+          <View style={styles.ownerOfferExpiry}>
+            <MaterialCommunityIcons name="timer-outline" color={colors.warning} size={18} />
+            <Text style={styles.ownerOfferExpiryText}>{offerExpiryLabel(offer.expiresAt)}</Text>
+          </View>
         </View>
-        <View style={styles.metricBox}>
-          <Text style={styles.metricValue}>{expiresAt}</Text>
-          <Text style={styles.metricLabel}>expires</Text>
+      </View>
+      <View style={styles.ownerOfferRouteBox}>
+        <View style={styles.ownerOfferRouteRail}>
+          <View style={styles.ownerOfferRouteDotStart} />
+          <View style={styles.ownerOfferRouteLine} />
+          <View style={styles.ownerOfferRouteDotEnd} />
+        </View>
+        <View style={styles.flex}>
+          <Text style={styles.ownerOfferRouteLabel}>Pickup</Text>
+          <Text style={styles.ownerOfferRouteValue}>{pickup}</Text>
+          <Text style={styles.ownerOfferRouteLabel}>Drop-off</Text>
+          <Text style={styles.ownerOfferRouteValue}>{destination}</Text>
+        </View>
+        <View style={styles.ownerOfferDistanceBox}>
+          <Text style={styles.ownerOfferDistanceValue}>{Number(offer.distanceKmAtOffer ?? 0).toFixed(1)}km</Text>
+          <Text style={styles.ownerOfferDistanceLabel}>to pickup</Text>
+        </View>
+      </View>
+      <View style={styles.ownerOfferInfoGrid}>
+        <View style={styles.ownerOfferInfoCard}>
+          <MaterialCommunityIcons name="truck-outline" color={colors.textSecondary} size={20} />
+          <View style={styles.flex}>
+            <Text style={styles.ownerOfferInfoLabel}>Truck type</Text>
+            <Text style={styles.ownerOfferInfoValue}>{request?.requestedVehicleClassId?.slice(-6).toUpperCase() || 'Matched'}</Text>
+          </View>
+        </View>
+        <View style={styles.ownerOfferInfoCard}>
+          <MaterialCommunityIcons name="package-variant-closed" color={colors.textSecondary} size={20} />
+          <View style={styles.flex}>
+            <Text style={styles.ownerOfferInfoLabel}>Load</Text>
+            <Text style={styles.ownerOfferInfoValue}>{loadSummaryLabel(request)}</Text>
+          </View>
+        </View>
+        <View style={styles.ownerOfferInfoCard}>
+          <MaterialCommunityIcons name="map-marker-distance" color={colors.textSecondary} size={20} />
+          <View style={styles.flex}>
+            <Text style={styles.ownerOfferInfoLabel}>Route</Text>
+            <Text style={styles.ownerOfferInfoValue}>{offer.etaMinutesAtOffer ? `${Math.round(offer.etaMinutesAtOffer)} min estimate` : 'Review route'}</Text>
+          </View>
+        </View>
+        <View style={styles.ownerOfferInfoCard}>
+          <MaterialCommunityIcons name="flash-outline" color={colors.textSecondary} size={20} />
+          <View style={styles.flex}>
+            <Text style={styles.ownerOfferInfoLabel}>Rule</Text>
+            <Text style={styles.ownerOfferInfoValue}>Fastest confirmed owner gets the job.</Text>
+          </View>
         </View>
       </View>
       {expanded && request ? (
-        <View style={styles.detailPanel}>
+        <View style={styles.ownerOfferDetailPanel}>
           <RouteMapPreview pickup={request.pickupLocation} destination={request.destinationLocation} statusLabel="Offer route" />
-          <View style={styles.requestRow}>
-            <View style={styles.flex}>
-              <Text style={styles.fieldLabel}>Pickup</Text>
-              <Text style={styles.muted}>{request.pickupLocation?.addressText}</Text>
+          <RoutePill pickup={request.pickupLocation?.addressText ?? 'Pickup'} destination={request.destinationLocation?.addressText ?? 'Drop-off'} />
+          <View style={styles.ownerOfferDetailGrid}>
+            <View style={styles.ownerOfferDetailItem}>
+              <Text style={styles.fieldLabel}>Load details</Text>
+              <Text style={styles.muted}>{loadSummaryLabel(request)}</Text>
             </View>
-            <View style={styles.flex}>
-              <Text style={styles.fieldLabel}>Destination</Text>
-              <Text style={styles.muted}>{request.destinationLocation?.addressText}</Text>
-            </View>
-          </View>
-          <View style={styles.requestRow}>
-            <View style={styles.flex}>
-              <Text style={styles.fieldLabel}>Load</Text>
-              <Text style={styles.muted}>{loadDetails?.itemType ?? 'General load'}{loadDetails?.estimatedWeightKg ? ` / ${loadDetails.estimatedWeightKg}kg` : ''}{loadDetails?.estimatedVolumeCubicMeters ? ` / ${loadDetails.estimatedVolumeCubicMeters}m3` : ''}</Text>
-            </View>
-            <View style={styles.flex}>
+            <View style={styles.ownerOfferDetailItem}>
               <Text style={styles.fieldLabel}>Handling</Text>
               <Text style={styles.muted}>{loadDetails?.loadingAssistanceRequested ? 'Loading help requested' : 'No loading help requested'}</Text>
             </View>
@@ -3529,19 +4315,13 @@ function OwnerOfferCard({
           {loadDetails?.specialHandlingInstructions ? (
             <Text style={styles.noticeText}>{loadDetails.specialHandlingInstructions}</Text>
           ) : null}
-          <Text style={styles.muted}>Accepting this request assigns the trip to your vehicle and makes competing offers expire.</Text>
+          <Text style={styles.muted}>Accepting assigns this job to your active vehicle. Other owners lose access after the first confirmed accept.</Text>
         </View>
       ) : null}
-      <View style={styles.actionRow}>
-        <Pressable accessibilityRole="button" disabled={isPending} onPress={() => onToggleExpanded(offer)} style={[styles.secondaryButton, styles.actionButton, isPending && styles.buttonDisabled]}>
-          <Text style={styles.secondaryButtonText}>{expanded ? 'Hide details' : 'View details'}</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" disabled={isPending} onPress={() => onDecline(offer)} style={[styles.secondaryButton, styles.actionButton, isPending && styles.buttonDisabled]}>
-          <Text style={styles.secondaryButtonText}>Decline</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" disabled={isPending} onPress={() => onAccept(offer)} style={[styles.primaryButton, styles.actionButton, isPending && styles.buttonDisabled]}>
-          <Text style={styles.primaryButtonText}>{isPending ? 'Working...' : 'Accept request'}</Text>
-        </Pressable>
+      <View style={styles.ownerOfferActions}>
+        <PrimaryButton label={isPending ? 'Working...' : 'Accept'} loading={isPending} disabled={isPending} onPress={() => onAccept(offer)} style={styles.ownerOfferPrimaryAction} />
+        <SecondaryButton label={expanded ? 'Hide' : 'Details'} disabled={isPending} onPress={() => onToggleExpanded(offer)} style={styles.ownerOfferSecondaryAction} />
+        <SecondaryButton label="Decline" disabled={isPending} onPress={() => onDecline(offer)} tone="danger" style={styles.ownerOfferSecondaryAction} />
       </View>
     </View>
   );
@@ -3567,8 +4347,16 @@ function OwnerOffersScreen({ profile }: { profile: UserProfile }) {
     refetchInterval: 15000
   });
 
+  const vehiclesQuery = useQuery({
+    queryKey: ['vehicles', 'mine'],
+    queryFn: async () => ((await kuliApi.request('/vehicles/mine')) as ApiEnvelope<Vehicle[]>).data
+  });
+
   const offers = offersQuery.data ?? [];
   const acceptedTrips = (ownerRequestsQuery.data ?? []).filter((request) => activeRequestStatuses.includes(request.status) || isPaymentSettlingRequest(request));
+  const vehicles = vehiclesQuery.data ?? [];
+  const onlineVehicle = vehicles.find((vehicle) => vehicle.availabilityStatus === 'online_available' && vehicle.verificationStatus === 'approved');
+  const approvedVehicleCount = vehicles.filter((vehicle) => vehicle.verificationStatus === 'approved').length;
   const acceptedRequest = acceptedResult?.request;
   const showAcceptedResult = Boolean(acceptedRequest && (activeRequestStatuses.includes(acceptedRequest.status) || isPaymentSettlingRequest(acceptedRequest)));
 
@@ -3624,73 +4412,375 @@ function OwnerOffersScreen({ profile }: { profile: UserProfile }) {
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>/owner/offers</Text>
-        <Text style={styles.title}>Accept fast, with confidence.</Text>
-        <Text style={styles.copy}>Open offers are first-accept-wins. Accepted requests become active trips and make the vehicle busy.</Text>
+    <Screen contentStyle={styles.ownerOffersContent}>
+      <View style={styles.ownerOffersHero}>
+        <View style={styles.flex}>
+          <Text style={styles.ownerOffersEyebrow}>Driver inbox</Text>
+          <Text style={styles.ownerOffersTitle}>Offers</Text>
+          <Text style={styles.ownerOffersSubtitle}>Accept nearby requests before they expire.</Text>
+        </View>
+        <StatusBadge tone={onlineVehicle ? 'success' : approvedVehicleCount ? 'warning' : 'error'}>
+          {onlineVehicle ? 'Online' : approvedVehicleCount ? 'Offline' : 'Vehicle needed'}
+        </StatusBadge>
+      </View>
 
-        <ShellCard title="Offer inbox">
-          {offersQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(offersQuery.error)}</Text> : null}
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          {message ? <Text style={styles.noticeText}>{message}</Text> : null}
-          {offersQuery.isLoading ? <Text style={styles.muted}>Loading offers...</Text> : null}
-          {offers.length === 0 && !offersQuery.isLoading ? <Text style={styles.muted}>No open offers. Keep an approved vehicle online to receive requests.</Text> : null}
-          <View style={styles.roleGrid}>
-            {offers.map((offer) => (
-              <OwnerOfferCard
-                key={offer.id}
-                offer={offer}
-                pendingOfferId={pendingOfferId}
-                onAccept={(nextOffer) => runOfferAction(nextOffer, 'accept')}
-                onDecline={(nextOffer) => runOfferAction(nextOffer, 'decline')}
-                expanded={expandedOfferId === offer.id}
-                onToggleExpanded={toggleOfferDetails}
-              />
+      <View style={styles.ownerOfferStrategy}>
+        <MaterialCommunityIcons name="flash-outline" color={colors.card} size={24} />
+        <View style={styles.flex}>
+          <Text style={styles.ownerOfferStrategyTitle}>Fastest confirmed owner gets the job.</Text>
+          <Text style={styles.ownerOfferStrategyCopy}>Accept only when your active vehicle is ready to start the pickup.</Text>
+        </View>
+      </View>
+
+      <View style={styles.ownerOfferReadiness}>
+        <View style={styles.ownerOfferReadinessIcon}>
+          <MaterialCommunityIcons name={onlineVehicle ? 'truck-check-outline' : 'truck-alert-outline'} color={onlineVehicle ? colors.success : colors.warning} size={24} />
+        </View>
+        <View style={styles.flex}>
+          <Text style={styles.ownerOfferReadinessTitle}>{onlineVehicle ? `${onlineVehicle.licensePlate} is receiving offers` : approvedVehicleCount ? 'Go online from Home or Vehicles' : 'Complete vehicle verification'}</Text>
+          <Text style={styles.ownerOfferReadinessCopy}>{onlineVehicle ? `${onlineVehicle.vehicleClassSnapshot?.name || 'Approved vehicle'} / ${onlineVehicle.capacityKg ?? 0}kg` : 'Keep an approved truck online to receive nearby requests.'}</Text>
+        </View>
+      </View>
+
+      {offersQuery.isError ? <ErrorState title="Offers could not load" message={getErrorMessage(offersQuery.error)} action={<SecondaryButton label="Retry" onPress={() => offersQuery.refetch()} />} /> : null}
+      {ownerRequestsQuery.isError ? <ErrorState title="Active jobs could not load" message={getErrorMessage(ownerRequestsQuery.error)} /> : null}
+      {error ? <ErrorState title="Offer action failed" message={error} /> : null}
+      {message ? <Text style={styles.noticeText}>{message}</Text> : null}
+
+      <View style={styles.ownerSectionHeader}>
+        <View style={styles.flex}>
+          <Text style={styles.ownerSectionTitle}>Available requests</Text>
+          <Text style={styles.ownerSectionCopy}>{offers.length ? `${offers.length} open offer${offers.length === 1 ? '' : 's'} waiting.` : 'New nearby requests appear here.'}</Text>
+        </View>
+        <SecondaryButton label="Refresh" onPress={() => offersQuery.refetch()} style={styles.ownerSmallButton} />
+      </View>
+
+      {offersQuery.isLoading ? (
+        <View style={styles.ownerOfferList}>
+          {[0, 1].map((item) => (
+            <View key={item} style={styles.ownerOfferSkeleton}>
+              <View style={styles.notificationSkeletonLineWide} />
+              <View style={styles.notificationSkeletonLine} />
+              <View style={styles.notificationSkeletonLineShort} />
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {offers.length === 0 && !offersQuery.isLoading && !offersQuery.isError ? (
+        <View style={styles.ownerEmptyCard}>
+          <MaterialCommunityIcons name="radar" color={colors.black} size={46} />
+          <Text style={styles.ownerEmptyTitle}>No requests yet</Text>
+          <Text style={styles.ownerEmptyCopy}>Keep an approved vehicle online to receive nearby requests. KULI will notify you when a matching customer sends one.</Text>
+        </View>
+      ) : null}
+
+      <View style={styles.ownerOfferList}>
+        {offers.map((offer) => (
+          <OwnerOfferCard
+            key={offer.id}
+            offer={offer}
+            pendingOfferId={pendingOfferId}
+            onAccept={(nextOffer) => runOfferAction(nextOffer, 'accept')}
+            onDecline={(nextOffer) => runOfferAction(nextOffer, 'decline')}
+            expanded={expandedOfferId === offer.id}
+            onToggleExpanded={toggleOfferDetails}
+          />
+        ))}
+      </View>
+
+      {showAcceptedResult && acceptedRequest ? (
+        <View style={styles.ownerActiveJobCard}>
+          <View style={styles.ownerSectionHeader}>
+            <View style={styles.flex}>
+              <Text style={styles.ownerSectionTitle}>Accepted job</Text>
+              <Text style={styles.ownerSectionCopy}>Use the controls below to move the job forward.</Text>
+            </View>
+            <StatusBadge tone={badgeToneForStatus(acceptedRequest.status)}>{statusLabels[acceptedRequest.status]}</StatusBadge>
+          </View>
+          <ActiveTripWorkspace
+            request={acceptedRequest}
+            profile={profile}
+            ownerControls
+            onRequestUpdated={(request) => {
+              setAcceptedResult((current) => (current ? { ...current, request } : current));
+            }}
+          />
+        </View>
+      ) : null}
+
+      {acceptedTrips.length ? (
+        <View style={styles.ownerActiveJobsSection}>
+          <View style={styles.ownerSectionHeader}>
+            <View style={styles.flex}>
+              <Text style={styles.ownerSectionTitle}>Active jobs</Text>
+              <Text style={styles.ownerSectionCopy}>Accepted and cash-pending work stays here until closed.</Text>
+            </View>
+            <StatusBadge tone="success">{`${acceptedTrips.length}`}</StatusBadge>
+          </View>
+          <View style={styles.ownerActiveJobList}>
+            {acceptedTrips.map((request) => (
+              <View key={request.id} style={styles.ownerActiveJobCard}>
+                <ActiveTripWorkspace request={request} profile={profile} ownerControls />
+              </View>
             ))}
           </View>
-        </ShellCard>
+        </View>
+      ) : null}
+    </Screen>
+  );
+}
 
-        {showAcceptedResult && acceptedRequest ? (
-          <ShellCard title="Accepted trip">
-            <View style={styles.cardHeader}>
-              <View style={styles.flex}>
-                <Text style={styles.cardTitle}>{acceptedRequest.requestCode}</Text>
-                <Text style={styles.muted}>{acceptedRequest.pickupLocation?.addressText} to {acceptedRequest.destinationLocation?.addressText}</Text>
-              </View>
-              <StatusPill tone={statusTone(acceptedRequest.status)}>{statusLabels[acceptedRequest.status]}</StatusPill>
-            </View>
-            <ActiveTripWorkspace
-              request={acceptedRequest}
-              profile={profile}
-              ownerControls
-              onRequestUpdated={(request) => {
-                setAcceptedResult((current) => (current ? { ...current, request } : current));
-              }}
-            />
-          </ShellCard>
-        ) : null}
+type NotificationFilter = 'all' | 'trips' | 'offers' | 'payments' | 'system';
 
-        {acceptedTrips.length ? (
-          <ShellCard title="Active trip detail">
-            <View style={styles.roleGrid}>
-              {acceptedTrips.map((request) => (
-                <View key={request.id} style={styles.card}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.flex}>
-                      <Text style={styles.cardTitle}>{request.requestCode}</Text>
-                      <Text style={styles.muted}>{request.pickupLocation?.addressText} to {request.destinationLocation?.addressText}</Text>
-                    </View>
-                    <StatusPill tone={statusTone(request.status)}>{statusLabels[request.status]}</StatusPill>
-                  </View>
-                  <ActiveTripWorkspace request={request} profile={profile} ownerControls />
-                </View>
-              ))}
-            </View>
-          </ShellCard>
+const notificationFilters: Array<{ key: NotificationFilter; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'trips', label: 'Trips' },
+  { key: 'offers', label: 'Offers' },
+  { key: 'payments', label: 'Payments' },
+  { key: 'system', label: 'System' }
+];
+
+const notificationCategoryForType = (type: string): NotificationFilter => {
+  const normalized = type.toLowerCase();
+
+  if (normalized.includes('offer')) {
+    return 'offers';
+  }
+
+  if (normalized.includes('payment') || normalized.includes('earning') || normalized.includes('payout')) {
+    return 'payments';
+  }
+
+  if (normalized.includes('message') || normalized.includes('trip') || normalized.includes('request') || normalized.includes('status') || normalized.includes('cancel')) {
+    return 'trips';
+  }
+
+  return 'system';
+};
+
+const notificationVisual = (notification: NotificationRecord): {
+  icon: string;
+  accent: string;
+  background: string;
+  foreground: string;
+  label: string;
+} => {
+  const type = notification.type.toLowerCase();
+
+  if (type.includes('offer')) {
+    return {
+      icon: 'truck-fast-outline',
+      accent: colors.warning,
+      background: colors.warningTint,
+      foreground: colors.warning,
+      label: 'Offer'
+    };
+  }
+
+  if (type.includes('payment') || type.includes('earning') || type.includes('payout')) {
+    return {
+      icon: 'cash-multiple',
+      accent: colors.success,
+      background: colors.successTint,
+      foreground: colors.success,
+      label: 'Payment'
+    };
+  }
+
+  if (type.includes('cancel') || type.includes('failed') || type.includes('dispute') || notification.deliveryStatus === 'failed') {
+    return {
+      icon: 'alert-circle-outline',
+      accent: colors.error,
+      background: colors.errorTint,
+      foreground: colors.error,
+      label: type.includes('dispute') ? 'Review' : 'Alert'
+    };
+  }
+
+  if (type.includes('message')) {
+    return {
+      icon: 'message-text-outline',
+      accent: colors.black,
+      background: colors.subtle,
+      foreground: colors.black,
+      label: 'Message'
+    };
+  }
+
+  if (type.includes('status') || type.includes('trip') || type.includes('request')) {
+    return {
+      icon: 'map-marker-path',
+      accent: colors.success,
+      background: colors.successTint,
+      foreground: colors.success,
+      label: 'Trip'
+    };
+  }
+
+  return {
+    icon: 'bell-outline',
+    accent: colors.black,
+    background: colors.subtle,
+    foreground: colors.black,
+    label: 'System'
+  };
+};
+
+const formatNotificationTime = (createdAt?: string) => {
+  if (!createdAt) {
+    return 'Just now';
+  }
+
+  const created = new Date(createdAt);
+  const timestamp = created.getTime();
+
+  if (Number.isNaN(timestamp)) {
+    return 'Just now';
+  }
+
+  const diffMs = Date.now() - timestamp;
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (diffMs < minute) {
+    return 'Just now';
+  }
+
+  if (diffMs < hour) {
+    return `${Math.max(1, Math.floor(diffMs / minute))}m ago`;
+  }
+
+  if (diffMs < day) {
+    return `${Math.floor(diffMs / hour)}h ago`;
+  }
+
+  if (diffMs < 7 * day) {
+    return `${Math.floor(diffMs / day)}d ago`;
+  }
+
+  return created.toLocaleDateString();
+};
+
+function PreferenceToggle({
+  label,
+  detail,
+  enabled,
+  onPress,
+  disabled = false
+}: {
+  label: string;
+  detail: string;
+  enabled: boolean;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityState={{ checked: enabled, disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={[styles.notificationPreferenceRow, enabled && styles.notificationPreferenceRowActive, disabled && styles.notificationPreferenceRowDisabled]}
+    >
+      <View style={styles.flex}>
+        <Text style={styles.notificationPreferenceTitle}>{label}</Text>
+        <Text style={styles.notificationPreferenceDetail}>{detail}</Text>
+      </View>
+      <View style={[styles.notificationToggleTrack, enabled && styles.notificationToggleTrackActive, disabled && styles.notificationToggleTrackDisabled]}>
+        <View style={[styles.notificationToggleKnob, enabled && styles.notificationToggleKnobActive]} />
+      </View>
+    </Pressable>
+  );
+}
+
+function NotificationCard({
+  notification,
+  pending,
+  profile,
+  onMarkRead,
+  onOpenDetail
+}: {
+  notification: NotificationRecord;
+  pending: boolean;
+  profile: UserProfile;
+  onMarkRead: (notification: NotificationRecord) => void;
+  onOpenDetail: (notification: NotificationRecord) => void;
+}) {
+  const unread = notification.deliveryStatus !== 'read';
+  const visual = notificationVisual(notification);
+  const canOpen = Boolean(notification.data?.requestId);
+
+  return (
+    <View style={[styles.notificationCard, unread && styles.notificationCardUnread]}>
+      <View style={[styles.notificationAccent, { backgroundColor: visual.accent }]} />
+      <View style={[styles.notificationIconWrap, { backgroundColor: visual.background }]}>
+        <MaterialCommunityIcons name={visual.icon as never} color={visual.foreground} size={24} />
+      </View>
+      <View style={styles.notificationCardBody}>
+        <View style={styles.notificationCardHeader}>
+          <Text style={styles.notificationCardLabel}>{visual.label}</Text>
+          <View style={styles.notificationMetaRow}>
+            <Text style={styles.notificationTime}>{formatNotificationTime(notification.createdAt)}</Text>
+            {unread ? <View style={styles.notificationUnreadDot} /> : null}
+          </View>
+        </View>
+        <Text style={styles.notificationTitle}>{notification.title}</Text>
+        <Text style={styles.notificationBody}>{notification.body}</Text>
+        {profile.role === 'truck_owner' && notification.type === 'offer.sent' ? (
+          <Text style={styles.notificationHint}>Review the route, load, and estimate before accepting.</Text>
         ) : null}
-      </ScrollView>
-    </SafeAreaView>
+        <View style={styles.notificationActionRow}>
+          {canOpen ? (
+            <Pressable accessibilityRole="button" disabled={pending} onPress={() => onOpenDetail(notification)} style={[styles.notificationPrimaryAction, pending && styles.buttonDisabled]}>
+              <Text style={styles.notificationPrimaryActionText}>{profile.role === 'truck_owner' && notification.type === 'offer.sent' ? 'View offer' : 'View details'}</Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            disabled={!unread || pending}
+            onPress={() => onMarkRead(notification)}
+            style={[styles.notificationSecondaryAction, (!unread || pending) && styles.notificationSecondaryActionDisabled]}
+          >
+            <Text style={[styles.notificationSecondaryActionText, (!unread || pending) && styles.notificationSecondaryActionTextDisabled]}>{unread ? 'Mark read' : 'Read'}</Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function NotificationLoadingList() {
+  return (
+    <View style={styles.notificationList}>
+      {[0, 1, 2].map((item) => (
+        <View key={item} style={styles.notificationSkeletonCard}>
+          <View style={styles.notificationSkeletonIcon} />
+          <View style={styles.flex}>
+            <View style={styles.notificationSkeletonLineWide} />
+            <View style={styles.notificationSkeletonLine} />
+            <View style={styles.notificationSkeletonLineShort} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function NotificationEmptyState({ profile }: { profile: UserProfile }) {
+  return (
+    <View style={styles.notificationEmptyCard}>
+      <View style={styles.notificationEmptyIcon}>
+        <MaterialCommunityIcons name="bell-sleep-outline" color={colors.black} size={42} />
+      </View>
+      <Text style={styles.notificationEmptyTitle}>No updates yet</Text>
+      <Text style={styles.notificationEmptyCopy}>
+        {profile.role === 'truck_owner'
+          ? 'Offer alerts, vehicle decisions, trip changes, and payment updates will appear here.'
+          : 'Trip updates, messages, payment notes, and account alerts will appear here.'}
+      </Text>
+    </View>
   );
 }
 
@@ -3700,6 +4790,7 @@ function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
   const [pushEnabled, setPushEnabled] = useState(true);
   const [smsEnabled, setSmsEnabled] = useState(false);
   const [emailEnabled, setEmailEnabled] = useState(true);
+  const [activeFilter, setActiveFilter] = useState<NotificationFilter>('all');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [pendingId, setPendingId] = useState('');
@@ -3713,6 +4804,9 @@ function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
 
   const notifications = notificationsQuery.data ?? [];
   const unreadCount = notifications.filter((notification) => notification.deliveryStatus !== 'read').length;
+  const availableFilters = notificationFilters.filter((filter) => filter.key === 'all' || notifications.some((notification) => notificationCategoryForType(notification.type) === filter.key));
+  const filteredNotifications = activeFilter === 'all' ? notifications : notifications.filter((notification) => notificationCategoryForType(notification.type) === activeFilter);
+  const unreadLabel = unreadCount === 1 ? '1 unread' : `${unreadCount} unread`;
 
   const markRead = async (notification: NotificationRecord) => {
     setPendingId(notification.id);
@@ -3724,7 +4818,7 @@ function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
         method: 'PATCH'
       });
       await queryClient.invalidateQueries({ queryKey: ['notifications'] });
-      setMessage('Notification marked read.');
+      setMessage('Marked as read.');
     } catch (readError) {
       setError(getErrorMessage(readError));
     } finally {
@@ -3748,7 +4842,7 @@ function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
       if (profile.role === 'truck_owner') {
         navigation.navigate(notification.type === 'offer.sent' ? 'Offers' : notification.data?.requestId ? 'Offers' : 'Home');
       } else {
-        navigation.navigate(notification.data?.requestId ? 'Home' : 'Alerts');
+        navigation.navigate(notification.data?.requestId ? 'Home' : 'Notifications');
       }
     } catch (detailError) {
       setError(getErrorMessage(detailError));
@@ -3782,89 +4876,120 @@ function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.cardHeader}>
+    <Screen contentStyle={styles.notificationsContent}>
+      <View style={styles.notificationsHeader}>
+        <View style={styles.notificationsHeaderTop}>
           <View style={styles.flex}>
-            <Text style={styles.eyebrow}>{profile.role === 'client' ? '/client/notifications' : '/owner/notifications'}</Text>
-            <Text style={styles.title}>Updates stay inside KULI.</Text>
+            <Text style={styles.notificationsEyebrow}>{profile.role === 'truck_owner' ? 'Owner updates' : 'Your updates'}</Text>
+            <Text style={styles.notificationsTitle}>Notifications</Text>
           </View>
-          <StatusPill tone={unreadCount ? 'warn' : 'ready'}>{unreadCount} unread</StatusPill>
+          <StatusBadge tone={unreadCount ? 'warning' : 'success'}>{unreadLabel}</StatusBadge>
         </View>
+        <Text style={styles.notificationsSubtitle}>
+          {profile.role === 'truck_owner'
+            ? 'Offer, trip, vehicle, and payment alerts stay organized here.'
+            : 'Trip progress, messages, payments, and account updates stay organized here.'}
+        </Text>
+      </View>
 
-        <ShellCard title="Delivery preferences">
-          <Text style={styles.muted}>In-app transactional alerts stay on. External channels can be toggled once providers are configured.</Text>
-          {[
-            { label: 'Push', value: pushEnabled, onPress: () => setPushEnabled((value) => !value) },
-            { label: 'SMS', value: smsEnabled, onPress: () => setSmsEnabled((value) => !value) },
-            { label: 'Email', value: emailEnabled, onPress: () => setEmailEnabled((value) => !value) }
-          ].map((option) => (
-            <Pressable
-              accessibilityRole="switch"
-              accessibilityState={{ checked: option.value }}
-              key={option.label}
-              onPress={option.onPress}
-              style={[styles.switchRow, option.value && styles.switchRowActive]}
-            >
-              <Text style={[styles.switchText, option.value && styles.switchTextActive]}>{option.label}</Text>
-              <StatusPill tone={option.value ? 'ready' : 'warn'}>{option.value ? 'On' : 'Off'}</StatusPill>
-            </Pressable>
-          ))}
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          {message ? <Text style={styles.noticeText}>{message}</Text> : null}
-          <Pressable accessibilityRole="button" disabled={preferencesPending} onPress={savePreferences} style={[styles.primaryButton, preferencesPending && styles.buttonDisabled]}>
-            <Text style={styles.primaryButtonText}>{preferencesPending ? 'Saving...' : 'Save preferences'}</Text>
-          </Pressable>
-        </ShellCard>
-
-        <ShellCard title="Notification center">
-          {notificationsQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(notificationsQuery.error)}</Text> : null}
-          <Pressable accessibilityRole="button" onPress={() => notificationsQuery.refetch()} style={styles.secondaryButton}>
-            <Text style={styles.secondaryButtonText}>Refresh notifications</Text>
-          </Pressable>
-          {notifications.length === 0 ? <Text style={styles.muted}>No notifications yet. Offer, message, and status updates will appear here.</Text> : null}
-          <View style={styles.roleGrid}>
-            {notifications.map((notification) => (
-              <View key={notification.id} style={styles.notificationRow}>
-                <View style={styles.flex}>
-                  <Text style={styles.cardTitle}>{notification.title}</Text>
-                  <Text style={styles.muted}>{notification.body}</Text>
-                  <Text style={styles.muted}>{notification.type}{notification.createdAt ? ` / ${new Date(notification.createdAt).toLocaleString()}` : ''}</Text>
-                  {profile.role === 'truck_owner' && notification.type === 'offer.sent' ? (
-                    <Text style={styles.noticeText}>Open Offers to review pickup, destination, load, estimate, then accept or decline.</Text>
-                  ) : null}
-                </View>
-                <View style={styles.notificationActions}>
-                  {notification.data?.requestId ? (
-                    <Pressable accessibilityRole="button" disabled={pendingId === notification.id} onPress={() => openNotificationDetail(notification)} style={[styles.compactButton, pendingId === notification.id && styles.buttonDisabled]}>
-                      <Text style={styles.compactButtonText}>{profile.role === 'truck_owner' && notification.type === 'offer.sent' ? 'View offer' : 'View detail'}</Text>
-                    </Pressable>
-                  ) : null}
-                  <Pressable
-                    accessibilityRole="button"
-                    disabled={notification.deliveryStatus === 'read' || pendingId === notification.id}
-                    onPress={() => markRead(notification)}
-                    style={[styles.compactButton, (notification.deliveryStatus === 'read' || pendingId === notification.id) && styles.buttonDisabled]}
-                  >
-                    <Text style={styles.compactButtonText}>{notification.deliveryStatus === 'read' ? 'Read' : 'Mark read'}</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ))}
+      <View style={styles.notificationPreferencesCard}>
+        <View style={styles.notificationSectionHeader}>
+          <View style={styles.flex}>
+            <Text style={styles.notificationSectionTitle}>Alert preferences</Text>
+            <Text style={styles.notificationSectionCopy}>Important in-app updates stay on. Choose extra channels when you want them.</Text>
           </View>
-        </ShellCard>
-      </ScrollView>
-    </SafeAreaView>
+          <View style={styles.notificationInAppPill}>
+            <MaterialCommunityIcons name="check" color={colors.success} size={15} />
+            <Text style={styles.notificationInAppPillText}>In-app on</Text>
+          </View>
+        </View>
+        <PreferenceToggle label="Push" detail="Instant alerts on this device." enabled={pushEnabled} onPress={() => setPushEnabled((value) => !value)} />
+        <PreferenceToggle label="SMS" detail="Optional text updates when provider is configured." enabled={smsEnabled} onPress={() => setSmsEnabled((value) => !value)} />
+        <PreferenceToggle label="Email" detail="Receipts and important account updates." enabled={emailEnabled} onPress={() => setEmailEnabled((value) => !value)} />
+        {error ? <ErrorState title="Could not update notifications" message={error} /> : null}
+        {message ? <Text style={styles.notificationSuccessText}>{message}</Text> : null}
+        <PrimaryButton disabled={preferencesPending} label={preferencesPending ? 'Saving...' : 'Save preferences'} loading={preferencesPending} onPress={savePreferences} />
+      </View>
+
+      <View style={styles.notificationFilterRow}>
+        {availableFilters.map((filter) => {
+          const selected = activeFilter === filter.key;
+
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              key={filter.key}
+              onPress={() => setActiveFilter(filter.key)}
+              style={[styles.notificationFilterChip, selected && styles.notificationFilterChipActive]}
+            >
+              <Text style={[styles.notificationFilterText, selected && styles.notificationFilterTextActive]}>{filter.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <View style={styles.notificationListHeader}>
+        <Text style={styles.notificationSectionTitle}>{activeFilter === 'all' ? 'Latest updates' : `${notificationFilters.find((filter) => filter.key === activeFilter)?.label ?? 'Updates'} updates`}</Text>
+        <SecondaryButton label="Refresh" onPress={() => notificationsQuery.refetch()} style={styles.notificationRefreshButton} />
+      </View>
+
+      {notificationsQuery.isLoading ? <NotificationLoadingList /> : null}
+
+      {notificationsQuery.isError ? (
+        <ErrorState
+          title="Updates could not load"
+          message={getErrorMessage(notificationsQuery.error)}
+          action={<SecondaryButton label="Try again" onPress={() => notificationsQuery.refetch()} />}
+        />
+      ) : null}
+
+      {!notificationsQuery.isLoading && !notificationsQuery.isError && notifications.length === 0 ? <NotificationEmptyState profile={profile} /> : null}
+
+      {!notificationsQuery.isLoading && !notificationsQuery.isError && notifications.length > 0 && filteredNotifications.length === 0 ? (
+        <View style={styles.notificationEmptyCard}>
+          <View style={styles.notificationEmptyIcon}>
+            <MaterialCommunityIcons name="filter-variant-remove" color={colors.black} size={38} />
+          </View>
+          <Text style={styles.notificationEmptyTitle}>Nothing in this category</Text>
+          <Text style={styles.notificationEmptyCopy}>Try All to see every update.</Text>
+        </View>
+      ) : null}
+
+      {!notificationsQuery.isLoading && !notificationsQuery.isError && filteredNotifications.length > 0 ? (
+        <View style={styles.notificationList}>
+          {filteredNotifications.map((notification) => (
+            <NotificationCard
+              key={notification.id}
+              notification={notification}
+              pending={pendingId === notification.id}
+              profile={profile}
+              onMarkRead={markRead}
+              onOpenDetail={openNotificationDetail}
+            />
+          ))}
+        </View>
+      ) : null}
+    </Screen>
   );
 }
 
-function RatingReportPanel({ request, onRatingSaved }: { request: KuliRequest; onRatingSaved?: () => void }) {
+const ratingTags = ['On time', 'Careful handling', 'Fair price', 'Good communication', 'Professional'];
+const trustIssueOptions = [
+  { key: 'damage', label: 'Item damaged', icon: 'package-variant-remove' },
+  { key: 'no_show', label: 'Delayed pickup', icon: 'clock-alert-outline' },
+  { key: 'overcharge', label: 'Price dispute', icon: 'cash-alert' },
+  { key: 'misconduct', label: 'Driver/client behavior', icon: 'account-alert-outline' },
+  { key: 'other', label: 'Other', icon: 'dots-horizontal-circle-outline' }
+];
+
+function RatingReportPanel({ request, onRatingSaved, onDismiss }: { request: KuliRequest; onRatingSaved?: () => void; onDismiss?: () => void }) {
   const queryClient = useQueryClient();
   const [rating, setRating] = useState('5');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [reviewText, setReviewText] = useState('');
   const [mode, setMode] = useState<'review' | 'issue' | 'payment'>('review');
   const [category, setCategory] = useState('damage');
-  const [categoryOpen, setCategoryOpen] = useState(false);
   const [description, setDescription] = useState('');
   const [evidenceFile, setEvidenceFile] = useState<PickedFile | null>(null);
   const [pendingAction, setPendingAction] = useState('');
@@ -3896,7 +5021,7 @@ function RatingReportPanel({ request, onRatingSaved }: { request: KuliRequest; o
         method: 'POST',
         body: {
           rating: parsedRating,
-          reviewText: reviewText.trim() || undefined
+          reviewText: [selectedTags.join(', '), reviewText.trim()].filter(Boolean).join(' - ') || undefined
         }
       })) as ApiEnvelope<RatingRecord>;
 
@@ -3997,13 +5122,23 @@ function RatingReportPanel({ request, onRatingSaved }: { request: KuliRequest; o
     }
   };
 
+  const toggleRatingTag = (tag: string) => {
+    setSelectedTags((current) => (current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]));
+  };
+
   return (
-    <View style={styles.subsection}>
-      <View style={styles.cardHeader}>
-        <Text style={styles.fieldLabel}>After-trip actions</Text>
-        <StatusPill tone={terminal ? 'ready' : 'warn'}>{terminal ? 'Ready' : 'Trip active'}</StatusPill>
+    <View style={styles.trustPanel}>
+      <View style={styles.trustHero}>
+        <View style={styles.trustHeroIcon}>
+          <MaterialCommunityIcons name="shield-check-outline" color={colors.card} size={30} />
+        </View>
+        <View style={styles.flex}>
+          <Text style={styles.trustHeroTitle}>{mode === 'review' ? 'Rate your KULI move' : mode === 'issue' ? 'Report an issue' : 'Cash payment review'}</Text>
+          <Text style={styles.trustHeroCopy}>{request.requestCode} / {shortAreaLabel(request.pickupLocation?.addressText)} to {shortAreaLabel(request.destinationLocation?.addressText)}</Text>
+        </View>
+        <StatusBadge tone={terminal ? 'success' : 'warning'}>{terminal ? 'Ready' : 'Trip active'}</StatusBadge>
       </View>
-      <View style={styles.segmentedCompact}>
+      <View style={styles.trustModeTabs}>
         {[
           { key: 'review', label: 'Review' },
           { key: 'issue', label: 'Issue' },
@@ -4014,17 +5149,25 @@ function RatingReportPanel({ request, onRatingSaved }: { request: KuliRequest; o
             accessibilityState={{ selected: mode === option.key }}
             key={option.key}
             onPress={() => setMode(option.key as 'review' | 'issue' | 'payment')}
-            style={[styles.segmentButton, mode === option.key && styles.segmentButtonActive]}
+            style={[styles.trustModeTab, mode === option.key && styles.trustModeTabActive]}
           >
-            <Text style={[styles.segmentText, mode === option.key && styles.segmentTextActive]}>{option.label}</Text>
+            <Text style={[styles.trustModeTabText, mode === option.key && styles.trustModeTabTextActive]}>{option.label}</Text>
           </Pressable>
         ))}
       </View>
 
       {mode === 'review' ? (
         <View style={styles.trustSection}>
-          <Text style={styles.muted}>Rate the completed move. Five stars means everything went smoothly.</Text>
-          <View style={styles.starRow}>
+          <View style={styles.ratingOwnerCard}>
+            <View style={styles.ratingOwnerAvatar}>
+              <MaterialCommunityIcons name="truck-check-outline" color={colors.black} size={26} />
+            </View>
+            <View style={styles.flex}>
+              <Text style={styles.ratingOwnerTitle}>{request.selectedVehicleId ? `Vehicle ${request.selectedVehicleId.slice(-6).toUpperCase()}` : 'KULI truck owner'}</Text>
+              <Text style={styles.ratingOwnerCopy}>Your public review helps future customers choose verified trucks.</Text>
+            </View>
+          </View>
+          <View style={styles.trustStars}>
             {[1, 2, 3, 4, 5].map((star) => {
               const selected = Number(rating) >= star;
 
@@ -4034,85 +5177,173 @@ function RatingReportPanel({ request, onRatingSaved }: { request: KuliRequest; o
                   accessibilityState={{ selected }}
                   key={star}
                   onPress={() => setRating(String(star))}
-                  style={styles.starButton}
+                  style={styles.trustStarButton}
                 >
-                  <Text style={[styles.starText, selected && styles.starTextSelected]}>{selected ? '★' : '☆'}</Text>
+                  <MaterialCommunityIcons name={selected ? 'star' : 'star-outline'} color={selected ? colors.warning : colors.border} size={42} />
                 </Pressable>
               );
             })}
           </View>
-          <Text style={styles.ratingSummary}>{rating}/5 selected</Text>
+          <Text style={styles.trustRatingSummary}>{rating}/5 selected</Text>
+          <View style={styles.trustTagGrid}>
+            {ratingTags.map((tag) => {
+              const selected = selectedTags.includes(tag);
+
+              return (
+                <Pressable key={tag} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => toggleRatingTag(tag)} style={[styles.trustTag, selected && styles.trustTagSelected]}>
+                  <Text style={[styles.trustTagText, selected && styles.trustTagTextSelected]}>{tag}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
           <Field label="Review note" value={reviewText} onChangeText={setReviewText} placeholder="Optional: what went well?" />
         </View>
       ) : null}
 
       {mode === 'issue' ? (
         <View style={styles.trustSection}>
-          <Text style={styles.muted}>Report safety, damage, no-show, or app issues. Add a photo when it helps explain what happened.</Text>
-          <Pressable accessibilityRole="button" onPress={() => setCategoryOpen((value) => !value)} style={styles.locationSelectButton}>
-            <View style={styles.flex}>
-              <Text style={styles.locationSelectTitle}>{reportCategoryLabels[category]}</Text>
-              <Text style={styles.muted}>Issue category</Text>
-            </View>
-            <Text style={styles.locationChevron}>{categoryOpen ? 'Close' : 'Change'}</Text>
-          </Pressable>
-          {categoryOpen ? (
-            <View style={styles.locationMenuContent}>
-              {reportCategories.map((option) => {
-                const selected = category === option;
+          <Text style={styles.trustSectionCopy}>Choose the closest category. Evidence is optional, but useful for damage or price questions.</Text>
+          <View style={styles.issueTileGrid}>
+            {trustIssueOptions.map((option) => {
+              const selected = category === option.key;
 
-                return (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    key={option}
-                    onPress={() => {
-                      setCategory(option);
-                      setCategoryOpen(false);
-                    }}
-                    style={[styles.locationOption, selected && styles.locationOptionSelected]}
-                  >
-                    <Text style={[styles.fieldLabel, selected && styles.documentOptionSelectedText]}>{reportCategoryLabels[option]}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          ) : null}
+              return (
+                <Pressable accessibilityRole="button" accessibilityState={{ selected }} key={option.key} onPress={() => setCategory(option.key)} style={[styles.issueTile, selected && styles.issueTileSelected]}>
+                  <MaterialCommunityIcons name={option.icon as never} color={selected ? colors.card : colors.black} size={25} />
+                  <Text style={[styles.issueTileText, selected && styles.issueTileTextSelected]}>{option.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
           <Field label="What happened?" value={description} onChangeText={setDescription} placeholder="Add a short, clear description" />
-          <FilePickerField label="Evidence photo" value={evidenceFile} onChange={setEvidenceFile} />
+          <View style={styles.evidenceCard}>
+            <MaterialCommunityIcons name={evidenceFile ? 'file-check-outline' : 'camera-plus-outline'} color={evidenceFile ? colors.success : colors.textSecondary} size={28} />
+            <View style={styles.flex}>
+              <Text style={styles.evidenceTitle}>{evidenceFile ? 'Evidence attached' : 'Add evidence'}</Text>
+              <Text style={styles.evidenceCopy}>{evidenceFile ? evidenceFile.name : 'Upload a photo or take a new picture when it helps.'}</Text>
+            </View>
+          </View>
+          <FilePickerField label="Evidence photo" value={evidenceFile} onChange={setEvidenceFile} emptyText="Optional. Add a clear image when it supports the issue." uploadLabel="Upload" takeLabel="Camera" />
         </View>
       ) : null}
 
       {mode === 'payment' ? (
         <View style={styles.trustSection}>
-          <Text style={styles.muted}>Use this only if the cash/manual payment amount or status needs review.</Text>
+          <View style={styles.paymentDisputeCard}>
+            <Text style={styles.ownerPaymentEyebrow}>Manual cash estimate</Text>
+            <Text style={styles.ownerPaymentAmount}>{requestEstimateLabel(request)}</Text>
+            <StatusBadge tone={request.payment?.status === 'disputed' ? 'warning' : request.payment?.status === 'confirmed_by_owner' ? 'success' : 'warning'}>
+              {request.payment ? paymentStatusLabels[request.payment.status] : 'Payment pending'}
+            </StatusBadge>
+          </View>
+          <Text style={styles.trustSectionCopy}>Use this only for pay-after-delivery cash amount or payment status issues.</Text>
           <Field label="Payment issue" value={description} onChangeText={setDescription} placeholder="Describe the payment problem" />
         </View>
       ) : null}
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-      {message ? <Text style={styles.noticeText}>{message}</Text> : null}
+      {error ? <ErrorState title="Action failed" message={error} /> : null}
+      {message ? <Text style={styles.trustSuccessText}>{message}</Text> : null}
       {mode === 'review' ? (
-        <Pressable accessibilityRole="button" disabled={!canRate || Boolean(pendingAction)} onPress={submitRating} style={[styles.primaryButton, (!canRate || Boolean(pendingAction)) && styles.buttonDisabled]}>
-          <Text style={styles.primaryButtonText}>{pendingAction === 'rating' ? 'Saving...' : 'Submit review'}</Text>
-        </Pressable>
+        <>
+          <PrimaryButton disabled={!canRate || Boolean(pendingAction)} loading={pendingAction === 'rating'} label={pendingAction === 'rating' ? 'Saving...' : 'Submit review'} onPress={submitRating} />
+          {onDismiss ? <SecondaryButton label="Not now" onPress={onDismiss} /> : null}
+        </>
       ) : null}
       {mode === 'issue' ? (
-        <Pressable accessibilityRole="button" disabled={Boolean(pendingAction)} onPress={createReport} style={[styles.primaryButton, Boolean(pendingAction) && styles.buttonDisabled]}>
-          <Text style={styles.primaryButtonText}>{pendingAction === 'report' ? 'Submitting...' : 'Submit issue'}</Text>
-        </Pressable>
+        <PrimaryButton disabled={Boolean(pendingAction)} loading={pendingAction === 'report'} label={pendingAction === 'report' ? 'Submitting...' : 'Submit issue'} onPress={createReport} />
       ) : null}
       {mode === 'payment' ? (
-        <Pressable accessibilityRole="button" disabled={!canDisputePayment || Boolean(pendingAction)} onPress={disputePayment} style={[styles.primaryButton, (!canDisputePayment || Boolean(pendingAction)) && styles.buttonDisabled]}>
-          <Text style={styles.primaryButtonText}>{pendingAction === 'dispute' ? 'Submitting...' : 'Dispute payment'}</Text>
-        </Pressable>
+        <PrimaryButton disabled={!canDisputePayment || Boolean(pendingAction)} loading={pendingAction === 'dispute'} label={pendingAction === 'dispute' ? 'Submitting...' : 'Submit payment dispute'} onPress={disputePayment} />
+      ) : null}
+    </View>
+  );
+}
+
+type ClientHistoryFilter = 'all' | 'completed' | 'cancelled' | 'issues' | 'payment';
+
+const clientHistoryFilters: Array<{ key: ClientHistoryFilter; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'completed', label: 'Completed' },
+  { key: 'cancelled', label: 'Cancelled' },
+  { key: 'issues', label: 'Issues' },
+  { key: 'payment', label: 'Payment' }
+];
+
+const historyFilterMatches = (request: KuliRequest, filter: ClientHistoryFilter) => {
+  if (filter === 'all') {
+    return true;
+  }
+
+  if (filter === 'completed') {
+    return request.status === 'completed';
+  }
+
+  if (filter === 'cancelled') {
+    return request.status === 'cancelled' || request.status === 'timed_out';
+  }
+
+  if (filter === 'issues') {
+    return request.status === 'cancelled' || request.payment?.status === 'disputed';
+  }
+
+  return Boolean(request.payment) || request.status === 'completed';
+};
+
+function ClientHistoryTripCard({
+  request,
+  expanded,
+  onToggle
+}: {
+  request: KuliRequest;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <View style={styles.activityTripCard}>
+      <View style={styles.activityTripHeader}>
+        <View style={styles.flex}>
+          <Text style={styles.activityTripCode}>{request.requestCode}</Text>
+          <Text style={styles.activityTripDate}>{formatRequestSchedule(request)}</Text>
+        </View>
+        <StatusBadge tone={badgeToneForStatus(request.status)}>{statusLabels[request.status]}</StatusBadge>
+      </View>
+      <View style={styles.activityRouteRow}>
+        <View style={styles.activityRouteRail}>
+          <View style={styles.activityRouteDotStart} />
+          <View style={styles.activityRouteLine} />
+          <View style={styles.activityRouteDotEnd} />
+        </View>
+        <View style={styles.flex}>
+          <Text style={styles.activityRouteText}>{request.pickupLocation?.addressText}</Text>
+          <Text style={styles.activityRouteText}>{request.destinationLocation?.addressText}</Text>
+        </View>
+      </View>
+      <View style={styles.activityTripFooter}>
+        <View>
+          <Text style={styles.activityTripAmount}>{requestEstimateLabel(request)}</Text>
+          <Text style={styles.activityTripMeta}>{request.requestedVehicleClassId ? `Truck ${request.requestedVehicleClassId.slice(-6).toUpperCase()}` : 'KULI truck'}</Text>
+        </View>
+        <SecondaryButton label={expanded ? 'Hide' : 'Details'} onPress={onToggle} style={styles.ownerSmallButton} />
+      </View>
+      {expanded ? (
+        <View style={styles.activityDetailPanel}>
+          <RoutePill pickup={request.pickupLocation?.addressText ?? 'Pickup'} destination={request.destinationLocation?.addressText ?? 'Destination'} />
+          <View style={styles.activityDetailGrid}>
+            <MetricCard label="Payment" value={request.payment ? paymentStatusLabels[request.payment.status] : 'Pending'} tone={request.payment?.status === 'disputed' ? 'warning' : request.payment?.status === 'confirmed_by_owner' ? 'success' : 'default'} />
+            <MetricCard label="Rating" value={request.selectedOwnerId ? 'Available' : 'Unavailable'} detail="After completed owner-linked trip" />
+          </View>
+          <TripTimeline requestId={request.id} />
+          <RatingReportPanel request={request} />
+        </View>
       ) : null}
     </View>
   );
 }
 
 function ClientHistoryScreen({ profile }: { profile: UserProfile }) {
+  const navigation = useNavigation<any>();
   const [expandedRequestId, setExpandedRequestId] = useState('');
+  const [activeFilter, setActiveFilter] = useState<ClientHistoryFilter>('all');
   const [dismissedRatingRequestIds, setDismissedRatingRequestIds] = useState<string[]>([]);
   const requestsQuery = useQuery({
     queryKey: ['kuli-requests', 'mine', 'history'],
@@ -4121,6 +5352,7 @@ function ClientHistoryScreen({ profile }: { profile: UserProfile }) {
 
   const requests = requestsQuery.data ?? [];
   const terminalRequests = requests.filter((request) => terminalRequestStatuses.includes(request.status));
+  const filteredRequests = terminalRequests.filter((request) => historyFilterMatches(request, activeFilter));
   const ratingPromptRequest = terminalRequests.find((request) => request.status === 'completed' && request.selectedOwnerId && !dismissedRatingRequestIds.includes(request.id));
 
   const dismissRatingPrompt = (requestId: string) => {
@@ -4128,41 +5360,54 @@ function ClientHistoryScreen({ profile }: { profile: UserProfile }) {
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>/client/history</Text>
-        <Text style={styles.title}>Close the trust loop.</Text>
-        <Text style={styles.copy}>Payment disputes, ratings, and reports stay attached to terminal KULI requests.</Text>
-        <ShellCard title="Completed and cancelled requests">
-          {requestsQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(requestsQuery.error)}</Text> : null}
-          {terminalRequests.length === 0 ? <Text style={styles.muted}>No terminal trips yet. Complete or cancel an accepted trip before rating or disputing payment.</Text> : null}
-          <View style={styles.roleGrid}>
-            {terminalRequests.map((request) => (
-              <View key={request.id} style={styles.requestRowStack}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.flex}>
-                    <Text style={styles.cardTitle}>{request.requestCode}</Text>
-                    <Text style={styles.muted}>{request.pickupLocation?.addressText} to {request.destinationLocation?.addressText}</Text>
-                  </View>
-                  <StatusPill tone={statusTone(request.status)}>{statusLabels[request.status]}</StatusPill>
-                </View>
-                <View style={styles.cardHeader}>
-                  <Text style={styles.muted}>{request.quoteSnapshot?.currency ?? 'ETB'} {Number(request.quoteSnapshot?.totalEstimate ?? 0).toFixed(2)}</Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => setExpandedRequestId((current) => (current === request.id ? '' : request.id))}
-                    style={styles.compactButton}
-                  >
-                    <Text style={styles.compactButtonText}>{expandedRequestId === request.id ? 'Hide' : 'Details'}</Text>
-                  </Pressable>
-                </View>
-                {expandedRequestId === request.id ? <RatingReportPanel request={request} /> : null}
-              </View>
-            ))}
+    <>
+      <Screen contentStyle={styles.activityContent}>
+        <View style={styles.activityHero}>
+          <View style={styles.flex}>
+            <Text style={styles.activityEyebrow}>KULI Activity</Text>
+            <Text style={styles.activityTitle}>Trip history</Text>
+            <Text style={styles.activitySubtitle}>Reviews, reports, and manual payment questions stay attached to each trip.</Text>
           </View>
-        </ShellCard>
+          <StatusBadge tone="dark">{`${terminalRequests.length} trips`}</StatusBadge>
+        </View>
+
+        <View style={styles.activityFilterRow}>
+          {clientHistoryFilters.map((filter) => {
+            const selected = activeFilter === filter.key;
+
+            return (
+              <Pressable key={filter.key} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => setActiveFilter(filter.key)} style={[styles.activityFilterChip, selected && styles.activityFilterChipActive]}>
+                <Text style={[styles.activityFilterText, selected && styles.activityFilterTextActive]}>{filter.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {requestsQuery.isLoading ? <LoadingState title="Loading activity" message="Checking your completed and cancelled moves." /> : null}
+        {requestsQuery.isError ? <ErrorState title="Activity could not load" message={getErrorMessage(requestsQuery.error)} /> : null}
+        {!requestsQuery.isLoading && terminalRequests.length === 0 ? (
+          <View style={styles.ownerEmptyCard}>
+            <MaterialCommunityIcons name="history" color={colors.black} size={44} />
+            <Text style={styles.ownerEmptyTitle}>No trips yet</Text>
+            <Text style={styles.ownerEmptyCopy}>Completed and cancelled KULI moves will appear here.</Text>
+            <PrimaryButton label="Request a truck" onPress={() => navigation.navigate('Request')} />
+          </View>
+        ) : null}
+        {!requestsQuery.isLoading && terminalRequests.length > 0 && filteredRequests.length === 0 ? (
+          <EmptyState title="Nothing in this filter" message="Try All to see every completed, cancelled, or payment-related trip." />
+        ) : null}
+        <View style={styles.activityTripList}>
+          {filteredRequests.map((request) => (
+            <ClientHistoryTripCard
+              key={request.id}
+              request={request}
+              expanded={expandedRequestId === request.id}
+              onToggle={() => setExpandedRequestId((current) => (current === request.id ? '' : request.id))}
+            />
+          ))}
+        </View>
         <Text style={styles.muted}>Signed in as {profile.fullName || profile.email}.</Text>
-      </ScrollView>
+      </Screen>
       <Modal animationType="fade" transparent visible={Boolean(ratingPromptRequest)} onRequestClose={() => ratingPromptRequest && dismissRatingPrompt(ratingPromptRequest.id)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.pickerDialog}>
@@ -4172,17 +5417,14 @@ function ClientHistoryScreen({ profile }: { profile: UserProfile }) {
               {ratingPromptRequest ? (
                 <>
                   <Text style={styles.muted}>{ratingPromptRequest.requestCode} / {ratingPromptRequest.pickupLocation?.addressText} to {ratingPromptRequest.destinationLocation?.addressText}</Text>
-                  <RatingReportPanel request={ratingPromptRequest} onRatingSaved={() => dismissRatingPrompt(ratingPromptRequest.id)} />
-                  <Pressable accessibilityRole="button" onPress={() => dismissRatingPrompt(ratingPromptRequest.id)} style={styles.secondaryButton}>
-                    <Text style={styles.secondaryButtonText}>Not now</Text>
-                  </Pressable>
+                  <RatingReportPanel request={ratingPromptRequest} onRatingSaved={() => dismissRatingPrompt(ratingPromptRequest.id)} onDismiss={() => dismissRatingPrompt(ratingPromptRequest.id)} />
                 </>
               ) : null}
             </ScrollView>
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </>
   );
 }
 
@@ -4203,9 +5445,16 @@ function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
     queryFn: async () => ((await kuliApi.request(`/owners/${profile.id}/ratings`)) as ApiEnvelope<RatingRecord[]>).data
   });
 
-  const completedRequests = (requestsQuery.data ?? []).filter((request) => request.status === 'completed' && !isPaymentClosedRequest(request));
+  const allOwnerRequests = requestsQuery.data ?? [];
+  const allCompletedRequests = allOwnerRequests.filter((request) => request.status === 'completed');
+  const completedRequests = allCompletedRequests.filter((request) => !isPaymentClosedRequest(request));
   const ratings = ratingsQuery.data ?? [];
   const averageRating = ratings.length ? ratings.reduce((sum, rating) => sum + rating.rating, 0) / ratings.length : 0;
+  const totalEarnings = allCompletedRequests.reduce((sum, request) => sum + Number(request.payment?.amountConfirmed ?? request.quoteSnapshot?.totalEstimate ?? 0), 0);
+  const cashCollected = allCompletedRequests
+    .filter((request) => request.payment?.status === 'confirmed_by_owner' || request.payment?.status === 'resolved')
+    .reduce((sum, request) => sum + Number(request.payment?.amountConfirmed ?? request.quoteSnapshot?.totalEstimate ?? 0), 0);
+  const pendingConfirmations = allCompletedRequests.filter((request) => !isPaymentClosedRequest(request)).length;
 
   const confirmPayment = async (request: KuliRequest) => {
     setPendingRequestId(request.id);
@@ -4233,77 +5482,120 @@ function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>/owner/earnings</Text>
-        <Text style={styles.title}>Confirm cash and watch trust.</Text>
-        <ShellCard title="Rating summary">
-          <View style={styles.metricGrid}>
-            <View style={styles.metricBox}>
-              <Text style={styles.metricValue}>{averageRating.toFixed(1)}</Text>
-              <Text style={styles.metricLabel}>average</Text>
-            </View>
-            <View style={styles.metricBox}>
-              <Text style={styles.metricValue}>{ratings.length}</Text>
-              <Text style={styles.metricLabel}>ratings</Text>
-            </View>
+    <Screen contentStyle={styles.earningsContent}>
+      <View style={styles.earningsHero}>
+        <Text style={styles.earningsHeroLabel}>Total completed earnings</Text>
+        <Text style={styles.earningsHeroAmount}>ETB {totalEarnings.toFixed(2)}</Text>
+        <Text style={styles.earningsHeroCopy}>Manual cash/pay-after-delivery records confirmed by KULI trips.</Text>
+      </View>
+
+      <View style={styles.ownerMetricGrid}>
+        <MetricCard label="Completed jobs" value={String(allCompletedRequests.length)} tone="dark" />
+        <MetricCard label="Cash collected" value={`ETB ${cashCollected.toFixed(0)}`} tone="success" />
+        <MetricCard label="Pending confirmations" value={String(pendingConfirmations)} tone={pendingConfirmations ? 'warning' : 'default'} />
+        <MetricCard label="Average rating" value={averageRating ? averageRating.toFixed(1) : '-'} detail={`${ratings.length} review${ratings.length === 1 ? '' : 's'}`} />
+      </View>
+
+      {requestsQuery.isLoading ? <LoadingState title="Loading earnings" message="Checking completed jobs and cash confirmations." /> : null}
+      {requestsQuery.isError ? <ErrorState title="Earnings could not load" message={getErrorMessage(requestsQuery.error)} /> : null}
+      {error ? <ErrorState title="Payment action failed" message={error} /> : null}
+      {message ? <Text style={styles.trustSuccessText}>{message}</Text> : null}
+
+      <View style={styles.earningsSection}>
+        <View style={styles.ownerSectionHeader}>
+          <View style={styles.flex}>
+            <Text style={styles.ownerSectionTitle}>Cash confirmations</Text>
+            <Text style={styles.ownerSectionCopy}>Confirm only after receiving manual cash from the customer.</Text>
           </View>
-          {ratingsQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(ratingsQuery.error)}</Text> : null}
-          {ratings.slice(0, 3).map((rating) => (
-            <View key={rating.id} style={styles.requestRow}>
-              <View style={styles.flex}>
-                <Text style={styles.fieldLabel}>{rating.rating}/5</Text>
-                <Text style={styles.muted}>{rating.reviewText || 'No written review.'}</Text>
+          <StatusBadge tone={pendingConfirmations ? 'warning' : 'success'}>{`${pendingConfirmations} pending`}</StatusBadge>
+        </View>
+        <Field label="Override amount ETB" value={amountConfirmed} onChangeText={setAmountConfirmed} placeholder="Leave blank for estimate" keyboardType="numeric" />
+        {allCompletedRequests.length === 0 ? (
+          <View style={styles.ownerEmptyCard}>
+            <MaterialCommunityIcons name="cash-clock" color={colors.black} size={44} />
+            <Text style={styles.ownerEmptyTitle}>No earnings yet</Text>
+            <Text style={styles.ownerEmptyCopy}>Complete trips and confirm cash payments to build your earnings history.</Text>
+          </View>
+        ) : null}
+        {completedRequests.length === 0 && allCompletedRequests.length > 0 ? <EmptyState title="No pending cash confirmations" message="Completed payments are already confirmed, resolved, or closed." /> : null}
+        <View style={styles.ownerPaymentList}>
+          {completedRequests.map((request) => (
+            <View key={request.id} style={styles.ownerPaymentCard}>
+              <View style={styles.ownerPaymentHeader}>
+                <View style={styles.flex}>
+                  <Text style={styles.ownerPaymentEyebrow}>Cash payment</Text>
+                  <Text style={styles.ownerPaymentAmount}>{request.quoteSnapshot?.currency ?? 'ETB'} {Number(request.quoteSnapshot?.totalEstimate ?? 0).toFixed(2)}</Text>
+                  <Text style={styles.ownerPaymentRoute}>{request.pickupLocation?.addressText} to {request.destinationLocation?.addressText}</Text>
+                </View>
+                <StatusBadge tone={request.payment?.status === 'disputed' ? 'warning' : request.payment?.status === 'confirmed_by_owner' ? 'success' : 'warning'}>
+                  {request.payment ? paymentStatusLabels[request.payment.status] : 'Payment pending'}
+                </StatusBadge>
               </View>
+              <View style={styles.ownerPaymentMethodRow}>
+                <View style={styles.ownerPaymentMethodIcon}>
+                  <MaterialCommunityIcons name="cash" color={colors.black} size={24} />
+                </View>
+                <View style={styles.flex}>
+                  <Text style={styles.ownerPaymentMethodTitle}>Cash after delivery</Text>
+                  <Text style={styles.ownerPaymentMethodCopy}>Confirm only after you have received the cash amount.</Text>
+                </View>
+              </View>
+              <PrimaryButton
+                disabled={pendingRequestId === request.id}
+                label={pendingRequestId === request.id ? 'Confirming...' : 'Confirm cash received'}
+                loading={pendingRequestId === request.id}
+                onPress={() => confirmPayment(request)}
+              />
             </View>
           ))}
-        </ShellCard>
-        <ShellCard title="Cash confirmations">
-          {requestsQuery.isError ? <Text style={styles.errorText}>{getErrorMessage(requestsQuery.error)}</Text> : null}
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          {message ? <Text style={styles.noticeText}>{message}</Text> : null}
-          <Field label="Override amount ETB" value={amountConfirmed} onChangeText={setAmountConfirmed} placeholder="Leave blank for estimate" keyboardType="numeric" />
-          {completedRequests.length === 0 ? <Text style={styles.muted}>No completed trips waiting for cash confirmation. Payment confirmation is blocked until completion.</Text> : null}
-          <View style={styles.roleGrid}>
-            {completedRequests.map((request) => (
-              <View key={request.id} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.flex}>
-                    <Text style={styles.cardTitle}>{request.requestCode}</Text>
-                    <Text style={styles.muted}>{request.quoteSnapshot?.currency ?? 'ETB'} {Number(request.quoteSnapshot?.totalEstimate ?? 0).toFixed(2)}</Text>
-                  </View>
-                  <StatusPill tone={request.payment?.status === 'disputed' ? 'warn' : 'ready'}>{request.payment?.status ?? 'Payment pending'}</StatusPill>
-                </View>
-                <Pressable accessibilityRole="button" disabled={pendingRequestId === request.id} onPress={() => confirmPayment(request)} style={[styles.primaryButton, pendingRequestId === request.id && styles.buttonDisabled]}>
-                  <Text style={styles.primaryButtonText}>{pendingRequestId === request.id ? 'Confirming...' : 'Confirm cash payment'}</Text>
-                </Pressable>
-              </View>
-            ))}
+        </View>
+      </View>
+
+      <View style={styles.earningsSection}>
+        <View style={styles.ownerSectionHeader}>
+          <View style={styles.flex}>
+            <Text style={styles.ownerSectionTitle}>Rating summary</Text>
+            <Text style={styles.ownerSectionCopy}>Recent customer feedback from completed KULI trips.</Text>
           </View>
-        </ShellCard>
-      </ScrollView>
-    </SafeAreaView>
+          <View style={styles.earningsRatingBadge}>
+            <MaterialCommunityIcons name="star" color={colors.warning} size={18} />
+            <Text style={styles.earningsRatingText}>{averageRating ? averageRating.toFixed(1) : '-'}</Text>
+          </View>
+        </View>
+        {ratingsQuery.isError ? <ErrorState title="Ratings could not load" message={getErrorMessage(ratingsQuery.error)} /> : null}
+        {ratings.length === 0 && !ratingsQuery.isLoading ? <EmptyState title="No reviews yet" message="Customer reviews appear here after completed trips." /> : null}
+        <View style={styles.earningsReviewList}>
+          {ratings.slice(0, 4).map((ratingRecord) => (
+            <View key={ratingRecord.id} style={styles.earningsReviewCard}>
+              <StarRating value={ratingRecord.rating} compact />
+              <Text style={styles.earningsReviewText}>{ratingRecord.reviewText || 'No written review.'}</Text>
+              {ratingRecord.createdAt ? <Text style={styles.muted}>{new Date(ratingRecord.createdAt).toLocaleDateString()}</Text> : null}
+            </View>
+          ))}
+        </View>
+      </View>
+    </Screen>
   );
 }
 
 function ClientTabs({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
   return (
-    <Tab.Navigator screenOptions={tabScreenOptions}>
+    <Tab.Navigator screenOptions={createTabScreenOptions(clientTabIcons)}>
       <Tab.Screen name="Home">{() => <ClientHomeScreen profile={profile} onSignOut={onSignOut} />}</Tab.Screen>
       <Tab.Screen name="Request" component={ClientQuoteScreen} />
-      <Tab.Screen name="History">{() => <ClientHistoryScreen profile={profile} />}</Tab.Screen>
-      <Tab.Screen name="Alerts">{() => <NotificationCenterScreen profile={profile} />}</Tab.Screen>
+      <Tab.Screen name="Activity">{() => <ClientHistoryScreen profile={profile} />}</Tab.Screen>
+      <Tab.Screen name="Notifications">{() => <NotificationCenterScreen profile={profile} />}</Tab.Screen>
     </Tab.Navigator>
   );
 }
 
 function OwnerTabs({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
   return (
-    <Tab.Navigator screenOptions={tabScreenOptions}>
+    <Tab.Navigator screenOptions={createTabScreenOptions(ownerTabIcons)}>
       <Tab.Screen name="Home">{() => <HomeOverview profile={profile} onSignOut={onSignOut} />}</Tab.Screen>
       <Tab.Screen name="Vehicles" component={OwnerVehiclesScreen} />
       <Tab.Screen name="Offers">{() => <OwnerOffersScreen profile={profile} />}</Tab.Screen>
-      <Tab.Screen name="Alerts">{() => <NotificationCenterScreen profile={profile} />}</Tab.Screen>
+      <Tab.Screen name="Notifications">{() => <NotificationCenterScreen profile={profile} />}</Tab.Screen>
       <Tab.Screen name="Earnings">{() => <OwnerEarningsScreen profile={profile} />}</Tab.Screen>
     </Tab.Navigator>
   );
@@ -4442,26 +5734,59 @@ export default function App() {
   );
 }
 
-const tabScreenOptions = {
-  headerStyle: { backgroundColor: colors.black },
-  headerTintColor: colors.card,
-  headerTitleStyle: {
-    fontSize: 18,
-    fontWeight: '800' as const
-  },
-  tabBarActiveTintColor: colors.black,
-  tabBarInactiveTintColor: colors.textSecondary,
-  tabBarStyle: {
-    backgroundColor: colors.card,
-    borderTopColor: colors.border,
-    minHeight: 68,
-    paddingBottom: 10,
-    paddingTop: 8
-  },
-  tabBarLabelStyle: {
-    fontSize: 11,
-    fontWeight: '800' as const
-  }
+type TabIconConfig = Record<string, { name: string; label: string; iconSet?: 'ion' | 'material' }>;
+type TabBarIconProps = { focused: boolean; color: string; size: number };
+
+const clientTabIcons: TabIconConfig = {
+  Home: { name: 'home-outline', label: 'Home' },
+  Request: { name: 'map-marker-path', label: 'Request', iconSet: 'material' },
+  Activity: { name: 'receipt-outline', label: 'Activity' },
+  Notifications: { name: 'notifications-outline', label: 'Notifications' }
+};
+
+const ownerTabIcons: TabIconConfig = {
+  Home: { name: 'speedometer-outline', label: 'Home', iconSet: 'material' },
+  Vehicles: { name: 'truck-outline', label: 'Vehicles', iconSet: 'material' },
+  Offers: { name: 'clipboard-list-outline', label: 'Offers', iconSet: 'material' },
+  Notifications: { name: 'notifications-outline', label: 'Notifications' },
+  Earnings: { name: 'cash-multiple', label: 'Earnings', iconSet: 'material' }
+};
+
+const createTabScreenOptions = (icons: TabIconConfig) => ({ route }: { route: { name: string } }) => {
+  const icon = icons[route.name] ?? { name: 'ellipse-outline', label: route.name };
+
+  return {
+    headerShown: false,
+    tabBarHideOnKeyboard: true,
+    tabBarShowLabel: false,
+    tabBarStyle: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.xl,
+      borderTopWidth: 1,
+      borderWidth: 1,
+      elevation: 16,
+      height: 82,
+      left: spacing.md,
+      paddingBottom: spacing.sm,
+      paddingHorizontal: spacing.sm,
+      paddingTop: spacing.sm,
+      position: 'absolute' as const,
+      right: spacing.md,
+      shadowColor: colors.black,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.1,
+      shadowRadius: 24
+    },
+    tabBarItemStyle: {
+      borderRadius: radii.xl,
+      minHeight: 58,
+      paddingVertical: 0
+    },
+    tabBarIcon: ({ focused }: TabBarIconProps) => (
+      <BottomTabIcon focused={focused} iconSet={icon.iconSet} label={icon.label} name={icon.name} />
+    )
+  };
 };
 
 const styles = StyleSheet.create({
@@ -4481,17 +5806,111 @@ const styles = StyleSheet.create({
   },
   content: {
     gap: spacing.lg,
-    padding: spacing.xl
+    padding: spacing.xl,
+    paddingBottom: 128
   },
   authContent: {
     gap: spacing.lg,
     padding: spacing.lg,
     paddingBottom: spacing.xxl
   },
+  requestFlowContent: {
+    backgroundColor: colors.background,
+    gap: 0,
+    paddingBottom: 128
+  },
+  requestMapStage: {
+    backgroundColor: colors.black,
+    minHeight: 430,
+    position: 'relative'
+  },
+  requestHeroMap: {
+    borderRadius: 0,
+    borderWidth: 0,
+    height: 430
+  },
+  requestFloatingHeader: {
+    left: spacing.lg,
+    position: 'absolute',
+    right: spacing.lg,
+    top: spacing.lg
+  },
+  requestFlowSheet: {
+    marginTop: -spacing.xl,
+    paddingBottom: spacing.xl
+  },
+  requestStepRail: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.xl,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    padding: spacing.xs
+  },
+  requestStepItem: {
+    alignItems: 'center',
+    flex: 1,
+    gap: spacing.xs
+  },
+  requestStepDot: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 17,
+    height: 34,
+    justifyContent: 'center',
+    width: 34
+  },
+  requestStepDotActive: {
+    backgroundColor: colors.black
+  },
+  requestStepDotComplete: {
+    backgroundColor: colors.success
+  },
+  requestStepDotText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  requestStepDotTextActive: {
+    color: colors.card
+  },
+  requestStepLabel: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '800'
+  },
+  requestStepLabelActive: {
+    color: colors.textPrimary
+  },
+  requestSuggestionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm
+  },
+  requestSuggestionChip: {
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    minHeight: 38,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md
+  },
+  requestSuggestionChipActive: {
+    backgroundColor: colors.black,
+    borderColor: colors.black
+  },
+  requestSuggestionText: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  requestSuggestionTextActive: {
+    color: colors.card
+  },
   requestContent: {
     gap: spacing.lg,
     padding: spacing.lg,
-    paddingBottom: spacing.xxl
+    paddingBottom: 128
   },
   requestSection: {
     gap: spacing.lg
@@ -4522,6 +5941,17 @@ const styles = StyleSheet.create({
   requestTruckCardSelected: {
     backgroundColor: colors.black,
     borderColor: colors.black
+  },
+  requestTruckIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.lg,
+    height: 56,
+    justifyContent: 'center',
+    width: 56
+  },
+  requestTruckIconSelected: {
+    backgroundColor: colors.darkSurface
   },
   requestTruckTitle: {
     color: colors.textPrimary,
@@ -4589,6 +6019,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.black,
     borderColor: colors.black
   },
+  requestLoadIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    height: 40,
+    justifyContent: 'center',
+    width: 40
+  },
+  requestLoadIconSelected: {
+    backgroundColor: colors.darkSurface
+  },
   requestLoadTitle: {
     color: colors.textPrimary,
     fontSize: 15,
@@ -4630,6 +6071,12 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     padding: spacing.lg
   },
+  requestCheckoutHero: {
+    backgroundColor: colors.black,
+    borderRadius: radii.xl,
+    gap: spacing.xs,
+    padding: spacing.xl
+  },
   requestQuoteLabel: {
     color: '#D1D5DB',
     fontSize: 12,
@@ -4654,6 +6101,41 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     padding: spacing.md
+  },
+  requestMetricGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  vehicleImageFrame: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    height: 56,
+    justifyContent: 'center',
+    overflow: 'hidden',
+    width: 56
+  },
+  vehicleImageFrameLarge: {
+    height: 72,
+    width: 72
+  },
+  vehicleImageFrameSelected: {
+    backgroundColor: colors.darkSurface,
+    borderColor: colors.darkSurface
+  },
+  vehicleImageFrameOnline: {
+    borderColor: colors.success
+  },
+  vehicleImage: {
+    height: '100%',
+    width: '100%'
+  },
+  vehicleDefaultArt: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center'
   },
   requestCandidateList: {
     gap: spacing.md
@@ -4831,21 +6313,27 @@ const styles = StyleSheet.create({
   clientHomeContent: {
     gap: spacing.xl,
     padding: spacing.lg,
-    paddingBottom: spacing.xxl
+    paddingBottom: 128
   },
-  clientHero: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    gap: spacing.lg,
-    padding: spacing.lg
+  clientHomeHeroStack: {
+    gap: spacing.lg
+  },
+  clientTopBar: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.lg
   },
   clientGreeting: {
     color: colors.textPrimary,
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: '900',
-    lineHeight: 34
+    lineHeight: 36
+  },
+  clientLocationRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginTop: spacing.xs
   },
   clientLocation: {
     color: colors.textSecondary,
@@ -4868,26 +6356,40 @@ const styles = StyleSheet.create({
   },
   clientCtaPanel: {
     backgroundColor: colors.black,
-    borderRadius: radii.lg,
-    gap: spacing.lg,
-    padding: spacing.lg
+    borderRadius: radii.xl,
+    gap: spacing.xl,
+    minHeight: 226,
+    overflow: 'hidden',
+    padding: spacing.xl,
+    position: 'relative'
+  },
+  clientHeroTruckMark: {
+    bottom: -22,
+    opacity: 0.16,
+    position: 'absolute',
+    right: -10,
+    transform: [{ rotate: '-8deg' }]
   },
   clientCtaTitle: {
     color: colors.card,
-    fontSize: 24,
+    fontSize: 30,
     fontWeight: '900',
-    lineHeight: 30
+    lineHeight: 36,
+    maxWidth: 260
   },
   clientCtaCopy: {
     color: '#D1D5DB',
-    fontSize: 14,
-    lineHeight: 21
+    fontSize: 15,
+    lineHeight: 22,
+    maxWidth: 260
   },
   clientCtaButton: {
     alignItems: 'center',
     alignSelf: 'flex-start',
     backgroundColor: colors.card,
     borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.sm,
     justifyContent: 'center',
     minHeight: 52,
     paddingHorizontal: spacing.xl
@@ -4911,6 +6413,24 @@ const styles = StyleSheet.create({
   dashboardSection: {
     gap: spacing.md
   },
+  clientSectionHead: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  clientSectionTitle: {
+    color: colors.textPrimary,
+    fontSize: 21,
+    fontWeight: '900',
+    lineHeight: 28
+  },
+  clientSectionSubtitle: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 2
+  },
   serviceGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -4921,8 +6441,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radii.lg,
     borderWidth: 1,
-    gap: spacing.sm,
-    minHeight: 136,
+    gap: spacing.md,
+    minHeight: 150,
     padding: spacing.lg,
     width: '47.8%'
   },
@@ -4949,6 +6469,165 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 12,
     lineHeight: 17
+  },
+  clientActiveCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    gap: spacing.lg,
+    padding: spacing.lg
+  },
+  clientActiveCardTop: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  clientActiveEyebrow: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0,
+    textTransform: 'uppercase'
+  },
+  clientActiveCode: {
+    color: colors.textPrimary,
+    fontSize: 22,
+    fontWeight: '900',
+    lineHeight: 28
+  },
+  clientRouteCard: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.lg,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  clientRouteRail: {
+    alignItems: 'center',
+    paddingVertical: 2,
+    width: 18
+  },
+  clientRouteDotStart: {
+    backgroundColor: colors.success,
+    borderRadius: 5,
+    height: 10,
+    width: 10
+  },
+  clientRouteLine: {
+    backgroundColor: colors.border,
+    flex: 1,
+    minHeight: 26,
+    width: 2
+  },
+  clientRouteDotEnd: {
+    backgroundColor: colors.black,
+    borderRadius: 5,
+    height: 10,
+    width: 10
+  },
+  clientRouteLabel: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '800',
+    lineHeight: 21
+  },
+  clientRouteTo: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '800',
+    lineHeight: 18,
+    textTransform: 'uppercase'
+  },
+  clientActiveMetaRow: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  clientActiveMetaItem: {
+    backgroundColor: colors.black,
+    borderRadius: radii.md,
+    flex: 1,
+    gap: 2,
+    minHeight: 72,
+    justifyContent: 'center',
+    padding: spacing.md
+  },
+  clientActiveMetaValue: {
+    color: colors.card,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  clientActiveMetaLabel: {
+    color: '#D1D5DB',
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase'
+  },
+  clientActiveSchedule: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  clientEmptyMove: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    gap: spacing.lg,
+    padding: spacing.xl
+  },
+  clientEmptyIllustration: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: 54,
+    height: 108,
+    justifyContent: 'center',
+    position: 'relative',
+    width: 108
+  },
+  clientEmptyTruckBadge: {
+    alignItems: 'center',
+    backgroundColor: colors.black,
+    borderColor: colors.card,
+    borderRadius: 22,
+    borderWidth: 3,
+    bottom: 0,
+    height: 44,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: -4,
+    width: 44
+  },
+  clientEmptyTitle: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '900',
+    textAlign: 'center'
+  },
+  clientEmptyCopy: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: spacing.xs,
+    textAlign: 'center'
+  },
+  clientRecentEmpty: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  clientRecentEmptyTitle: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '900',
+    lineHeight: 20
   },
   dashboardCard: {
     gap: spacing.lg
@@ -4992,8 +6671,42 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     paddingTop: spacing.lg
   },
-  recentTripCard: {
+  recentTripList: {
     gap: spacing.md
+  },
+  recentTripCard: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  recentTripIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: 22,
+    height: 44,
+    justifyContent: 'center',
+    width: 44
+  },
+  recentTripBody: {
+    flex: 1,
+    gap: spacing.sm
+  },
+  recentTripTitle: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '900',
+    lineHeight: 21
+  },
+  recentTripMeta: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 2
   },
   recentTripFooter: {
     alignItems: 'center',
@@ -5005,6 +6718,12 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 14,
     fontWeight: '900'
+  },
+  recentTripCode: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase'
   },
   authHero: {
     backgroundColor: colors.black,
@@ -5239,6 +6958,1339 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 12,
     lineHeight: 17
+  },
+  ownerHomeContent: {
+    gap: spacing.lg,
+    paddingBottom: spacing.xxl
+  },
+  ownerHomeHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md
+  },
+  ownerAvatar: {
+    alignItems: 'center',
+    backgroundColor: colors.black,
+    borderRadius: 26,
+    height: 52,
+    justifyContent: 'center',
+    width: 52
+  },
+  ownerAvatarText: {
+    color: colors.card,
+    fontSize: 20,
+    fontWeight: '900'
+  },
+  ownerHeaderKicker: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  ownerHeaderTitle: {
+    color: colors.textPrimary,
+    fontSize: 28,
+    fontWeight: '900',
+    lineHeight: 34
+  },
+  ownerHeaderCopy: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: spacing.xs
+  },
+  ownerReadinessCard: {
+    backgroundColor: colors.black,
+    borderColor: colors.black,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    gap: spacing.lg,
+    padding: spacing.lg
+  },
+  ownerReadinessSuccess: {
+    backgroundColor: colors.card,
+    borderColor: colors.success
+  },
+  ownerReadinessWarning: {
+    backgroundColor: colors.card,
+    borderColor: colors.warning
+  },
+  ownerReadinessError: {
+    backgroundColor: colors.card,
+    borderColor: colors.error
+  },
+  ownerReadinessTop: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md
+  },
+  ownerReadinessIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.nearBlack,
+    borderRadius: radii.lg,
+    height: 58,
+    justifyContent: 'center',
+    width: 58
+  },
+  ownerReadinessIconSuccess: {
+    backgroundColor: colors.successTint
+  },
+  ownerReadinessIconWarning: {
+    backgroundColor: colors.warningTint
+  },
+  ownerReadinessIconError: {
+    backgroundColor: colors.errorTint
+  },
+  ownerReadinessTitle: {
+    color: colors.textPrimary,
+    fontSize: 22,
+    fontWeight: '900',
+    lineHeight: 28
+  },
+  ownerReadinessCopy: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: spacing.xs
+  },
+  ownerTextOnDark: {
+    color: colors.card
+  },
+  ownerMutedOnDark: {
+    color: '#D1D5DB'
+  },
+  ownerActiveVehicleStrip: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.lg,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ownerActiveVehicleStripDark: {
+    backgroundColor: colors.darkSurface
+  },
+  ownerVehicleStripTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  ownerVehicleStripCopy: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18
+  },
+  ownerDarkPrimaryButton: {
+    backgroundColor: colors.card
+  },
+  ownerSuccessOnDark: {
+    color: '#BBF7D0',
+    fontSize: 14,
+    fontWeight: '800'
+  },
+  ownerMetricGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm
+  },
+  ownerMetricCard: {
+    flexBasis: '48%',
+    flexGrow: 1
+  },
+  ownerSectionHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  ownerSectionTitle: {
+    color: colors.textPrimary,
+    fontSize: 21,
+    fontWeight: '900',
+    lineHeight: 27
+  },
+  ownerSectionCopy: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: spacing.xs
+  },
+  ownerSmallButton: {
+    minHeight: 42,
+    paddingHorizontal: spacing.md
+  },
+  ownerJobCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  ownerJobTop: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  ownerJobCode: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '900'
+  },
+  ownerJobRoute: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: spacing.xs
+  },
+  ownerJobNext: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '800',
+    lineHeight: 20
+  },
+  ownerEmptyCard: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.xl
+  },
+  ownerEmptyTitle: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '900',
+    textAlign: 'center'
+  },
+  ownerEmptyCopy: {
+    color: colors.textSecondary,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center'
+  },
+  ownerAccountCard: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between',
+    padding: spacing.lg
+  },
+  ownerAccountTitle: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '900'
+  },
+  ownerAccountCopy: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '800',
+    marginTop: spacing.xs
+  },
+  ownerAccountMuted: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    marginTop: 2
+  },
+  ownerVehiclesContent: {
+    gap: spacing.lg,
+    paddingBottom: spacing.xxl
+  },
+  ownerVehiclesHero: {
+    alignItems: 'center',
+    backgroundColor: colors.black,
+    borderRadius: radii.xl,
+    flexDirection: 'row',
+    gap: spacing.lg,
+    padding: spacing.xl
+  },
+  ownerVehiclesTitle: {
+    color: colors.card,
+    fontSize: 34,
+    fontWeight: '900',
+    lineHeight: 39
+  },
+  ownerVehiclesCopy: {
+    color: '#E5E7EB',
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: spacing.sm
+  },
+  ownerVehiclesHeroIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.darkSurface,
+    borderRadius: radii.lg,
+    height: 62,
+    justifyContent: 'center',
+    width: 62
+  },
+  ownerVehiclePanel: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.lg,
+    padding: spacing.lg
+  },
+  ownerClassGrid: {
+    gap: spacing.md
+  },
+  ownerClassCard: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ownerClassCardSelected: {
+    backgroundColor: colors.black,
+    borderColor: colors.black
+  },
+  ownerClassIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    height: 48,
+    justifyContent: 'center',
+    width: 48
+  },
+  ownerClassIconSelected: {
+    backgroundColor: colors.darkSurface
+  },
+  ownerClassTitle: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '900'
+  },
+  ownerClassCopy: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 2
+  },
+  ownerClassMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.sm
+  },
+  ownerClassMeta: {
+    color: colors.black,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  ownerFormCard: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.lg,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ownerFormTwoColumn: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  vehiclePhotoPickerCard: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ownerVehicleList: {
+    gap: spacing.md
+  },
+  ownerVehicleCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ownerVehicleCardSelected: {
+    borderColor: colors.black,
+    borderWidth: 2
+  },
+  ownerVehicleTop: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md
+  },
+  ownerVehicleIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    height: 52,
+    justifyContent: 'center',
+    width: 52
+  },
+  ownerVehicleIconOnline: {
+    backgroundColor: colors.successTint
+  },
+  ownerVehicleTitle: {
+    color: colors.textPrimary,
+    fontSize: 19,
+    fontWeight: '900'
+  },
+  ownerVehicleType: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    marginTop: 2
+  },
+  ownerVehicleMetricRow: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  ownerVehicleMetric: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flex: 1,
+    minHeight: 66,
+    justifyContent: 'center',
+    padding: spacing.sm
+  },
+  ownerVehicleMetricValue: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  ownerVehicleMetricLabel: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '900',
+    marginTop: 2
+  },
+  ownerVehicleDescription: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20
+  },
+  ownerVehicleBlockReason: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.warningTint,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  ownerVehicleBlockText: {
+    color: colors.warning,
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '800',
+    lineHeight: 18
+  },
+  ownerVehicleBlockTextError: {
+    color: colors.error
+  },
+  ownerVehicleActions: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  ownerVehicleActionButton: {
+    flex: 1
+  },
+  ownerVerificationCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.lg,
+    padding: spacing.lg
+  },
+  ownerVerificationHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  ownerDocumentList: {
+    gap: spacing.md
+  },
+  ownerDocumentCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ownerDocumentCardUploaded: {
+    borderColor: colors.warning
+  },
+  ownerDocumentCardReady: {
+    borderColor: colors.success
+  },
+  ownerDocumentCardRejected: {
+    borderColor: colors.error
+  },
+  ownerDocumentTop: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md
+  },
+  ownerDocumentIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    height: 48,
+    justifyContent: 'center',
+    width: 48
+  },
+  ownerDocumentIconApproved: {
+    backgroundColor: colors.successTint
+  },
+  ownerDocumentIconRejected: {
+    backgroundColor: colors.errorTint
+  },
+  ownerDocumentTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  ownerDocumentCopy: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 2
+  },
+  ownerDocumentTips: {
+    gap: spacing.xs
+  },
+  ownerDocumentTip: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs
+  },
+  ownerDocumentTipText: {
+    color: colors.textSecondary,
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17
+  },
+  ownerDocumentRejectedSummary: {
+    backgroundColor: colors.errorTint,
+    borderColor: colors.error
+  },
+  ownerOffersContent: {
+    gap: spacing.lg,
+    paddingBottom: spacing.xxl
+  },
+  ownerOffersHero: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.black,
+    borderRadius: radii.xl,
+    flexDirection: 'row',
+    gap: spacing.lg,
+    justifyContent: 'space-between',
+    padding: spacing.xl
+  },
+  ownerOffersEyebrow: {
+    color: '#D1D5DB',
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  ownerOffersTitle: {
+    color: colors.card,
+    fontSize: 36,
+    fontWeight: '900',
+    lineHeight: 40
+  },
+  ownerOffersSubtitle: {
+    color: '#E5E7EB',
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: spacing.sm
+  },
+  ownerOfferStrategy: {
+    alignItems: 'center',
+    backgroundColor: colors.black,
+    borderRadius: radii.lg,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  ownerOfferStrategyTitle: {
+    color: colors.card,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  ownerOfferStrategyCopy: {
+    color: '#D1D5DB',
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 2
+  },
+  ownerOfferReadiness: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  ownerOfferReadinessIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    height: 48,
+    justifyContent: 'center',
+    width: 48
+  },
+  ownerOfferReadinessTitle: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '900'
+  },
+  ownerOfferReadinessCopy: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 2
+  },
+  ownerOfferList: {
+    gap: spacing.md
+  },
+  ownerOfferSkeleton: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.sm,
+    minHeight: 180,
+    padding: spacing.lg
+  },
+  ownerOfferCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    overflow: 'hidden',
+    padding: spacing.lg,
+    paddingTop: spacing.xl
+  },
+  ownerOfferTimerBar: {
+    backgroundColor: colors.subtle,
+    height: 6,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0
+  },
+  ownerOfferTimerFill: {
+    backgroundColor: colors.warning,
+    height: '100%',
+    width: '72%'
+  },
+  ownerOfferHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  ownerOfferHeaderBadges: {
+    alignItems: 'flex-end',
+    gap: spacing.xs
+  },
+  ownerOfferEyebrow: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  ownerOfferPrice: {
+    color: colors.textPrimary,
+    fontSize: 32,
+    fontWeight: '900',
+    lineHeight: 36
+  },
+  ownerOfferExpiry: {
+    alignItems: 'center',
+    backgroundColor: colors.warningTint,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    minHeight: 38,
+    paddingHorizontal: spacing.md
+  },
+  ownerOfferExpiryText: {
+    color: colors.warning,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  ownerOfferRouteBox: {
+    alignItems: 'stretch',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.lg,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ownerOfferRouteRail: {
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+    width: 18
+  },
+  ownerOfferRouteDotStart: {
+    backgroundColor: colors.black,
+    borderRadius: 6,
+    height: 12,
+    width: 12
+  },
+  ownerOfferRouteLine: {
+    backgroundColor: colors.border,
+    flex: 1,
+    marginVertical: spacing.xs,
+    width: 2
+  },
+  ownerOfferRouteDotEnd: {
+    backgroundColor: colors.success,
+    borderRadius: 6,
+    height: 12,
+    width: 12
+  },
+  ownerOfferRouteLabel: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '900'
+  },
+  ownerOfferRouteValue: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '900',
+    marginBottom: spacing.sm
+  },
+  ownerOfferDistanceBox: {
+    alignItems: 'flex-end',
+    justifyContent: 'center'
+  },
+  ownerOfferDistanceValue: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '900'
+  },
+  ownerOfferDistanceLabel: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '900'
+  },
+  ownerOfferInfoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm
+  },
+  ownerOfferInfoCard: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexBasis: '48%',
+    flexDirection: 'row',
+    flexGrow: 1,
+    gap: spacing.sm,
+    minHeight: 66,
+    padding: spacing.sm
+  },
+  ownerOfferInfoLabel: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    fontWeight: '900'
+  },
+  ownerOfferInfoValue: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '900',
+    lineHeight: 16,
+    marginTop: 2
+  },
+  ownerOfferDetailPanel: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.lg,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ownerOfferDetailGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  ownerOfferDetailItem: {
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    flex: 1,
+    gap: spacing.xs,
+    padding: spacing.md
+  },
+  ownerOfferActions: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  ownerOfferPrimaryAction: {
+    flex: 1.4
+  },
+  ownerOfferSecondaryAction: {
+    flex: 1
+  },
+  ownerActiveJobsSection: {
+    gap: spacing.md
+  },
+  ownerActiveJobList: {
+    gap: spacing.lg
+  },
+  ownerActiveJobCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ownerActiveJobSheet: {
+    marginTop: -spacing.lg
+  },
+  ownerJobHandle: {
+    alignSelf: 'center',
+    backgroundColor: colors.border,
+    borderRadius: 2,
+    height: 4,
+    width: 44
+  },
+  ownerActiveJobEyebrow: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '900'
+  },
+  ownerJobContactCard: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ownerJobContactIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    height: 46,
+    justifyContent: 'center',
+    width: 46
+  },
+  ownerJobContactTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  ownerJobContactCopy: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2
+  },
+  ownerControlPanel: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  ownerControlHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md
+  },
+  ownerControlIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.black,
+    borderRadius: radii.md,
+    height: 48,
+    justifyContent: 'center',
+    width: 48
+  },
+  ownerControlTitle: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '900'
+  },
+  ownerControlCopy: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 2
+  },
+  activityContent: {
+    gap: spacing.lg,
+    paddingBottom: spacing.xxl
+  },
+  activityHero: {
+    backgroundColor: colors.black,
+    borderRadius: radii.xl,
+    gap: spacing.md,
+    padding: spacing.xl
+  },
+  activityEyebrow: {
+    color: '#D1D5DB',
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  activityTitle: {
+    color: colors.card,
+    fontSize: 34,
+    fontWeight: '900',
+    lineHeight: 39
+  },
+  activitySubtitle: {
+    color: '#E5E7EB',
+    fontSize: 15,
+    lineHeight: 22
+  },
+  activityFilterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm
+  },
+  activityFilterChip: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 42,
+    paddingHorizontal: spacing.lg
+  },
+  activityFilterChipActive: {
+    backgroundColor: colors.black,
+    borderColor: colors.black
+  },
+  activityFilterText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '900'
+  },
+  activityFilterTextActive: {
+    color: colors.card
+  },
+  activityTripList: {
+    gap: spacing.md
+  },
+  activityTripCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  activityTripHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  activityTripCode: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '900'
+  },
+  activityTripDate: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    marginTop: 2
+  },
+  activityRouteRow: {
+    alignItems: 'stretch',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  activityRouteRail: {
+    alignItems: 'center',
+    paddingVertical: 3,
+    width: 16
+  },
+  activityRouteDotStart: {
+    backgroundColor: colors.black,
+    borderRadius: 6,
+    height: 12,
+    width: 12
+  },
+  activityRouteLine: {
+    backgroundColor: colors.border,
+    flex: 1,
+    marginVertical: spacing.xs,
+    width: 2
+  },
+  activityRouteDotEnd: {
+    backgroundColor: colors.success,
+    borderRadius: 6,
+    height: 12,
+    width: 12
+  },
+  activityRouteText: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '800',
+    lineHeight: 20,
+    marginBottom: spacing.sm
+  },
+  activityTripFooter: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  activityTripAmount: {
+    color: colors.textPrimary,
+    fontSize: 22,
+    fontWeight: '900'
+  },
+  activityTripMeta: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '800'
+  },
+  activityDetailPanel: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.lg,
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  activityDetailGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  trustPanel: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  trustHero: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md
+  },
+  trustHeroIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.black,
+    borderRadius: radii.md,
+    height: 52,
+    justifyContent: 'center',
+    width: 52
+  },
+  trustHeroTitle: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '900',
+    lineHeight: 26
+  },
+  trustHeroCopy: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 2
+  },
+  trustModeTabs: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    padding: spacing.xs
+  },
+  trustModeTab: {
+    alignItems: 'center',
+    borderRadius: radii.sm,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 44
+  },
+  trustModeTabActive: {
+    backgroundColor: colors.black
+  },
+  trustModeTabText: {
+    color: colors.black,
+    fontSize: 13,
+    fontWeight: '900'
+  },
+  trustModeTabTextActive: {
+    color: colors.card
+  },
+  ratingOwnerCard: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ratingOwnerAvatar: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    height: 48,
+    justifyContent: 'center',
+    width: 48
+  },
+  ratingOwnerTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  ratingOwnerCopy: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2
+  },
+  trustStars: {
+    flexDirection: 'row',
+    justifyContent: 'space-between'
+  },
+  trustStarButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+    minWidth: 52
+  },
+  trustRatingSummary: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '900',
+    textAlign: 'center'
+  },
+  trustTagGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm
+  },
+  trustTag: {
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 40,
+    paddingHorizontal: spacing.md
+  },
+  trustTagSelected: {
+    backgroundColor: colors.black,
+    borderColor: colors.black
+  },
+  trustTagText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '900'
+  },
+  trustTagTextSelected: {
+    color: colors.card
+  },
+  trustSectionCopy: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20
+  },
+  issueTileGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm
+  },
+  issueTile: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexBasis: '48%',
+    flexGrow: 1,
+    gap: spacing.sm,
+    justifyContent: 'center',
+    minHeight: 104,
+    padding: spacing.md
+  },
+  issueTileSelected: {
+    backgroundColor: colors.black,
+    borderColor: colors.black
+  },
+  issueTileText: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '900',
+    textAlign: 'center'
+  },
+  issueTileTextSelected: {
+    color: colors.card
+  },
+  evidenceCard: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  evidenceTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  evidenceCopy: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2
+  },
+  paymentDisputeCard: {
+    backgroundColor: colors.warningTint,
+    borderColor: colors.warning,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  trustSuccessText: {
+    color: colors.success,
+    fontSize: 14,
+    fontWeight: '900',
+    lineHeight: 20
+  },
+  earningsContent: {
+    gap: spacing.lg,
+    paddingBottom: spacing.xxl
+  },
+  earningsHero: {
+    backgroundColor: colors.black,
+    borderRadius: radii.xl,
+    gap: spacing.sm,
+    padding: spacing.xl
+  },
+  earningsHeroLabel: {
+    color: '#D1D5DB',
+    fontSize: 13,
+    fontWeight: '900'
+  },
+  earningsHeroAmount: {
+    color: colors.card,
+    fontSize: 34,
+    fontWeight: '900',
+    lineHeight: 40
+  },
+  earningsHeroCopy: {
+    color: '#E5E7EB',
+    fontSize: 14,
+    lineHeight: 20
+  },
+  earningsSection: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  earningsRatingBadge: {
+    alignItems: 'center',
+    backgroundColor: colors.warningTint,
+    borderRadius: radii.xl,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    minHeight: 36,
+    paddingHorizontal: spacing.md
+  },
+  earningsRatingText: {
+    color: colors.warning,
+    fontSize: 14,
+    fontWeight: '900'
+  },
+  earningsReviewList: {
+    gap: spacing.sm
+  },
+  earningsReviewCard: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  earningsReviewText: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    lineHeight: 20
+  },
+  ownerPaymentList: {
+    gap: spacing.md
+  },
+  ownerPaymentCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  ownerPaymentHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  ownerPaymentEyebrow: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  ownerPaymentAmount: {
+    color: colors.textPrimary,
+    fontSize: 28,
+    fontWeight: '900',
+    lineHeight: 34
+  },
+  ownerPaymentRoute: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19
+  },
+  ownerPaymentMethodRow: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  ownerPaymentMethodIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: radii.md,
+    height: 46,
+    justifyContent: 'center',
+    width: 46
+  },
+  ownerPaymentMethodTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  ownerPaymentMethodCopy: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2
   },
   reasonOption: {
     backgroundColor: colors.card,
@@ -5918,21 +8970,359 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800'
   },
-  notificationRow: {
+  notificationsContent: {
+    gap: spacing.lg,
+    paddingBottom: spacing.xxl
+  },
+  notificationsHeader: {
+    backgroundColor: colors.black,
+    borderRadius: radii.xl,
+    gap: spacing.md,
+    padding: spacing.xl
+  },
+  notificationsHeaderTop: {
     alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  notificationsEyebrow: {
+    color: '#D1D5DB',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0,
+    marginBottom: spacing.xs
+  },
+  notificationsTitle: {
+    color: colors.card,
+    fontSize: 34,
+    fontWeight: '900',
+    lineHeight: 39
+  },
+  notificationsSubtitle: {
+    color: '#E5E7EB',
+    fontSize: 15,
+    lineHeight: 22
+  },
+  notificationPreferencesCard: {
     backgroundColor: colors.card,
-    borderColor: colors.line,
-    borderRadius: radii.sm,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  notificationSectionHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  notificationSectionTitle: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '900',
+    lineHeight: 26
+  },
+  notificationSectionCopy: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: spacing.xs
+  },
+  notificationInAppPill: {
+    alignItems: 'center',
+    backgroundColor: colors.successTint,
+    borderRadius: radii.xl,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    minHeight: 34,
+    paddingHorizontal: spacing.md
+  },
+  notificationInAppPillText: {
+    color: colors.success,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  notificationPreferenceRow: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: radii.md,
     borderWidth: 1,
     flexDirection: 'row',
-    gap: spacing.sm,
-    justifyContent: 'space-between',
-    minHeight: 76,
-    padding: spacing.sm
+    gap: spacing.md,
+    minHeight: 72,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
   },
-  notificationActions: {
-    gap: spacing.xs,
-    minWidth: 92
+  notificationPreferenceRowActive: {
+    backgroundColor: colors.card,
+    borderColor: colors.black
+  },
+  notificationPreferenceRowDisabled: {
+    opacity: 0.55
+  },
+  notificationPreferenceTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '900'
+  },
+  notificationPreferenceDetail: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2
+  },
+  notificationToggleTrack: {
+    backgroundColor: colors.border,
+    borderRadius: 999,
+    height: 32,
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    width: 54
+  },
+  notificationToggleTrackActive: {
+    backgroundColor: colors.black
+  },
+  notificationToggleTrackDisabled: {
+    backgroundColor: colors.muted
+  },
+  notificationToggleKnob: {
+    backgroundColor: colors.card,
+    borderRadius: 13,
+    height: 26,
+    width: 26
+  },
+  notificationToggleKnobActive: {
+    alignSelf: 'flex-end'
+  },
+  notificationSuccessText: {
+    color: colors.success,
+    fontSize: 14,
+    fontWeight: '800'
+  },
+  notificationFilterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm
+  },
+  notificationFilterChip: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg
+  },
+  notificationFilterChipActive: {
+    backgroundColor: colors.black,
+    borderColor: colors.black
+  },
+  notificationFilterText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '900'
+  },
+  notificationFilterTextActive: {
+    color: colors.card
+  },
+  notificationListHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between'
+  },
+  notificationRefreshButton: {
+    minHeight: 42,
+    paddingHorizontal: spacing.md
+  },
+  notificationList: {
+    gap: spacing.md
+  },
+  notificationCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    overflow: 'hidden',
+    padding: spacing.md,
+    paddingLeft: spacing.lg
+  },
+  notificationCardUnread: {
+    borderColor: colors.warning
+  },
+  notificationAccent: {
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    top: 0,
+    width: 5
+  },
+  notificationIconWrap: {
+    alignItems: 'center',
+    borderRadius: radii.md,
+    height: 48,
+    justifyContent: 'center',
+    width: 48
+  },
+  notificationCardBody: {
+    flex: 1,
+    gap: spacing.xs
+  },
+  notificationCardHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'space-between'
+  },
+  notificationCardLabel: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  notificationMetaRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs
+  },
+  notificationTime: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '800'
+  },
+  notificationUnreadDot: {
+    backgroundColor: colors.warning,
+    borderRadius: 5,
+    height: 10,
+    width: 10
+  },
+  notificationTitle: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '900',
+    lineHeight: 23
+  },
+  notificationBody: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20
+  },
+  notificationHint: {
+    color: colors.warning,
+    fontSize: 13,
+    fontWeight: '800',
+    lineHeight: 18
+  },
+  notificationActionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.sm
+  },
+  notificationPrimaryAction: {
+    alignItems: 'center',
+    backgroundColor: colors.black,
+    borderRadius: radii.md,
+    minHeight: 42,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg
+  },
+  notificationPrimaryActionText: {
+    color: colors.card,
+    fontSize: 14,
+    fontWeight: '900'
+  },
+  notificationSecondaryAction: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    minHeight: 42,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg
+  },
+  notificationSecondaryActionDisabled: {
+    backgroundColor: colors.subtle
+  },
+  notificationSecondaryActionText: {
+    color: colors.black,
+    fontSize: 14,
+    fontWeight: '900'
+  },
+  notificationSecondaryActionTextDisabled: {
+    color: colors.textSecondary
+  },
+  notificationSkeletonCard: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    minHeight: 104,
+    padding: spacing.md
+  },
+  notificationSkeletonIcon: {
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    height: 48,
+    width: 48
+  },
+  notificationSkeletonLineWide: {
+    backgroundColor: colors.subtle,
+    borderRadius: 999,
+    height: 16,
+    width: '75%'
+  },
+  notificationSkeletonLine: {
+    backgroundColor: colors.subtle,
+    borderRadius: 999,
+    height: 12,
+    marginTop: spacing.sm,
+    width: '95%'
+  },
+  notificationSkeletonLineShort: {
+    backgroundColor: colors.subtle,
+    borderRadius: 999,
+    height: 12,
+    marginTop: spacing.sm,
+    width: '45%'
+  },
+  notificationEmptyCard: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.xl
+  },
+  notificationEmptyIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: 32,
+    height: 64,
+    justifyContent: 'center',
+    width: 64
+  },
+  notificationEmptyTitle: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '900',
+    textAlign: 'center'
+  },
+  notificationEmptyCopy: {
+    color: colors.textSecondary,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center'
   },
   metricGrid: {
     flexDirection: 'row',

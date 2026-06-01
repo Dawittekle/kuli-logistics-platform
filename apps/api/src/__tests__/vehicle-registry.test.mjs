@@ -329,6 +329,44 @@ test('admin file preview creates signed url and audit log', async () => {
   assert.equal(auditLogRepository.entries[0].action, 'file.signed_url.created');
 });
 
+test('vehicle photo upload can be attached to pending vehicle', async () => {
+  const { service } = createService();
+  const [vehicleClass] = await service.seedDefaultVehicleClasses();
+  const vehicle = await service.createVehicle({
+    actor: truckOwner,
+    input: {
+      vehicleClassId: vehicleClass.id,
+      licensePlate: 'AA-PHOTO'
+    }
+  });
+
+  const intent = await service.createUploadIntent({
+    actor: truckOwner,
+    input: {
+      vehicleId: vehicle.id,
+      type: 'vehicle_photo',
+      mimeType: 'image/jpeg',
+      sizeBytes: 4096,
+      originalFileName: 'truck.jpg'
+    }
+  });
+
+  const updated = await service.updateOwnerVehicle({
+    actor: truckOwner,
+    vehicleId: vehicle.id,
+    input: {
+      photo: {
+        fileId: intent.file.id,
+        previewUrl: 'file://truck.jpg'
+      }
+    }
+  });
+
+  assert.equal(intent.file.visibility, 'public');
+  assert.equal(updated.photo.fileId, intent.file.id);
+  assert.equal(updated.photo.previewUrl, 'file://truck.jpg');
+});
+
 test('file upload completion marks file metadata uploaded', async () => {
   const { service } = createService();
   const intent = await service.createUploadIntent({

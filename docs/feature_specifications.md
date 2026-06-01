@@ -147,7 +147,7 @@ Truck owners register vehicles and upload required documents. Admins review subm
 ### User Flow
 
 1. Truck owner opens vehicle management.
-2. Owner enters vehicle class, license plate, capacity, service area, current/standby location, and document uploads.
+2. Owner enters vehicle class, license plate, capacity, service area, current/standby location, a vehicle photo where available, and document uploads.
 3. System validates required fields and file readability.
 4. Vehicle enters pending verification.
 5. Admin reviews pending queue.
@@ -166,6 +166,7 @@ Truck owners register vehicles and upload required documents. Admins review subm
 ### Required Components
 
 - Mobile vehicle registration form.
+- Vehicle photo picker and default vehicle image fallback.
 - Document upload component.
 - Owner vehicle list and status screen.
 - Admin verification queue.
@@ -194,6 +195,7 @@ Truck owners register vehicles and upload required documents. Admins review subm
 - License plate required and normalized.
 - Owner must be truck owner role.
 - Required documents: identity, driver license, vehicle registration certificate, proof of ownership, insurance where available.
+- Vehicle photo is requested for marketplace trust, but existing vehicles can fall back to a default truck image until a photo is attached.
 - File types restricted to image/PDF.
 - File size capped.
 - Vehicle cannot become available unless approved and not suspended/maintenance.
@@ -697,4 +699,3 @@ The system must track security-sensitive and business-critical events.
 ### Edge Cases
 
 - Audit write failure during critical command: command should fail closed for admin/security actions, but can degrade for low-risk read actions.
-
