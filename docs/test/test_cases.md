@@ -144,12 +144,26 @@ Status values:
 | UI-006 | Small screen usability | Verify mobile layout. | Expo web/mobile viewport or emulator. | Small phone viewport. | Navigate all screens. | Text does not overlap; buttons remain tappable; bottom tabs do not cover critical controls. | Not run yet | Not Run | |
 | UI-007 | Map preview visible | Verify map-first request/tracking. | Client signed in. | Any route. | Open Request and active tracking. | Map preview is visible; zoom/full-screen controls work where available. | Not run yet | Not Run | |
 | UI-008 | Request flow usable | Verify guided flow. | Client signed in. | Valid route/load/truck. | Complete Route -> Truck -> Quote -> Sent steps. | Flow is understandable and preserves input after recoverable errors. | Not run yet | Not Run | |
+| UI-009 | Splash/login/signup UI | Verify startup and auth surfaces look polished. | Mobile app running. | Expo web or Android. | Launch app signed out.<br>Observe splash/loading.<br>Open Login, Register, and Forgot password. | Startup/auth screens use KULI branding, readable forms, clear errors, and no staff registration. | Not run yet | Not Run | |
+| UI-010 | Verification prompt | Verify email verification appears only when needed. | Supabase configured; confirmed and unconfirmed accounts available. | Confirmed and unconfirmed accounts. | Sign in as confirmed user.<br>Sign in/register as unconfirmed user. | Confirmed users enter app without verification prompt; unconfirmed users see manual code/link guidance and manual resend. | Not run yet | Not Run | |
+| UI-011 | Status language | Verify raw enums are hidden. | Mobile app has requests/offers/vehicles in multiple states. | Pending, accepted, completed, cancelled, payment states. | Scan request, vehicle, offer, activity, and earnings cards. | Statuses show human-friendly labels such as Online, Pending, Completed, Payment confirmed, and Verification pending. | Not run yet | Not Run | |
+| UI-012 | Status-based tracking copy | Verify no live GPS promise. | Accepted request exists. | Active request/job. | Open client tracking and owner active job. | Map/status copy describes preview or status-based tracking; no live movement is promised. | Not run yet | Not Run | |
+
+## 12. Demo Flow Testing
+
+| Test case ID | Feature | Purpose | Preconditions | Test data | Steps | Expected result | Actual result | Status | Notes |
+|---|---|---|---|---|---|---|---|---|---|
+| DEMO-001 | Client demo walkthrough | Verify client demo can be shown without creating real users. | API running; demo auth enabled; at least one approved online owner vehicle if quote dispatch is demonstrated. | Demo client. | Start demo client.<br>Open Home.<br>Create quote/request.<br>View waiting/active state.<br>Open Activity/Notifications. | Client flow is explorable with local demo auth and no Supabase OTP requirement. | Not run yet | Not Run | Some backend states may need seeded owner/vehicle data. |
+| DEMO-002 | Owner demo walkthrough | Verify owner demo can be shown without creating real users. | API running; demo auth enabled. | Demo owner. | Start demo owner.<br>Open Home/Vehicles/Offers/Earnings.<br>Register or inspect vehicle.<br>Review offer/job states if seeded. | Owner surfaces are explorable with local demo auth; unapproved vehicles remain blocked from going online. | Not run yet | Not Run | |
+| DEMO-003 | End-to-end role handoff | Verify full client-owner marketplace demo. | Client and owner sessions available; approved online vehicle available. | Demo client plus demo owner. | Client dispatches request.<br>Owner accepts.<br>Owner advances status to completed.<br>Owner confirms cash.<br>Client rates/reports from Activity. | Every state-changing action is backend-confirmed and visible to the other role after refresh/refetch. | Not run yet | Not Run | Best final-demo rehearsal case. |
+| DEMO-004 | Staff mobile block | Verify staff users are not demoed inside mobile. | Staff account exists. | Admin or assistant account. | Sign in on mobile as staff. | Mobile shows forbidden/right workspace state and no marketplace tabs. | Not run yet | Not Run | Staff workflows are tested in web dashboard. |
 
 ## Test Execution History
 
 | Date | Build/Commit | Environment | Tester | Test cases run | Pass | Fail | Not Run | Notes |
 |---|---|---|---|---|---:|---:|---:|---|
 | 2026-06-01 | Current local branch | Local repo | Codex | Documentation creation only | 0 | 0 | All | Created test case document; no manual test execution performed. |
+| 2026-06-01 | Current local branch | Local repo | Codex | Mobile UI QA static pass | 5 automated checks | 0 | Manual cases | Ran mobile TypeScript, repo lint, repo typecheck, mobile startup verify, and Expo web export after copy cleanup; manual visual walkthrough not executed. |
 
 ## Known Testing Gaps
 

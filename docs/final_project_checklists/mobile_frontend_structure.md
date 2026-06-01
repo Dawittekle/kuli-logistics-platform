@@ -91,6 +91,7 @@ Session states:
 
 - Login with Supabase email/password.
 - Public registration for `client` and `truck_owner`.
+- Forgot-password/account recovery through Supabase reset email.
 - Email confirmation code entry and resend.
 - Local development demo profiles when demo auth is enabled.
 
@@ -99,7 +100,7 @@ Important behavior:
 - Public registration does not expose `admin` or `assistant`.
 - Normal routing after auth depends on backend `/me`.
 - Demo login can preserve an existing backend role by email so an owner account does not silently become a client.
-- Real password reset/account recovery is not implemented yet; this is still a functional requirement gap.
+- Password reset uses Supabase email recovery and keeps existing login/register/verification behavior intact.
 
 ## Navigation Structure
 
@@ -111,8 +112,8 @@ Client tabs:
 |---|---|---|
 | `Home` | `ClientHomeScreen` | Profile summary, active requests, accepted trip workspace, cancel/sign out. |
 | `Request` | `ClientQuoteScreen` | Pickup/destination, load details, schedule, quote, candidate selection, dispatch. |
-| `History` | `ClientHistoryScreen` | Terminal requests, rating prompt, reviews, reports, payment disputes. |
-| `Alerts` | `NotificationCenterScreen` | In-app notifications and preferences. |
+| `Activity` | `ClientHistoryScreen` | Terminal requests, rating prompt, reviews, reports, payment disputes. |
+| `Notifications` | `NotificationCenterScreen` | In-app notifications and preferences. |
 
 Truck owner tabs:
 
@@ -121,7 +122,7 @@ Truck owner tabs:
 | `Home` | `HomeOverview` | Owner profile, account status, sign out. |
 | `Vehicles` | `OwnerVehiclesScreen` | Vehicle registration, document upload, verification state, availability. |
 | `Offers` | `OwnerOffersScreen` | Offer inbox, offer detail, accept/decline, active trip workspace. |
-| `Alerts` | `NotificationCenterScreen` | In-app notifications and preferences. |
+| `Notifications` | `NotificationCenterScreen` | In-app notifications and preferences. |
 | `Earnings` | `OwnerEarningsScreen` | Completed trips, cash/manual payment confirmation, rating summary. |
 
 ## Main Component Map
@@ -321,4 +322,3 @@ Follow `docs/frontend_ui_system.md` and `skills-lock.json`:
 4. Reuse `kuliApi`, `getErrorMessage`, `ShellCard`, `StatusPill`, `Field`, and existing mutation/query patterns.
 5. Keep copy user-facing and role-aware; prefer names from `profile.fullName` or request participant metadata over generic role labels.
 6. Validate with at least `npm run lint`, `npm run typecheck`, and mobile web export when UI changes are made.
-

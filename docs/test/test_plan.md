@@ -137,6 +137,22 @@ The repository contains backend Node test suites for:
 
 The repository also contains mobile shell/smoke files for auth, quote, marketplace, trip, and engagement flows. These files document intended UI behavior and support startup validation, but they do not replace manual UI execution.
 
+### 4.5 UI Regression Testing
+
+Run UI regression checks after each mobile UI rebuild or demo-readiness pass. The tester should verify that normal mobile screens do not expose route paths, raw enum values, implementation/debug wording, placeholder icons, or prototype copy. At minimum, scan Auth, Home, Request, Activity, Notifications, Vehicles, Offers, Earnings, active trip/job, rating/report, and payment confirmation screens on a small mobile viewport.
+
+Automated scripts can confirm the app typechecks and bundles, but they do not replace visual inspection. Keep manual UI case results as `Not run yet` until a tester actually opens the screens and records the outcome.
+
+### 4.6 Demo Flow Testing
+
+Before the final project demo, run a complete client-plus-owner walkthrough with local demo auth first, then repeat the smallest possible real Supabase account check if email limits allow it. The demo walkthrough should prove:
+
+- Public mobile registration is limited to clients and truck owners.
+- Staff users remain blocked from mobile marketplace tabs.
+- Client request creation, owner acceptance, manual status tracking, messaging, rating/report, and payment dispute actions wait for backend confirmation.
+- Owner vehicle verification gates availability, offers use first-accept-wins behavior, and cash confirmation remains manual/pay-after-delivery.
+- The map UI is presented as preview/status-based tracking only; it does not promise live GPS.
+
 ## 5. Test Cases With Specifications
 
 Detailed test case tables are maintained in [test_cases.md](test_cases.md).
@@ -161,6 +177,7 @@ Manual testers must update `Actual result`, `Status`, and `Notes` during each te
 | Date | Build/Commit | Environment | Tester | Scope | Result Summary | Notes |
 |---|---|---|---|---|---|---|
 | 2026-06-01 | Current local branch | Local repo | Codex | Documentation creation only | Not executed | Test plan and test case documents created. |
+| 2026-06-01 | Current local branch | Local repo | Codex | Mobile UI QA static pass | Passed automated checks | Copy cleanup, docs update, TypeScript/lint/startup/export checks run; manual visual walkthrough still required. |
 
 ## 7. Known Testing Gaps
 

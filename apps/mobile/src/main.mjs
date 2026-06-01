@@ -5,7 +5,7 @@ import { clientWaitingState, ownerOfferInbox } from './marketplace-shell.mjs';
 import { candidateResultCardFields, clientQuoteFlow } from './quote-shell.mjs';
 import { clientTripTimeline, notificationCenter, ownerActiveTripFlow, tripMessageThread } from './trip-shell.mjs';
 
-console.log('@kuli/mobile placeholder scaffold');
+console.log('@kuli/mobile workflow contract summary');
 console.log(
   JSON.stringify(
     {

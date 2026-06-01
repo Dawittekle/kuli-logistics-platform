@@ -1481,7 +1481,7 @@ function VehicleCard({
             : ''
       : vehicle.verificationStatus === 'rejected'
         ? vehicle.rejectionReason || 'Update rejected documents before this truck can go online.'
-        : 'Admin approval is required before this truck can receive requests.';
+        : 'KULI approval is required before this truck can receive requests.';
 
   return (
     <View style={[styles.ownerVehicleCard, selected && styles.ownerVehicleCardSelected]}>
@@ -1636,7 +1636,7 @@ function DocumentUploadField({
     try {
       await uploadDocument(documentType);
       const label = documentTypes.find((entry) => entry.type === documentType)?.label ?? 'Document';
-      setMessage(`${label} attached for admin review.`);
+      setMessage(`${label} attached for KULI review.`);
       onUploaded();
     } catch (uploadError) {
       setError(getErrorMessage(uploadError));
@@ -1670,7 +1670,7 @@ function DocumentUploadField({
         await uploadDocument(documentType);
       }
 
-      setMessage(`${readyTypes.length} document${readyTypes.length === 1 ? '' : 's'} attached for admin review.`);
+      setMessage(`${readyTypes.length} document${readyTypes.length === 1 ? '' : 's'} attached for KULI review.`);
       onUploaded();
     } catch (uploadError) {
       setError(getErrorMessage(uploadError));
@@ -1685,7 +1685,7 @@ function DocumentUploadField({
       <View style={styles.ownerVerificationHeader}>
         <View style={styles.flex}>
           <Text style={styles.ownerSectionTitle}>Verification checklist</Text>
-          <Text style={styles.ownerSectionCopy}>Attach clear document photos from your library or camera. KULI stores upload metadata for admin review.</Text>
+          <Text style={styles.ownerSectionCopy}>Attach clear document photos from your library or camera. KULI stores upload details for review.</Text>
         </View>
         <StatusBadge tone={completedRequiredCount === requiredTypes.length ? 'success' : 'warning'}>
           {`${completedRequiredCount}/${requiredTypes.length}`}
@@ -1747,7 +1747,7 @@ function DocumentUploadField({
                 label={`${doc.label} file`}
                 value={draft}
                 onChange={(file) => setDraft(doc.type, file)}
-                emptyText={doc.required ? 'Required for admin verification. Use a clear, original document image.' : 'Optional, but useful where an insurance policy is available.'}
+                emptyText={doc.required ? 'Required for KULI verification. Use a clear, original document image.' : 'Optional, but useful where an insurance policy is available.'}
                 emptyTone={doc.required ? 'blocked' : 'warn'}
                 uploadLabel="Upload"
                 takeLabel="Camera"
@@ -1867,7 +1867,7 @@ function OwnerVehiclesScreen() {
           activeVehicleId: result.data.id
         }
       });
-      setNotice('Vehicle submitted for admin verification.');
+      setNotice('Vehicle submitted for KULI verification.');
       setLicensePlate('');
       setDescription('');
       await queryClient.invalidateQueries({ queryKey: ['vehicles', 'mine'] });
@@ -2950,7 +2950,7 @@ function ClientQuoteScreen() {
             ) : vehicleClassesQuery.isError ? (
               <ErrorState title="Could not load truck types" message={getErrorMessage(vehicleClassesQuery.error)} />
             ) : vehicleClasses.length === 0 ? (
-              <EmptyState title="No truck types available" message="Ask an administrator to create vehicle classes before requesting a truck." />
+              <EmptyState title="No truck types available" message="KULI needs at least one active truck type before requests can be priced." />
             ) : (
               <RequestTruckTypeCards vehicleClasses={vehicleClasses} selectedVehicleClassId={vehicleClassId} onSelect={setVehicleClassId} />
             )}
@@ -5636,14 +5636,14 @@ const clientTabIcons: TabIconConfig = {
   Home: { name: 'home-outline', label: 'Home' },
   Request: { name: 'map-marker-path', label: 'Request', iconSet: 'material' },
   Activity: { name: 'receipt-outline', label: 'Activity' },
-  Notifications: { name: 'notifications-outline', label: 'Updates' }
+  Notifications: { name: 'notifications-outline', label: 'Notifications' }
 };
 
 const ownerTabIcons: TabIconConfig = {
   Home: { name: 'speedometer-outline', label: 'Home', iconSet: 'material' },
   Vehicles: { name: 'truck-outline', label: 'Vehicles', iconSet: 'material' },
   Offers: { name: 'clipboard-list-outline', label: 'Offers', iconSet: 'material' },
-  Notifications: { name: 'notifications-outline', label: 'Updates' },
+  Notifications: { name: 'notifications-outline', label: 'Notifications' },
   Earnings: { name: 'cash-multiple', label: 'Earnings', iconSet: 'material' }
 };
 
