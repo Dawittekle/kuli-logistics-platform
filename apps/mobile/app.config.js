@@ -51,7 +51,7 @@ export default ({ config }) => ({
   userInterfaceStyle: 'light',
   jsEngine: 'jsc',
   splash: {
-    backgroundColor: '#0d3446'
+    backgroundColor: '#000000'
   },
   plugins: [
     [
