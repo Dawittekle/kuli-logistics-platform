@@ -1,3 +1,5 @@
+import fs from 'fs';
+
 const collectionName = 'notifications';
 
 const normalize = (document) => {
@@ -14,6 +16,7 @@ const normalize = (document) => {
 
 export class MongoNotificationRepository {
   constructor({ db }) {
+    this.db = db;
     this.collection = db.collection(collectionName);
   }
 
@@ -36,12 +39,59 @@ export class MongoNotificationRepository {
     }
 
     const now = new Date().toISOString();
-    const documents = notifications.map(({ id, ...notification }) => ({
-      _id: id,
-      ...notification,
-      createdAt: notification.createdAt ?? now,
-      updatedAt: now
-    }));
+    const recipientUserIds = [...new Set(notifications.map(n => n.recipientUserId))];
+    const users = await this.db.collection('users').find({ _id: { $in: recipientUserIds } }).toArray();
+    const userMap = new Map(users.map(u => [String(u._id), u]));
+
+    const documents = [];
+
+    for (const { id, ...notification } of notifications) {
+      const recipient = userMap.get(String(notification.recipientUserId));
+      const hasEmailPref = recipient?.notificationPreferences;
+      let emailEnabled = true; // Default to true if not specified
+      if (hasEmailPref) {
+        if (hasEmailPref.emailEnabled !== undefined) {
+          emailEnabled = Boolean(hasEmailPref.emailEnabled);
+        } else if (hasEmailPref.email !== undefined) {
+          emailEnabled = Boolean(hasEmailPref.email);
+        }
+      }
+
+      const recipientEmail = recipient?.email;
+      const channels = [...(notification.channels ?? ['in_app'])];
+      let emailDeliveryStatus = undefined;
+
+      if (emailEnabled && recipientEmail) {
+        if (!channels.includes('email')) {
+          channels.push('email');
+        }
+        emailDeliveryStatus = 'sent';
+
+        // Write to simulated sent_emails.log
+        const logEntry = `================================================================================
+Date: ${now}
+To: ${recipientEmail}
+Subject: ${notification.title}
+Body: ${notification.body}
+Data: ${JSON.stringify(notification.data ?? {})}
+================================================================================\n\n`;
+
+        try {
+          fs.appendFileSync('/home/dawit/Documents/Projects/mobile-app/kuli-logistics-platform/sent_emails.log', logEntry, 'utf8');
+        } catch (err) {
+          console.error('Failed to write to sent_emails.log:', err);
+        }
+      }
+
+      documents.push({
+        _id: id,
+        ...notification,
+        channels,
+        emailDeliveryStatus,
+        createdAt: notification.createdAt ?? now,
+        updatedAt: now
+      });
+    }
 
     await this.collection.insertMany(documents);
     return documents.map(normalize);

@@ -998,7 +998,8 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
   const [error, setError] = useState('');
   const normalizedEmail = email.trim().toLowerCase();
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
-  const canSubmit = emailValid && password.length > 0;
+  const isDevBypass = runtimeConfig.demoAuthEnabled && email.trim().startsWith('dev:');
+  const canSubmit = isDevBypass || (emailValid && password.length > 0);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -1009,6 +1010,23 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
 
     setPending(true);
     setError('');
+
+    if (isDevBypass) {
+      const mockSession = {
+        access_token: email.trim(),
+        user: { id: email.trim().replace('dev:', '') }
+      } as unknown as Session;
+
+      try {
+        const profile = await fetchProfileForSession(mockSession);
+        onAuthenticated(profile, mockSession);
+      } catch (loginError) {
+        setError(getErrorMessage(loginError));
+      } finally {
+        setPending(false);
+      }
+      return;
+    }
 
     try {
       const { data, error: authError } = await supabase.auth.signInWithPassword({
