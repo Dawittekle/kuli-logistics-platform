@@ -76,7 +76,10 @@ export default ({ config }) => ({
       supabaseUrl: process.env.MOBILE_APP_SUPABASE_URL ?? env.MOBILE_APP_SUPABASE_URL ?? '',
       supabaseAnonKey: process.env.MOBILE_APP_SUPABASE_ANON_KEY ?? env.MOBILE_APP_SUPABASE_ANON_KEY ?? '',
       demoAuthEnabled: resolveBoolean(demoAuthEnv, isLocalApi),
-      googleMapsApiKey: process.env.MOBILE_APP_GOOGLE_MAPS_API_KEY ?? env.MOBILE_APP_GOOGLE_MAPS_API_KEY ?? ''
+      googleMapsApiKey: process.env.MOBILE_APP_GOOGLE_MAPS_API_KEY ?? env.MOBILE_APP_GOOGLE_MAPS_API_KEY ?? '',
+      authRedirectUrl: process.env.MOBILE_APP_AUTH_REDIRECT_URL ?? env.MOBILE_APP_AUTH_REDIRECT_URL ?? 'kuli://auth/callback',
+      passwordResetRedirectUrl:
+        process.env.MOBILE_APP_PASSWORD_RESET_REDIRECT_URL ?? env.MOBILE_APP_PASSWORD_RESET_REDIRECT_URL ?? 'kuli://auth/reset-password'
     }
   }
 });
