@@ -97,7 +97,6 @@ BOOTSTRAP_ADMIN_FULL_NAME=KULI Admin
 MOBILE_APP_API_BASE_URL=http://localhost:4000/api/v1
 MOBILE_APP_SUPABASE_URL=https://your-project-ref.supabase.co
 MOBILE_APP_SUPABASE_ANON_KEY=your-supabase-anon-key
-MOBILE_APP_DEMO_AUTH_ENABLED=false
 MOBILE_APP_GOOGLE_MAPS_API_KEY=
 MOBILE_APP_AUTH_REDIRECT_URL=kuli://auth/callback
 MOBILE_APP_PASSWORD_RESET_REDIRECT_URL=kuli://auth/reset-password
@@ -109,7 +108,6 @@ MOBILE_APP_PASSWORD_RESET_REDIRECT_URL=kuli://auth/reset-password
 ADMIN_APP_API_BASE_URL=http://localhost:4000/api/v1
 ADMIN_APP_SUPABASE_URL=https://your-project-ref.supabase.co
 ADMIN_APP_SUPABASE_ANON_KEY=your-supabase-anon-key
-ADMIN_APP_DEMO_AUTH_ENABLED=false
 ```
 
 ## Supabase Dashboard Settings
@@ -226,4 +224,5 @@ The mobile and admin apps keep the fresh Supabase access token in memory immedia
 
 - Sign out and sign in again.
 - Confirm the API and frontend point to the same Supabase project.
-- Check development-only auth logs in local/demo mode. They show auth event, session presence, email, `/me` failure code, profile role, and route decision without logging tokens or passwords.
+- Confirm `DEMO_AUTH_ENABLED=false` in the API `.env`; frontend demo login controls are intentionally removed.
+- Check development-only mobile auth logs while running Expo dev mode. They show auth event, session presence, email, `/me` failure code, profile role, and route decision without logging tokens or passwords.

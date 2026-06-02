@@ -24,7 +24,7 @@ import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tan
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import type { Session } from '@supabase/supabase-js';
 
-import { clearDemoAccessToken, kuliApi, setDemoAccessToken, setSessionAccessToken } from './lib/api';
+import { clearSessionAccessToken, kuliApi, setSessionAccessToken } from './lib/api';
 import { supabase } from './lib/supabase';
 import { runtimeConfig, runtimeReadiness } from './config/runtime';
 import { colors, radii, spacing } from './theme';
@@ -42,6 +42,8 @@ import { SectionHeader } from './components/ui/SectionHeader';
 import { StatusBadge } from './components/ui/StatusBadge';
 import { MetricCard } from './components/visual/MetricCard';
 import { RoutePill } from './components/visual/RoutePill';
+
+declare const __DEV__: boolean;
 
 type Role = 'client' | 'truck_owner' | 'assistant' | 'admin';
 type AccountStatus = 'active' | 'pending_verification' | 'suspended' | 'banned' | 'deleted';
@@ -460,6 +462,30 @@ const syncPublicProfileFromSession = async (session: Session) => {
   return result.data.user;
 };
 
+const fetchProfileForSession = async (session: Session) => {
+  setSessionAccessToken(session.access_token);
+
+  try {
+    const result = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
+    return result.data;
+  } catch (error) {
+    if ((error as { status?: number }).status !== 401) {
+      throw error;
+    }
+
+    const { data } = await supabase.auth.getSession();
+    const refreshedSession = data.session;
+
+    if (!refreshedSession?.access_token) {
+      throw error;
+    }
+
+    setSessionAccessToken(refreshedSession.access_token);
+    const retry = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
+    return retry.data;
+  }
+};
+
 const documentTypes: Array<{ type: VehicleDocumentType; label: string; detail: string; required: boolean; tips: string[] }> = [
   {
     type: 'identity',
@@ -522,7 +548,7 @@ const isEmailNotConfirmedError = (error: unknown) =>
   error instanceof Error && error.message.toLowerCase().includes('email not confirmed');
 
 const authDebug = (...messages: unknown[]) => {
-  if (runtimeConfig.demoAuthEnabled) {
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
     console.log('[KULI auth]', ...messages);
   }
 };
@@ -552,23 +578,6 @@ const readAuthUrlParams = (url: string) => {
 
   return params;
 };
-
-const createDemoSession = ({ accessToken, email }: { accessToken: string; email?: string }) =>
-  ({
-    access_token: accessToken,
-    refresh_token: 'local-demo-refresh-token',
-    token_type: 'bearer',
-    expires_in: 3600,
-    expires_at: Math.floor(Date.now() / 1000) + 3600,
-    user: {
-      id: accessToken.replace(/^dev:/, ''),
-      app_metadata: {},
-      user_metadata: {},
-      aud: 'authenticated',
-      created_at: new Date().toISOString(),
-      email
-    }
-  }) as Session;
 
 function StatusPill({ tone, children }: { tone: 'ready' | 'warn' | 'blocked'; children: ReactNode }) {
   return (
@@ -673,7 +682,6 @@ function AuthBrandPanel({ mode }: { mode: AuthMode }) {
         <Text style={styles.authHeroTitle}>{title}</Text>
         <Text style={styles.authHeroCopy}>{copy}</Text>
       </View>
-      {runtimeConfig.demoAuthEnabled ? <StatusBadge tone="warning">Local demo mode</StatusBadge> : null}
     </View>
   );
 }
@@ -1008,11 +1016,9 @@ function AuthScreen({
   }, [resetCooldown]);
 
   const loadProfile = async (session: Session) => {
-    setSessionAccessToken(session.access_token);
-
     try {
-      const profile = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
-      onAuthenticated(profile.data, session);
+      const profile = await fetchProfileForSession(session);
+      onAuthenticated(profile, session);
     } catch (profileError) {
       if ((profileError as { code?: string }).code === 'PROFILE_NOT_FOUND') {
         const syncedProfile = await syncPublicProfileFromSession(session);
@@ -1133,43 +1139,6 @@ function AuthScreen({
       setError(getErrorMessage(verifyError));
     } finally {
       setResetPending(false);
-    }
-  };
-
-  const startDemoProfile = async (demoRole: PublicRole, options: { preserveExistingRole?: boolean } = {}) => {
-    if (!runtimeConfig.demoAuthEnabled || pending) {
-      return;
-    }
-
-    setPending(true);
-    setError('');
-    setNotice('');
-
-    try {
-      const suffix = normalizedEmail
-        ? normalizedEmail.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 42)
-        : Date.now().toString(36);
-      const result = (await kuliApi.request('/dev/demo-profile', {
-        method: 'POST',
-        body: {
-          role: demoRole,
-          suffix,
-          fullName: fullName.trim() || (options.preserveExistingRole ? undefined : demoRole === 'client' ? `Demo Client ${suffix}` : `Demo Owner ${suffix}`),
-          email: normalizedEmail || `${demoRole}-${suffix}@demo.kuli.local`,
-          phone: phone.trim() || undefined,
-          preserveExistingRole: Boolean(options.preserveExistingRole)
-        }
-      })) as ApiEnvelope<{ user: UserProfile; accessToken: string }>;
-
-      setDemoAccessToken(result.data.accessToken);
-      onAuthenticated(result.data.user, createDemoSession({
-        accessToken: result.data.accessToken,
-        email: result.data.user.email
-      }));
-    } catch (demoError) {
-      setError(getErrorMessage(demoError));
-    } finally {
-      setPending(false);
     }
   };
 
@@ -1542,19 +1511,6 @@ function AuthScreen({
                 />
               </UiCard>
 
-              {runtimeConfig.demoAuthEnabled ? (
-                <UiCard style={styles.authCard}>
-                  <SectionHeader
-                    eyebrow="Development only"
-                    title="Local demo access"
-                    description="Use these buttons to explore KULI with local dev tokens. The main login and create-account buttons still use Supabase."
-                  />
-                  <View style={styles.actionRow}>
-                    <SecondaryButton disabled={pending} label="Demo client" onPress={() => startDemoProfile('client')} style={styles.actionButton} />
-                    <PrimaryButton disabled={pending} label="Demo owner" onPress={() => startDemoProfile('truck_owner')} style={styles.actionButton} />
-                  </View>
-                </UiCard>
-              ) : null}
             </>
           )}
 
@@ -6250,15 +6206,15 @@ function AppContent() {
         userId: nextSession.user.id
       });
 
-      const result = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
+      const profile = await fetchProfileForSession(nextSession);
       activeSessionUserIdRef.current = nextUserId;
-      setProfile(result.data);
+      setProfile(profile);
       setProfileMissing(false);
       setProfileError('');
       authDebug('profile loaded', {
-        role: result.data.role,
-        accountStatus: result.data.accountStatus,
-        route: result.data.role === 'client' ? 'mobile-client' : result.data.role === 'truck_owner' ? 'mobile-owner' : 'mobile-forbidden'
+        role: profile.role,
+        accountStatus: profile.accountStatus,
+        route: profile.role === 'client' ? 'mobile-client' : profile.role === 'truck_owner' ? 'mobile-owner' : 'mobile-forbidden'
       });
     } catch (error) {
       authDebug('profile load failed', {
@@ -6472,7 +6428,7 @@ function AppContent() {
   };
 
   const handleSignOut = async () => {
-    clearDemoAccessToken();
+    clearSessionAccessToken();
     recoveryInProgressRef.current = false;
     setPasswordRecoverySession(null);
     await supabase.auth.signOut();

@@ -30,7 +30,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { runtimeConfig, runtimeReadiness } from './config/runtime';
-import { clearDemoAccessToken, kuliApi, setDemoAccessToken, setSessionAccessToken } from './lib/api';
+import { clearSessionAccessToken, kuliApi, setSessionAccessToken } from './lib/api';
 import { supabase } from './lib/supabase';
 
 type Role = 'client' | 'truck_owner' | 'assistant' | 'admin';
@@ -578,22 +578,29 @@ const getErrorMessage = (error: unknown) => {
   return 'Something went wrong. Please try again.';
 };
 
-const createDemoSession = ({ accessToken, email }: { accessToken: string; email?: string }) =>
-  ({
-    access_token: accessToken,
-    refresh_token: 'local-demo-refresh-token',
-    token_type: 'bearer',
-    expires_in: 3600,
-    expires_at: Math.floor(Date.now() / 1000) + 3600,
-    user: {
-      id: accessToken.replace(/^dev:/, ''),
-      app_metadata: {},
-      user_metadata: {},
-      aud: 'authenticated',
-      created_at: new Date().toISOString(),
-      email
+const fetchProfileForSession = async (session: Session) => {
+  setSessionAccessToken(session.access_token);
+
+  try {
+    const profile = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
+    return profile.data;
+  } catch (error) {
+    if ((error as { status?: number }).status !== 401) {
+      throw error;
     }
-  }) as Session;
+
+    const { data } = await supabase.auth.getSession();
+    const refreshedSession = data.session;
+
+    if (!refreshedSession?.access_token) {
+      throw error;
+    }
+
+    setSessionAccessToken(refreshedSession.access_token);
+    const retry = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
+    return retry.data;
+  }
+};
 
 function StatusBadge({ tone, children }: { tone: 'ready' | 'warn' | 'blocked' | 'muted'; children: ReactNode }) {
   return <span className={`status-badge status-badge--${tone}`}>{children}</span>;
@@ -775,44 +782,9 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
   const [password, setPassword] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  const canSubmit = runtimeConfig.demoAuthEnabled ? Boolean(email.trim()) : Boolean(email.trim()) && password.length >= 6;
-
-  const startDemoProfile = async (role: Extract<Role, 'admin' | 'assistant'>, options: { preserveExistingRole?: boolean } = {}) => {
-    if (!runtimeConfig.demoAuthEnabled || pending) {
-      return;
-    }
-
-    setPending(true);
-    setError('');
-
-    try {
-      const normalizedEmail = email.trim().toLowerCase();
-      const suffix = normalizedEmail
-        ? normalizedEmail.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 42)
-        : Date.now().toString(36);
-      const result = (await kuliApi.request('/dev/demo-profile', {
-        method: 'POST',
-        body: {
-          role,
-          suffix,
-          fullName: options.preserveExistingRole ? undefined : role === 'admin' ? `Demo Admin ${suffix}` : `Demo Assistant ${suffix}`,
-          email: normalizedEmail || `${role}-${suffix}@demo.kuli.local`,
-          phone: undefined,
-          preserveExistingRole: Boolean(options.preserveExistingRole)
-        }
-      })) as ApiEnvelope<{ user: UserProfile; accessToken: string }>;
-
-      setDemoAccessToken(result.data.accessToken);
-      onAuthenticated(result.data.user, createDemoSession({
-        accessToken: result.data.accessToken,
-        email: result.data.user.email
-      }));
-    } catch (demoError) {
-      setError(getErrorMessage(demoError));
-    } finally {
-      setPending(false);
-    }
-  };
+  const normalizedEmail = email.trim().toLowerCase();
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+  const canSubmit = emailValid && password.length > 0;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -821,17 +793,12 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
       return;
     }
 
-    if (runtimeConfig.demoAuthEnabled) {
-      await startDemoProfile('admin', { preserveExistingRole: true });
-      return;
-    }
-
     setPending(true);
     setError('');
 
     try {
       const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         password
       });
 
@@ -843,9 +810,8 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
         throw new Error('No staff session was returned. Check Supabase email confirmation settings.');
       }
 
-      setSessionAccessToken(data.session.access_token);
-      const profile = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
-      onAuthenticated(profile.data, data.session);
+      const profile = await fetchProfileForSession(data.session);
+      onAuthenticated(profile, data.session);
     } catch (loginError) {
       setError(getErrorMessage(loginError));
     } finally {
@@ -878,12 +844,6 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
           <LockKeyhole aria-hidden="true" size={18} />
           {pending ? 'Signing in...' : 'Sign in'}
         </button>
-        {runtimeConfig.demoAuthEnabled ? (
-          <div className="button-row">
-            <button className="secondary-action" disabled={pending} onClick={() => startDemoProfile('admin')} type="button">Demo admin</button>
-            <button className="secondary-action" disabled={pending} onClick={() => startDemoProfile('assistant')} type="button">Demo assistant</button>
-          </div>
-        ) : null}
         <p className="muted">Staff accounts are provisioned by an administrator. Clients and truck owners use the mobile app.</p>
       </form>
     </main>
@@ -895,8 +855,7 @@ function RuntimePanel() {
     () => [
       { label: 'API base URL', ready: runtimeReadiness.hasApiBaseUrl },
       { label: 'Supabase URL', ready: runtimeReadiness.hasSupabaseUrl },
-      { label: 'Supabase anon key', ready: runtimeReadiness.hasSupabaseAnonKey },
-      { label: 'Local demo auth', ready: runtimeReadiness.demoAuthEnabled }
+      { label: 'Supabase anon key', ready: runtimeReadiness.hasSupabaseAnonKey }
     ],
     []
   );
@@ -4638,8 +4597,8 @@ export default function App() {
     setSessionAccessToken(nextSession.access_token);
 
     try {
-      const result = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
-      setProfile(result.data);
+      const profile = await fetchProfileForSession(nextSession);
+      setProfile(profile);
     } catch (error) {
       if ((error as { code?: string }).code === 'PROFILE_NOT_FOUND') {
         setProfileMissing(true);
@@ -4677,7 +4636,7 @@ export default function App() {
   };
 
   const handleSignOut = async () => {
-    clearDemoAccessToken();
+    clearSessionAccessToken();
     setSessionAccessToken(null);
     await supabase.auth.signOut();
     queryClient.clear();

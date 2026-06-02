@@ -30,10 +30,10 @@ Important files:
 | `index.js` | Repository-root Expo entrypoint for `expo start` from the repo root. Registers `apps/mobile/src/App`. |
 | `app.config.js` | Repository-root Expo config delegate. Imports `apps/mobile/app.config.js`. |
 | `apps/mobile/index.js` | Workspace-local Expo entrypoint. Registers `apps/mobile/src/App`. |
-| `apps/mobile/app.config.js` | Reads `apps/mobile/.env` and passes runtime config through `expo-constants`. Configures app name, package IDs, JSC engine, image-picker permissions, API URL, Supabase values, demo auth, and Google Maps key. |
+| `apps/mobile/app.config.js` | Reads `apps/mobile/.env` and passes runtime config through `expo-constants`. Configures app name, package IDs, JSC engine, image-picker permissions, API URL, Supabase values, auth redirects, and Google Maps key. |
 | `apps/mobile/src/App.tsx` | Main mobile application. Contains navigation, auth, client screens, owner screens, reusable UI primitives, styles, and most workflow logic. |
 | `apps/mobile/src/config/runtime.ts` | Reads Expo runtime config and exposes `runtimeConfig` plus readiness booleans. |
-| `apps/mobile/src/lib/api.ts` | Creates the shared KULI API client. Attaches either local demo token or Supabase access token. |
+| `apps/mobile/src/lib/api.ts` | Creates the shared KULI API client. Attaches the latest Supabase access token for backend requests. |
 | `apps/mobile/src/lib/supabase.ts` | Supabase browser/mobile client setup. |
 | `apps/mobile/src/theme.ts` | Shared colors and spacing used by `App.tsx`. |
 | `apps/mobile/src/*-shell.mjs` | Lightweight startup/smoke helpers for auth, quotes, marketplace, trip, and engagement flows. |
@@ -52,12 +52,11 @@ Expected keys:
 | `MOBILE_APP_API_BASE_URL` | Backend API base, usually `http://localhost:4000/api/v1` for web or `http://10.0.2.2:4000/api/v1` for Android emulator. |
 | `MOBILE_APP_SUPABASE_URL` | Supabase project URL. |
 | `MOBILE_APP_SUPABASE_ANON_KEY` | Supabase public anon key. |
-| `MOBILE_APP_DEMO_AUTH_ENABLED` | Enables local demo profiles for development. Auto-enabled for local API URLs. |
 | `MOBILE_APP_GOOGLE_MAPS_API_KEY` | Optional static map provider key. If absent, local map preview uses a no-key fallback. |
 | `MOBILE_APP_AUTH_REDIRECT_URL` | Supabase email-confirmation redirect, default `kuli://auth/callback`. Add this URL to Supabase Auth redirect URLs. |
 | `MOBILE_APP_PASSWORD_RESET_REDIRECT_URL` | Supabase password-recovery redirect, default `kuli://auth/reset-password`. Add this URL to Supabase Auth redirect URLs. |
 
-Runtime readiness is visible inside the auth screen so API/Supabase/demo configuration problems are obvious during local testing.
+Runtime readiness checks remain internal to development workflows; the production auth screen does not expose demo login controls.
 
 ## Providers and App Entry Flow
 
@@ -96,13 +95,12 @@ Session states:
 - Forgot-password/account recovery through Supabase reset OTP. The user requests a code, enters it inside KULI, then chooses a new password in the app.
 - Password-reset completion from a Supabase recovery deep link remains available as a fallback, then the user signs in again with the new password.
 - Email confirmation code entry and resend.
-- Local development demo profiles when demo auth is enabled.
 
 Important behavior:
 
 - Public registration does not expose `admin` or `assistant`.
 - Normal routing after auth depends on backend `/me`.
-- Demo login can preserve an existing backend role by email so an owner account does not silently become a client.
+- Staff roles are blocked from mobile and must use the web dashboard.
 - Password reset uses Supabase recovery OTP (`verifyOtp` with `type: recovery`) and keeps signup confirmation behavior separate from password recovery.
 - Supabase password-recovery email templates should include the OTP token for the in-app reset flow. The deep-link URL is still configured as a fallback.
 
@@ -241,8 +239,7 @@ Server calls go through `kuliApi` from `apps/mobile/src/lib/api.ts`.
 
 Token behavior:
 
-- If local demo auth has set a `dev:*` access token, `kuliApi` uses it.
-- Otherwise, `kuliApi` reads the current Supabase session access token.
+- `kuliApi` uses the latest in-memory Supabase access token and falls back to `supabase.auth.getSession()` if needed.
 
 Data fetching uses TanStack Query:
 
@@ -311,8 +308,7 @@ Follow `docs/frontend_ui_system.md` and `skills-lock.json`:
 
 ## Known Gaps and Cautions
 
-- Password reset/account recovery is not exposed in mobile yet.
-- Real Supabase credential E2E remains open; local demo auth exists for development exploration.
+- Real Supabase credential E2E should be used for final auth validation; frontend demo account shortcuts have been removed.
 - Phone auth is not implemented.
 - SMS/email delivery depends on provider configuration; in-app notifications are implemented.
 - Continuous GPS live tracking is future scope. Current v1 uses manual trip statuses, polling, and static map previews.
