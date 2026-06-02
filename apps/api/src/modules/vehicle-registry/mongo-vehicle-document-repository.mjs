@@ -35,6 +35,10 @@ export class MongoVehicleDocumentRepository {
     return documents.map(normalize);
   }
 
+  async findById(id) {
+    return normalize(await this.collection.findOne({ _id: id }));
+  }
+
   async save(documentRecord) {
     const record = {
       ...documentRecord,

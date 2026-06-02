@@ -1110,6 +1110,24 @@ const createRouteRequest = (context) => async (request) => {
     );
   }
 
+  if (method === 'GET' && path.startsWith('/api/v1/admin/vehicles/') && path.includes('/documents/') && path.endsWith('/preview-url')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    const parts = path.split('/');
+    const vehicleId = parts[5];
+    const documentId = parts[7];
+
+    return success(
+      await context.vehicleRegistryService.createAdminVehicleDocumentPreviewUrl({
+        actor: currentUser,
+        vehicleId,
+        documentId
+      })
+    );
+  }
+
   if (method === 'GET' && path.startsWith('/api/v1/admin/vehicles/') && !path.endsWith('/verification')) {
     const { currentUser } = await resolveAuth();
     assertActiveAccount(currentUser);

@@ -420,6 +420,112 @@ test('admin file preview creates signed url and audit log', async () => {
   assert.equal(auditLogRepository.entries[0].action, 'file.signed_url.created');
 });
 
+test('admin vehicle document preview verifies vehicle-document-file linkage and audits', async () => {
+  const { service, auditLogRepository } = createService();
+  const [vehicleClass] = await service.seedDefaultVehicleClasses();
+  const vehicle = await service.createVehicle({
+    actor: truckOwner,
+    input: {
+      vehicleClassId: vehicleClass.id,
+      licensePlate: 'AA-PREVIEW-1'
+    }
+  });
+  const intent = await service.createUploadIntent({
+    actor: truckOwner,
+    input: {
+      vehicleId: vehicle.id,
+      type: 'identity',
+      mimeType: 'image/jpeg',
+      sizeBytes: 4096,
+      originalFileName: 'identity.jpg'
+    }
+  });
+
+  await service.completeFileUpload({
+    actor: truckOwner,
+    fileId: intent.file.id,
+    input: {
+      uploadedSizeBytes: 4096
+    }
+  });
+  const document = await service.attachVehicleDocument({
+    actor: truckOwner,
+    vehicleId: vehicle.id,
+    input: {
+      type: 'identity',
+      fileId: intent.file.id
+    }
+  });
+
+  const preview = await service.createAdminVehicleDocumentPreviewUrl({
+    actor: admin,
+    vehicleId: vehicle.id,
+    documentId: document.id
+  });
+
+  assert.equal(preview.documentId, document.id);
+  assert.equal(preview.file.originalFileName, 'identity.jpg');
+  assert.equal(preview.file.mimeType, 'image/jpeg');
+  assert.equal(preview.expiresInSeconds, 300);
+  assert.match(preview.url, /^local-dev:\/\/signed-read\//);
+  assert.equal(auditLogRepository.entries.at(-1).action, 'vehicle.document.preview_url.created');
+});
+
+test('admin vehicle document preview rejects documents from another vehicle', async () => {
+  const { service } = createService();
+  const [vehicleClass] = await service.seedDefaultVehicleClasses();
+  const vehicleOne = await service.createVehicle({
+    actor: truckOwner,
+    input: {
+      vehicleClassId: vehicleClass.id,
+      licensePlate: 'AA-PREVIEW-A'
+    }
+  });
+  const vehicleTwo = await service.createVehicle({
+    actor: truckOwner,
+    input: {
+      vehicleClassId: vehicleClass.id,
+      licensePlate: 'AA-PREVIEW-B'
+    }
+  });
+  const intent = await service.createUploadIntent({
+    actor: truckOwner,
+    input: {
+      vehicleId: vehicleOne.id,
+      type: 'driver_license',
+      mimeType: 'application/pdf',
+      sizeBytes: 4096,
+      originalFileName: 'license.pdf'
+    }
+  });
+
+  await service.completeFileUpload({
+    actor: truckOwner,
+    fileId: intent.file.id,
+    input: {
+      uploadedSizeBytes: 4096
+    }
+  });
+  const document = await service.attachVehicleDocument({
+    actor: truckOwner,
+    vehicleId: vehicleOne.id,
+    input: {
+      type: 'driver_license',
+      fileId: intent.file.id
+    }
+  });
+
+  await assert.rejects(
+    () =>
+      service.createAdminVehicleDocumentPreviewUrl({
+        actor: admin,
+        vehicleId: vehicleTwo.id,
+        documentId: document.id
+      }),
+    (error) => error instanceof AppError && error.code === 'VEHICLE_DOCUMENT_NOT_FOUND'
+  );
+});
+
 test('vehicle photo upload can be attached to pending vehicle', async () => {
   const { service } = createService();
   const [vehicleClass] = await service.seedDefaultVehicleClasses();

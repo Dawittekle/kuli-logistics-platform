@@ -7,8 +7,10 @@ import {
   CircleDollarSign,
   ClipboardList,
   CreditCard,
+  ExternalLink,
   FileCheck2,
   FileClock,
+  FileSearch,
   FileText,
   FileWarning,
   FileX2,
@@ -22,7 +24,8 @@ import {
   RefreshCw,
   ShieldCheck,
   Truck,
-  UsersRound
+  UsersRound,
+  X
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -43,11 +46,33 @@ type UserProfile = {
   createdAt?: string;
 };
 
+type FileMetadata = {
+  id: string;
+  originalFileName?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  uploadedSizeBytes?: number;
+  status?: string;
+  storageProvider?: string;
+  visibility?: string;
+  completedAt?: string;
+};
+
 type VehicleDocument = {
   id: string;
   type: string;
   fileId: string;
   status: string;
+  file?: FileMetadata;
+};
+
+type DocumentPreview = {
+  vehicleId: string;
+  documentId: string;
+  fileId: string;
+  url: string;
+  expiresInSeconds: number;
+  file: FileMetadata;
 };
 
 type Vehicle = {
@@ -389,7 +414,9 @@ const auditActionLabels: Record<string, string> = {
   'vehicle.rejected': 'Vehicle rejected',
   'vehicle.status_updated': 'Vehicle status updated',
   'vehicle.document_attached': 'Vehicle document attached',
+  'file.signed_url.created': 'File preview created',
   'file_signed_url_created': 'File preview created',
+  'vehicle.document.preview_url.created': 'Vehicle document preview created',
   'pricing_rule.created': 'Pricing rule created',
   'pricing_rule.activated': 'Pricing rule activated',
   'report.resolved': 'Report resolved',
@@ -456,6 +483,18 @@ const humanAuditAction = (action?: string) => (action ? auditActionLabels[action
 
 const formatDateTime = (value?: string) => (value ? new Date(value).toLocaleString() : 'Not recorded');
 const formatDate = (value?: string) => (value ? new Date(value).toLocaleDateString() : 'Not recorded');
+const formatFileSize = (bytes?: number) => {
+  if (!bytes || bytes <= 0) {
+    return 'Size unknown';
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${Math.round(bytes / 1024)} KB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+const canRenderSignedUrl = (url?: string) => Boolean(url && /^(https?:|blob:|data:|file:)/.test(url));
 
 const getErrorMessage = (error: unknown) => {
   if (error instanceof Error) {
@@ -544,20 +583,89 @@ function EmptyState({ title, description }: { title: string; description: string
   );
 }
 
-function DocumentReviewCard({ document, onPreview }: { document: VehicleDocument; onPreview: (fileId: string) => void }) {
+function DocumentReviewCard({
+  document,
+  onPreview,
+  isPreviewing
+}: {
+  document: VehicleDocument;
+  onPreview: (document: VehicleDocument) => void;
+  isPreviewing: boolean;
+}) {
   const tone = document.status === 'approved' ? 'ready' : document.status === 'rejected' ? 'blocked' : 'warn';
+  const fileName = document.file?.originalFileName || document.fileId;
+  const mimeType = document.file?.mimeType || 'File type unknown';
+  const fileSize = formatFileSize(document.file?.uploadedSizeBytes ?? document.file?.sizeBytes);
 
   return (
-    <button className="document-review-card" onClick={() => onPreview(document.fileId)} type="button">
+    <div className="document-review-card">
       <span className="document-review-card__icon">
-        <FileText aria-hidden="true" size={20} />
+        <FileSearch aria-hidden="true" size={20} />
       </span>
-      <span>
+      <span className="document-review-card__body">
         <strong>{humanize(document.type)}</strong>
-        <small>Submitted file ready for signed preview</small>
+        <small>{fileName}</small>
+        <em>{mimeType} / {fileSize}</em>
       </span>
-      <StatusBadge tone={tone}>{humanize(document.status)}</StatusBadge>
-    </button>
+      <span className="document-review-card__actions">
+        <StatusBadge tone={tone}>{humanize(document.status)}</StatusBadge>
+        <button className="secondary-action secondary-action--compact" disabled={isPreviewing} onClick={() => onPreview(document)} type="button">
+          <FileSearch aria-hidden="true" size={15} />
+          {isPreviewing ? 'Preparing...' : 'Preview'}
+        </button>
+      </span>
+    </div>
+  );
+}
+
+function DocumentPreviewModal({ preview, onClose }: { preview: DocumentPreview; onClose: () => void }) {
+  const mimeType = preview.file.mimeType ?? '';
+  const fileName = preview.file.originalFileName ?? preview.fileId;
+  const isImage = mimeType.startsWith('image/');
+  const isPdf = mimeType === 'application/pdf';
+  const renderableUrl = canRenderSignedUrl(preview.url);
+
+  return (
+    <div className="preview-modal" role="dialog" aria-modal="true" aria-label="Document preview">
+      <div className="preview-modal__panel">
+        <div className="preview-modal__header">
+          <div>
+            <p className="eyebrow">Secure preview</p>
+            <h3>{fileName}</h3>
+            <p className="muted">{mimeType || 'Unknown file type'} / expires in {preview.expiresInSeconds}s</p>
+          </div>
+          <button className="preview-modal__close" onClick={onClose} type="button" aria-label="Close preview">
+            <X aria-hidden="true" size={18} />
+          </button>
+        </div>
+        <div className="preview-modal__body">
+          {isImage && renderableUrl ? <img alt={fileName} src={preview.url} /> : null}
+          {isPdf && renderableUrl ? <iframe src={preview.url} title={fileName} /> : null}
+          {!((isImage || isPdf) && renderableUrl) ? (
+            <div className="preview-modal__fallback">
+              <FileText aria-hidden="true" size={32} />
+              <strong>{preview.file.storageProvider === 'local_dev' ? 'Local development preview' : 'Open document'}</strong>
+              <p>
+                {preview.file.storageProvider === 'local_dev'
+                  ? 'The backend returned protected local-dev metadata. Configure Supabase Storage or S3-compatible object storage to render binary previews in the browser.'
+                  : 'This file type cannot be rendered inline. Open it with the signed URL.'}
+              </p>
+            </div>
+          ) : null}
+        </div>
+        <div className="preview-modal__footer">
+          <span>{preview.file.storageProvider || 'storage'} / {formatFileSize(preview.file.uploadedSizeBytes ?? preview.file.sizeBytes)}</span>
+          <button
+            className="icon-button"
+            onClick={() => window.open(preview.url, '_blank', 'noopener,noreferrer')}
+            type="button"
+          >
+            <ExternalLink aria-hidden="true" size={16} />
+            Open signed URL
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1138,7 +1246,9 @@ function AdminVerificationPanel({ enabled }: { enabled: boolean }) {
   const [verificationFilter, setVerificationFilter] = useState<Vehicle['verificationStatus'] | ''>('pending');
   const [vehicleSearch, setVehicleSearch] = useState('');
   const [decisionReason, setDecisionReason] = useState('');
-  const [signedUrlMessage, setSignedUrlMessage] = useState('');
+  const [previewingDocumentId, setPreviewingDocumentId] = useState('');
+  const [previewError, setPreviewError] = useState('');
+  const [preview, setPreview] = useState<DocumentPreview | null>(null);
   const [decisionError, setDecisionError] = useState('');
   const [pendingDecision, setPendingDecision] = useState(false);
 
@@ -1218,14 +1328,22 @@ function AdminVerificationPanel({ enabled }: { enabled: boolean }) {
     }
   };
 
-  const previewDocument = async (fileId: string) => {
-    setSignedUrlMessage('');
+  const previewDocument = async (document: VehicleDocument) => {
+    if (!detail) {
+      setPreviewError('Select a vehicle before previewing documents.');
+      return;
+    }
+
+    setPreviewingDocumentId(document.id);
+    setPreviewError('');
 
     try {
-      const result = (await kuliApi.request(`/files/${fileId}/signed-url`)) as ApiEnvelope<{ url: string; expiresInSeconds: number }>;
-      setSignedUrlMessage(`${result.data.url} (${result.data.expiresInSeconds}s)`);
+      const result = (await kuliApi.request(`/admin/vehicles/${detail.id}/documents/${document.id}/preview-url`)) as ApiEnvelope<DocumentPreview>;
+      setPreview(result.data);
     } catch (error) {
-      setSignedUrlMessage(getErrorMessage(error));
+      setPreviewError(getErrorMessage(error));
+    } finally {
+      setPreviewingDocumentId('');
     }
   };
 
@@ -1235,7 +1353,7 @@ function AdminVerificationPanel({ enabled }: { enabled: boolean }) {
     counts[status] = allVehicles.filter((vehicle) => vehicle.verificationStatus === status).length;
     return counts;
   }, { draft: 0, pending: 0, approved: 0, rejected: 0 });
-  const requiredDocumentTypes = ['identity', 'driver_license', 'registration_certificate', 'ownership_proof', 'insurance'];
+  const requiredDocumentTypes = ['identity', 'driver_license', 'vehicle_registration', 'ownership_proof', 'insurance'];
   const owner = ownerDetailQuery.data;
 
   return (
@@ -1274,6 +1392,8 @@ function AdminVerificationPanel({ enabled }: { enabled: boolean }) {
             <select onChange={(event) => {
               setVerificationFilter(event.target.value as Vehicle['verificationStatus'] | '');
               setSelectedVehicleId('');
+              setPreview(null);
+              setPreviewError('');
             }} value={verificationFilter}>
               <option value="">All statuses</option>
               {verificationStatusOptions.map((status) => (
@@ -1304,7 +1424,8 @@ function AdminVerificationPanel({ enabled }: { enabled: boolean }) {
                 onClick={() => {
                   setSelectedVehicleId(vehicle.id);
                   setDecisionError('');
-                  setSignedUrlMessage('');
+                  setPreviewError('');
+                  setPreview(null);
                 }}
                 type="button"
               >
@@ -1356,13 +1477,13 @@ function AdminVerificationPanel({ enabled }: { enabled: boolean }) {
                     const document = (detail.documents ?? []).find((doc) => doc.type === type);
 
                     return document ? (
-                      <DocumentReviewCard document={document} key={type} onPreview={previewDocument} />
+                      <DocumentReviewCard document={document} isPreviewing={previewingDocumentId === document.id} key={type} onPreview={previewDocument} />
                     ) : (
                       <div className="document-review-card document-review-card--missing" key={type}>
                         <span className="document-review-card__icon">
                           <FileText aria-hidden="true" size={20} />
                         </span>
-                        <span>
+                        <span className="document-review-card__body">
                           <strong>{humanize(type)}</strong>
                           <small>Required document is not attached yet.</small>
                         </span>
@@ -1371,7 +1492,7 @@ function AdminVerificationPanel({ enabled }: { enabled: boolean }) {
                     );
                   })}
                 </div>
-                {signedUrlMessage ? <p className="muted">{signedUrlMessage}</p> : null}
+                {previewError ? <p className="field-error" role="alert">{previewError}</p> : null}
                 <div className="decision-card">
                   <div>
                     <p className="eyebrow">Decision</p>
@@ -1403,6 +1524,7 @@ function AdminVerificationPanel({ enabled }: { enabled: boolean }) {
           </div>
         </div>
       </section>
+      {preview ? <DocumentPreviewModal preview={preview} onClose={() => setPreview(null)} /> : null}
     </>
   );
 }
