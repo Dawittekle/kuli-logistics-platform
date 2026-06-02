@@ -234,4 +234,4 @@ Maintain project stability by running verification passes before pushing updates
 | `npm run smoke:critical` | Root | Verifies critical workflows: auth sync, booking creation, first-accept wins, and trip completion |
 | `npm run verify:startup` | Root | Confirms local compilation and starts API connection test against MongoDB |
 
-For detailed development roadmaps, system specifications, and implementation phases, refer to the documentation package in [`docs/`](docs).
+
