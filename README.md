@@ -18,9 +18,9 @@ This repository houses the entire monorepo—containing the API, mobile applicat
 Here is a preview of the KULI mobile app running on React Native/Expo:
 
 <p align="center">
-  <img src="docs/assets/mobile_home_screen.png" width="30%" alt="Client Home Screen" style="margin-right: 15px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
-  <img src="docs/assets/mobile_request_screen.png" width="30%" alt="Request & Matching Screen" style="margin-right: 15px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
-  <img src="docs/assets/mobile_activity_screen.png" width="30%" alt="Trip History & Activity" style="border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
+  <img src="assets/mobile_home_screen.png" width="30%" alt="Client Home Screen" style="margin-right: 15px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
+  <img src="assets/mobile_request_screen.png" width="30%" alt="Request & Matching Screen" style="margin-right: 15px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
+  <img src="assets/mobile_activity_screen.png" width="30%" alt="Trip History & Activity" style="border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
 </p>
 
 ---

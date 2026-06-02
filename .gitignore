@@ -7,3 +7,11 @@ dist
 .expo
 .turbo
 
+# Agent/AI Related
+.agents/
+.codex/
+skills-lock.json
+
+# Documentation and Reference
+docs/
+references/
