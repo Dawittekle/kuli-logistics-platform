@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -431,6 +432,38 @@ const getErrorMessage = (error: unknown) => {
 const isEmailNotConfirmedError = (error: unknown) =>
   error instanceof Error && error.message.toLowerCase().includes('email not confirmed');
 
+const authDebug = (...messages: unknown[]) => {
+  if (runtimeConfig.demoAuthEnabled) {
+    console.log('[KULI auth]', ...messages);
+  }
+};
+
+const readAuthUrlParams = (url: string) => {
+  const params = new URLSearchParams();
+  const appendParams = (value?: string) => {
+    if (!value) {
+      return;
+    }
+
+    new URLSearchParams(value).forEach((paramValue, key) => {
+      params.set(key, paramValue);
+    });
+  };
+
+  const queryStart = url.indexOf('?');
+  const hashStart = url.indexOf('#');
+
+  if (queryStart >= 0) {
+    appendParams(url.slice(queryStart + 1, hashStart >= 0 ? hashStart : undefined));
+  }
+
+  if (hashStart >= 0) {
+    appendParams(url.slice(hashStart + 1));
+  }
+
+  return params;
+};
+
 const createDemoSession = ({ accessToken, email }: { accessToken: string; email?: string }) =>
   ({
     access_token: accessToken,
@@ -745,7 +778,7 @@ function FilePickerField({
   );
 }
 
-function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfile, session: Session) => void }) {
+function AuthScreen({ initialNotice = '', onAuthenticated }: { initialNotice?: string; onAuthenticated: (profile: UserProfile, session: Session) => void }) {
   const [mode, setMode] = useState<AuthMode>('login');
   const [role, setRole] = useState<PublicRole>('client');
   const [fullName, setFullName] = useState('');
@@ -758,7 +791,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
   const [verificationPending, setVerificationPending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resetPending, setResetPending] = useState(false);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState(initialNotice);
   const [error, setError] = useState('');
 
   const isLogin = mode === 'login';
@@ -772,6 +805,10 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
     setError('');
     setNotice('');
   };
+
+  useEffect(() => {
+    setNotice(initialNotice);
+  }, [initialNotice]);
 
   useEffect(() => {
     if (resendCooldown <= 0) {
@@ -825,13 +862,15 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
     setResetPending(true);
 
     try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(normalizedEmail);
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+        redirectTo: runtimeConfig.passwordResetRedirectUrl
+      });
 
       if (resetError) {
         throw resetError;
       }
 
-      setNotice('Password reset email sent. Open the Supabase link from your inbox, then return to sign in.');
+      setNotice('Password reset email sent. Open the reset link from your inbox to choose a new password.');
     } catch (resetError) {
       setError(getErrorMessage(resetError));
     } finally {
@@ -936,9 +975,6 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
 
       if (!nextSession) {
         setNotice('If you opened a confirmation link, sign in with your email and password to continue.');
-        setVerificationDraft(null);
-        setVerificationCode('');
-        setMode('login');
         return;
       }
 
@@ -975,15 +1011,27 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
         throw verifyError;
       }
 
-      if (!data.session) {
+      let nextSession = data.session ?? (await supabase.auth.getSession()).data.session;
+
+      if (!nextSession && password.length >= 6) {
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: verificationDraft.email,
+          password
+        });
+
+        if (signInError) {
+          throw signInError;
+        }
+
+        nextSession = signInData.session;
+      }
+
+      if (!nextSession) {
         setNotice('Email confirmed. Sign in with your password to continue.');
-        setVerificationDraft(null);
-        setVerificationCode('');
-        setMode('login');
         return;
       }
 
-      await syncDraftProfile(data.session, verificationDraft);
+      await syncDraftProfile(nextSession, verificationDraft);
     } catch (verifyError) {
       setError(getErrorMessage(verifyError));
     } finally {
@@ -1039,6 +1087,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
         email: normalizedEmail,
         password,
         options: {
+          emailRedirectTo: runtimeConfig.authRedirectUrl,
           data: {
             full_name: fullName.trim(),
             phone,
@@ -1231,6 +1280,95 @@ function AccountBlockedScreen({ profile, onSignOut }: { profile: UserProfile; on
           <Pressable accessibilityRole="button" onPress={onSignOut} style={styles.secondaryButton}>
             <Text style={styles.secondaryButtonText}>Sign out</Text>
           </Pressable>
+        </ShellCard>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function ResetPasswordScreen({ onComplete, onSignOut }: { onComplete: () => Promise<void>; onSignOut: () => void }) {
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [pending, setPending] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+
+  const submit = async () => {
+    if (pending) {
+      return;
+    }
+
+    setError('');
+    setNotice('');
+
+    if (newPassword.length < 6) {
+      setError('Use at least 6 characters for your new password.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError('The password confirmation does not match.');
+      return;
+    }
+
+    setPending(true);
+
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      setNotice('Password updated. You can now sign in with your new password.');
+      await onComplete();
+    } catch (resetError) {
+      setError(getErrorMessage(resetError));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.screen}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+        <ScrollView contentContainerStyle={styles.authContent}>
+          <AuthBrandPanel mode="forgot" />
+          <UiCard style={styles.authCard}>
+            <AppHeader
+              eyebrow="Account recovery"
+              title="Choose a new password."
+              subtitle="Enter a new password for your KULI account. After it is saved, you will sign in again."
+            />
+            <Field label="New password" value={newPassword} onChangeText={setNewPassword} placeholder="Minimum 6 characters" secureTextEntry />
+            <Field label="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Repeat new password" secureTextEntry />
+            {error ? <AuthMessage tone="error" message={error} /> : null}
+            {notice ? <AuthMessage tone="notice" message={notice} /> : null}
+            <PrimaryButton disabled={pending || newPassword.length < 6 || confirmPassword.length < 6} label={pending ? 'Saving...' : 'Update password'} loading={pending} onPress={submit} />
+            <SecondaryButton disabled={pending} label="Back to login" onPress={onSignOut} />
+          </UiCard>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+function ProfileLoadErrorScreen({ message, onRetry, onSignOut }: { message: string; onRetry: () => void; onSignOut: () => void }) {
+  return (
+    <SafeAreaView style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.eyebrow}>Account check</Text>
+        <Text style={styles.title}>We could not open your workspace.</Text>
+        <ShellCard title="Profile check failed">
+          <Text style={styles.copy}>{message}</Text>
+          <View style={styles.actionRow}>
+            <Pressable accessibilityRole="button" onPress={onRetry} style={[styles.primaryButton, styles.actionButton]}>
+              <Text style={styles.primaryButtonText}>Try again</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={onSignOut} style={[styles.secondaryButton, styles.actionButton]}>
+              <Text style={styles.secondaryButtonText}>Sign out</Text>
+            </Pressable>
+          </View>
         </ShellCard>
       </ScrollView>
     </SafeAreaView>
@@ -5728,9 +5866,13 @@ function AppContent() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileMissing, setProfileMissing] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [authNotice, setAuthNotice] = useState('');
+  const [passwordRecoverySession, setPasswordRecoverySession] = useState<Session | null>(null);
   const [splashReady, setSplashReady] = useState(false);
   const [splashSeen, setSplashSeen] = useState(true);
   const activeSessionUserIdRef = useRef<string | null>(null);
+  const recoveryInProgressRef = useRef(false);
 
   const loadCurrentProfile = useCallback(async (nextSession: Session | null) => {
     const nextUserId = nextSession?.user.id ?? null;
@@ -5738,6 +5880,7 @@ function AppContent() {
 
     setSession(nextSession);
     setProfileMissing(false);
+    setProfileError('');
 
     if (!nextSession) {
       activeSessionUserIdRef.current = null;
@@ -5756,7 +5899,14 @@ function AppContent() {
       activeSessionUserIdRef.current = nextUserId;
       setProfile(result.data);
       setProfileMissing(false);
+      setProfileError('');
     } catch (error) {
+      authDebug('profile load failed', {
+        code: (error as { code?: string }).code,
+        message: getErrorMessage(error),
+        hasSession: Boolean(nextSession)
+      });
+
       if ((error as { code?: string }).code === 'PROFILE_NOT_FOUND') {
         activeSessionUserIdRef.current = nextUserId;
         if (!sameUser) {
@@ -5765,11 +5915,75 @@ function AppContent() {
         setProfileMissing(true);
       } else if (!sameUser) {
         setProfile(null);
+        setProfileError(getErrorMessage(error));
+      } else {
+        setProfileError(getErrorMessage(error));
       }
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const handleAuthUrl = useCallback(async (url: string | null) => {
+    if (!url || (!url.includes('auth/callback') && !url.includes('auth/reset-password') && !url.includes('access_token=') && !url.includes('code='))) {
+      return;
+    }
+
+    const params = readAuthUrlParams(url);
+    const type = params.get('type');
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    const code = params.get('code');
+    const isRecovery = type === 'recovery' || url.includes('reset-password');
+
+    authDebug('auth callback opened', { type, hasAccessToken: Boolean(accessToken), hasRefreshToken: Boolean(refreshToken), hasCode: Boolean(code), isRecovery });
+
+    try {
+      let nextSession: Session | null = null;
+
+      if (code) {
+        const { data: codeData, error: codeError } = await supabase.auth.exchangeCodeForSession(code);
+
+        if (codeError) {
+          throw codeError;
+        }
+
+        nextSession = codeData.session;
+      } else if (accessToken && refreshToken) {
+        const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken
+        });
+
+        if (sessionError) {
+          throw sessionError;
+        }
+
+        nextSession = sessionData.session;
+      } else {
+        nextSession = (await supabase.auth.getSession()).data.session;
+      }
+
+      if (!nextSession) {
+        setAuthNotice('The email link opened, but no active session was created. Try signing in again.');
+        return;
+      }
+
+      if (isRecovery) {
+        recoveryInProgressRef.current = true;
+        setPasswordRecoverySession(nextSession);
+        setSession(nextSession);
+        setLoading(false);
+        return;
+      }
+
+      await loadCurrentProfile(nextSession);
+    } catch (callbackError) {
+      authDebug('auth callback failed', callbackError);
+      setAuthNotice(getErrorMessage(callbackError));
+      setLoading(false);
+    }
+  }, [loadCurrentProfile]);
 
   useEffect(() => {
     let mounted = true;
@@ -5802,21 +6016,50 @@ function AppContent() {
         }
       });
 
+    Linking.getInitialURL()
+      .then((url) => {
+        if (mounted) {
+          handleAuthUrl(url);
+        }
+      })
+      .catch((linkError) => authDebug('initial link failed', linkError));
+
+    const linkSubscription = Linking.addEventListener('url', ({ url }) => {
+      handleAuthUrl(url);
+    });
+
     supabase.auth.getSession().then(({ data }) => {
       if (mounted) {
         loadCurrentProfile(data.session);
       }
     });
 
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: subscriptionData } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      authDebug('auth state changed', { event, hasSession: Boolean(nextSession), userId: nextSession?.user.id });
+
+      if (event === 'PASSWORD_RECOVERY' && nextSession) {
+        recoveryInProgressRef.current = true;
+        setPasswordRecoverySession(nextSession);
+        setSession(nextSession);
+        setLoading(false);
+        return;
+      }
+
+      if (recoveryInProgressRef.current) {
+        setSession(nextSession);
+        setLoading(false);
+        return;
+      }
+
       loadCurrentProfile(nextSession);
     });
 
     return () => {
       mounted = false;
-      data.subscription.unsubscribe();
+      linkSubscription.remove();
+      subscriptionData.subscription.unsubscribe();
     };
-  }, [loadCurrentProfile]);
+  }, [handleAuthUrl, loadCurrentProfile]);
 
   const handleAuthenticated = (nextProfile: UserProfile, nextSession: Session) => {
     AsyncStorage.setItem(AUTH_ONBOARDING_COMPLETED_KEY, 'true').catch(() => undefined);
@@ -5824,25 +6067,52 @@ function AppContent() {
     setSession(nextSession);
     setProfile(nextProfile);
     setProfileMissing(false);
+    setProfileError('');
+    setAuthNotice('');
     setLoading(false);
   };
 
   const handleSignOut = async () => {
     clearDemoAccessToken();
+    recoveryInProgressRef.current = false;
+    setPasswordRecoverySession(null);
     await supabase.auth.signOut();
     query.clear();
     activeSessionUserIdRef.current = null;
     setSession(null);
     setProfile(null);
     setProfileMissing(false);
+    setProfileError('');
+  };
+
+  const handleResetComplete = async () => {
+    recoveryInProgressRef.current = false;
+    setPasswordRecoverySession(null);
+    setAuthNotice('Password updated. Sign in with your new password.');
+    await supabase.auth.signOut();
+    query.clear();
+    activeSessionUserIdRef.current = null;
+    setSession(null);
+    setProfile(null);
+    setProfileMissing(false);
+    setProfileError('');
+  };
+
+  const retryProfileLoad = () => {
+    setLoading(true);
+    supabase.auth.getSession().then(({ data }) => loadCurrentProfile(data.session));
   };
 
   if (loading || !splashReady) {
     return <SplashScreen compact={splashSeen} />;
   }
 
+  if (passwordRecoverySession) {
+    return <ResetPasswordScreen onComplete={handleResetComplete} onSignOut={handleSignOut} />;
+  }
+
   if (!session) {
-    return <AuthScreen onAuthenticated={handleAuthenticated} />;
+    return <AuthScreen initialNotice={authNotice} onAuthenticated={handleAuthenticated} />;
   }
 
   if (profileMissing) {
@@ -5850,7 +6120,7 @@ function AppContent() {
   }
 
   if (!profile) {
-    return <AuthScreen onAuthenticated={handleAuthenticated} />;
+    return <ProfileLoadErrorScreen message={profileError || 'Your Supabase session is active, but KULI could not load the matching profile.'} onRetry={retryProfileLoad} onSignOut={handleSignOut} />;
   }
 
   if (isBlockedStatus(profile.accountStatus)) {

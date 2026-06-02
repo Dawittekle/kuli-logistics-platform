@@ -54,6 +54,8 @@ Expected keys:
 | `MOBILE_APP_SUPABASE_ANON_KEY` | Supabase public anon key. |
 | `MOBILE_APP_DEMO_AUTH_ENABLED` | Enables local demo profiles for development. Auto-enabled for local API URLs. |
 | `MOBILE_APP_GOOGLE_MAPS_API_KEY` | Optional static map provider key. If absent, local map preview uses a no-key fallback. |
+| `MOBILE_APP_AUTH_REDIRECT_URL` | Supabase email-confirmation redirect, default `kuli://auth/callback`. Add this URL to Supabase Auth redirect URLs. |
+| `MOBILE_APP_PASSWORD_RESET_REDIRECT_URL` | Supabase password-recovery redirect, default `kuli://auth/reset-password`. Add this URL to Supabase Auth redirect URLs. |
 
 Runtime readiness is visible inside the auth screen so API/Supabase/demo configuration problems are obvious during local testing.
 
@@ -92,6 +94,7 @@ Session states:
 - Login with Supabase email/password.
 - Public registration for `client` and `truck_owner`.
 - Forgot-password/account recovery through Supabase reset email.
+- Password-reset completion from a Supabase recovery deep link, then the user signs in again with the new password.
 - Email confirmation code entry and resend.
 - Local development demo profiles when demo auth is enabled.
 
