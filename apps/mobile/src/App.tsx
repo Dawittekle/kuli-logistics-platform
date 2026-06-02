@@ -46,6 +46,7 @@ import { RoutePill } from './components/visual/RoutePill';
 type Role = 'client' | 'truck_owner' | 'assistant' | 'admin';
 type AccountStatus = 'active' | 'pending_verification' | 'suspended' | 'banned' | 'deleted';
 type AuthMode = 'login' | 'register' | 'forgot';
+type ResetPasswordStep = 'request' | 'verify';
 type PublicRole = Extract<Role, 'client' | 'truck_owner'>;
 type VerificationDraft = {
   email: string;
@@ -778,7 +779,15 @@ function FilePickerField({
   );
 }
 
-function AuthScreen({ initialNotice = '', onAuthenticated }: { initialNotice?: string; onAuthenticated: (profile: UserProfile, session: Session) => void }) {
+function AuthScreen({
+  initialNotice = '',
+  onAuthenticated,
+  onPasswordRecoveryVerified
+}: {
+  initialNotice?: string;
+  onAuthenticated: (profile: UserProfile, session: Session) => void;
+  onPasswordRecoveryVerified: (session: Session) => void;
+}) {
   const [mode, setMode] = useState<AuthMode>('login');
   const [role, setRole] = useState<PublicRole>('client');
   const [fullName, setFullName] = useState('');
@@ -790,6 +799,10 @@ function AuthScreen({ initialNotice = '', onAuthenticated }: { initialNotice?: s
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationPending, setVerificationPending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [resetStep, setResetStep] = useState<ResetPasswordStep>('request');
+  const [resetCode, setResetCode] = useState('');
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetCooldown, setResetCooldown] = useState(0);
   const [resetPending, setResetPending] = useState(false);
   const [notice, setNotice] = useState(initialNotice);
   const [error, setError] = useState('');
@@ -804,6 +817,14 @@ function AuthScreen({ initialNotice = '', onAuthenticated }: { initialNotice?: s
     setMode(nextMode);
     setError('');
     setNotice('');
+
+    if (nextMode !== 'forgot') {
+      setResetStep('request');
+      setResetCode('');
+      setResetEmail('');
+      setResetCooldown(0);
+      setResetPending(false);
+    }
   };
 
   useEffect(() => {
@@ -819,6 +840,16 @@ function AuthScreen({ initialNotice = '', onAuthenticated }: { initialNotice?: s
 
     return () => clearTimeout(timer);
   }, [resendCooldown]);
+
+  useEffect(() => {
+    if (resetCooldown <= 0) {
+      return;
+    }
+
+    const timer = setTimeout(() => setResetCooldown((value) => Math.max(0, value - 1)), 1000);
+
+    return () => clearTimeout(timer);
+  }, [resetCooldown]);
 
   const loadProfile = async (session: Session) => {
     const profile = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
@@ -837,7 +868,7 @@ function AuthScreen({ initialNotice = '', onAuthenticated }: { initialNotice?: s
   };
 
   const sendPasswordReset = async () => {
-    if (resetPending) {
+    if (resetPending || resetCooldown > 0) {
       return;
     }
 
@@ -870,9 +901,62 @@ function AuthScreen({ initialNotice = '', onAuthenticated }: { initialNotice?: s
         throw resetError;
       }
 
-      setNotice('Password reset email sent. Open the reset link from your inbox to choose a new password.');
+      setResetEmail(normalizedEmail);
+      setResetCode('');
+      setResetStep('verify');
+      setResetCooldown(VERIFICATION_RESEND_COOLDOWN_SECONDS);
+      setNotice('Password reset code sent. Enter the code from your email to choose a new password in KULI.');
     } catch (resetError) {
       setError(getErrorMessage(resetError));
+    } finally {
+      setResetPending(false);
+    }
+  };
+
+  const verifyPasswordResetCode = async () => {
+    const targetEmail = (resetEmail || normalizedEmail).trim().toLowerCase();
+
+    if (resetPending) {
+      return;
+    }
+
+    setError('');
+    setNotice('');
+
+    if (!isValidEmail(targetEmail)) {
+      setError('Enter a valid email address before verifying the code.');
+      setResetStep('request');
+      return;
+    }
+
+    if (!resetCode.trim()) {
+      setError('Enter the reset code from your email.');
+      return;
+    }
+
+    setResetPending(true);
+
+    try {
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+        email: targetEmail,
+        token: resetCode.trim(),
+        type: 'recovery'
+      });
+
+      if (verifyError) {
+        throw verifyError;
+      }
+
+      const recoverySession = data.session ?? (await supabase.auth.getSession()).data.session;
+
+      if (!recoverySession) {
+        setError('The code was accepted, but KULI could not open a recovery session. Request a new code and try again.');
+        return;
+      }
+
+      onPasswordRecoveryVerified(recoverySession);
+    } catch (verifyError) {
+      setError(getErrorMessage(verifyError));
     } finally {
       setResetPending(false);
     }
@@ -1175,14 +1259,48 @@ function AuthScreen({ initialNotice = '', onAuthenticated }: { initialNotice?: s
             <UiCard style={styles.authCard}>
               <AppHeader
                 eyebrow="Account recovery"
-                title="Reset your password."
-                subtitle="We will send a secure reset link to the email on your KULI account."
+                title={resetStep === 'request' ? 'Reset your password.' : 'Enter your reset code.'}
+                subtitle={
+                  resetStep === 'request'
+                    ? 'We will email a one-time reset code. You can finish the password change inside KULI.'
+                    : `Use the code sent to ${resetEmail || normalizedEmail}.`
+                }
               />
-              <Field label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" />
+              {resetStep === 'request' ? (
+                <Field label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" />
+              ) : (
+                <>
+                  <View style={styles.verificationEmailBox}>
+                    <Text style={styles.fieldLabel}>{resetEmail || normalizedEmail}</Text>
+                    <Text style={styles.muted}>Reset codes can expire. Request a new one if this code no longer works.</Text>
+                  </View>
+                  <Field label="Reset code" value={resetCode} onChangeText={setResetCode} placeholder="6-digit code" keyboardType="numeric" />
+                </>
+              )}
               {error ? <AuthMessage tone="error" message={error} /> : null}
               {notice ? <AuthMessage tone="notice" message={notice} /> : null}
-              <PrimaryButton disabled={!canResetPassword} label={resetPending ? 'Sending...' : 'Send reset email'} loading={resetPending} onPress={sendPasswordReset} />
-              <SecondaryButton label="Back to login" onPress={() => changeMode('login')} />
+              {resetStep === 'request' ? (
+                <PrimaryButton disabled={!canResetPassword} label={resetPending ? 'Sending...' : 'Send reset code'} loading={resetPending} onPress={sendPasswordReset} />
+              ) : (
+                <>
+                  <PrimaryButton disabled={resetPending || !resetCode.trim()} label={resetPending ? 'Checking...' : 'Verify code'} loading={resetPending} onPress={verifyPasswordResetCode} />
+                  <SecondaryButton
+                    disabled={resetPending || resetCooldown > 0}
+                    label={resetCooldown > 0 ? `Send a new code in ${resetCooldown}s` : 'Send a new code'}
+                    onPress={sendPasswordReset}
+                  />
+                </>
+              )}
+              <SecondaryButton
+                label="Back to login"
+                onPress={() => {
+                  setResetStep('request');
+                  setResetCode('');
+                  setResetEmail('');
+                  setResetCooldown(0);
+                  changeMode('login');
+                }}
+              />
             </UiCard>
           ) : (
             <>
@@ -6072,6 +6190,18 @@ function AppContent() {
     setLoading(false);
   };
 
+  const handlePasswordRecoveryVerified = (nextSession: Session) => {
+    recoveryInProgressRef.current = true;
+    activeSessionUserIdRef.current = null;
+    setPasswordRecoverySession(nextSession);
+    setSession(nextSession);
+    setProfile(null);
+    setProfileMissing(false);
+    setProfileError('');
+    setAuthNotice('');
+    setLoading(false);
+  };
+
   const handleSignOut = async () => {
     clearDemoAccessToken();
     recoveryInProgressRef.current = false;
@@ -6112,7 +6242,7 @@ function AppContent() {
   }
 
   if (!session) {
-    return <AuthScreen initialNotice={authNotice} onAuthenticated={handleAuthenticated} />;
+    return <AuthScreen initialNotice={authNotice} onAuthenticated={handleAuthenticated} onPasswordRecoveryVerified={handlePasswordRecoveryVerified} />;
   }
 
   if (profileMissing) {
