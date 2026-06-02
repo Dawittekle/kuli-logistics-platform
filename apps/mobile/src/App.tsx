@@ -3187,17 +3187,22 @@ function RouteMapPreview({
   destination,
   truck,
   statusLabel,
-  style
+  style,
+  onMapTouch
 }: {
   pickup: MapLocationInput;
   destination: MapLocationInput;
   truck?: QuoteLocation;
   statusLabel?: string;
   style?: StyleProp<ViewStyle>;
+  onMapTouch?: (location: { lat: string; lon: string; type: 'pickup' | 'destination' }) => void;
 }) {
   const [zoom, setZoom] = useState(12);
   const [expanded, setExpanded] = useState(false);
   const [routePoints, setRoutePoints] = useState<{ lon: number; lat: number }[]>([]);
+  const [layoutWidth, setLayoutWidth] = useState(360);
+  const [layoutHeight, setLayoutHeight] = useState(190);
+  const [activeMode, setActiveMode] = useState<'pickup' | 'destination'>('pickup');
 
   const pickupPoint = normalizeMapLocation(pickup, 'Pickup');
   const destinationPoint = normalizeMapLocation(destination, 'Drop-off');
@@ -3243,6 +3248,54 @@ function RouteMapPreview({
     return decimated.map(p => `${p.lat},${p.lon}`).join('%7C');
   }, [routePoints]);
 
+  const mapCenter = useMemo(() => {
+    if (pickupPoint.lat && destinationPoint.lat) {
+      return {
+        lat: (pickupPoint.lat + destinationPoint.lat) / 2,
+        lon: (pickupPoint.lon + destinationPoint.lon) / 2
+      };
+    }
+    return {
+      lat: pickupPoint.lat || 8.9806,
+      lon: pickupPoint.lon || 38.7892
+    };
+  }, [pickupPoint, destinationPoint]);
+
+  const onLayout = (e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    if (width > 0) setLayoutWidth(width);
+    if (height > 0) setLayoutHeight(height);
+  };
+
+  const handlePress = (event: GestureResponderEvent) => {
+    if (!onMapTouch) return;
+    const { locationX, locationY } = event.nativeEvent;
+    
+    const centerLat = mapCenter.lat;
+    const centerLon = mapCenter.lon;
+    const latRad = centerLat * Math.PI / 180;
+    
+    const metersPerPixel = (156543.03 * Math.cos(latRad)) / Math.pow(2, zoom);
+    
+    const dxPixels = locationX - layoutWidth / 2;
+    const dyPixels = layoutHeight / 2 - locationY;
+    
+    const dxMeters = dxPixels * metersPerPixel;
+    const dyMeters = dyPixels * metersPerPixel;
+    
+    const dLat = dyMeters / 111320;
+    const dLon = dxMeters / (111320 * Math.cos(latRad));
+    
+    const touchedLat = centerLat + dLat;
+    const touchedLon = centerLon + dLon;
+    
+    onMapTouch({
+      lat: String(touchedLat.toFixed(6)),
+      lon: String(touchedLon.toFixed(6)),
+      type: activeMode
+    });
+  };
+
   const mapProviderLabel = runtimeConfig.googleMapsApiKey ? 'Google map (road path)' : 'OpenStreetMap (road path)';
 
   const staticMapUrl = useMemo(() => {
@@ -3253,7 +3306,7 @@ function RouteMapPreview({
         truckPoint ? `markers=color:blue%7Clabel:T%7C${truckPoint.lat},${truckPoint.lon}` : ''
       ].filter(Boolean);
       const pathParam = googlePath ? `path=color:0x0000ffff%7Cweight:5%7C${googlePath}` : `path=color:0x0000ffff%7Cweight:5%7C${pickupPoint.lat},${pickupPoint.lon}%7C${destinationPoint.lat},${destinationPoint.lon}`;
-      return `https://maps.googleapis.com/maps/api/staticmap?center=${pickupPoint.lat},${pickupPoint.lon}&zoom=${zoom}&size=640x320&scale=2&maptype=roadmap&${markers.join('&')}&${pathParam}&key=${encodeURIComponent(runtimeConfig.googleMapsApiKey)}`;
+      return `https://maps.googleapis.com/maps/api/staticmap?center=${mapCenter.lat},${mapCenter.lon}&zoom=${zoom}&size=640x320&scale=2&maptype=roadmap&${markers.join('&')}&${pathParam}&key=${encodeURIComponent(runtimeConfig.googleMapsApiKey)}`;
     }
 
     const ptParam = [
@@ -3264,37 +3317,90 @@ function RouteMapPreview({
 
     const plParam = coordsPath ? `&pl=c:0000FFf0,w:5,${coordsPath}` : `&pl=c:0000FFf0,w:5,${pickupPoint.lon},${pickupPoint.lat},${destinationPoint.lon},${destinationPoint.lat}`;
 
-    return `https://static-maps.yandex.ru/1.x/?l=map&size=600,300&pt=${ptParam}${plParam}`;
-  }, [pickupPoint, destinationPoint, truckPoint, zoom, coordsPath, googlePath]);
+    return `https://static-maps.yandex.ru/1.x/?l=map&size=600,300&ll=${mapCenter.lon},${mapCenter.lat}&z=${zoom}&pt=${ptParam}${plParam}`;
+  }, [pickupPoint, destinationPoint, truckPoint, mapCenter, zoom, coordsPath, googlePath]);
 
   const zoomMap = (direction: 'in' | 'out') => setZoom((current) => Math.max(10, Math.min(15, direction === 'in' ? current + 1 : current - 1)));
 
   const renderMap = (fullScreen = false) => (
-    <View style={[styles.mapPreview, !fullScreen && style, fullScreen && styles.mapPreviewFullScreen]}>
+    <Pressable
+      accessibilityRole="button"
+      onPress={handlePress}
+      onLayout={onLayout}
+      style={[styles.mapPreview, !fullScreen && style, fullScreen && styles.mapPreviewFullScreen]}
+    >
       <Image source={{ uri: staticMapUrl }} resizeMode="cover" style={styles.mapTile} />
       <View style={styles.mapScrim} />
       <View style={styles.mapGridLineVertical} />
       <View style={styles.mapGridLineHorizontal} />
       <View style={styles.mapRoute} />
+      
+      {onMapTouch ? (
+        <View style={styles.mapActiveModeRow}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={(e) => {
+              e.stopPropagation();
+              setActiveMode('pickup');
+            }}
+            style={[styles.mapModeButton, activeMode === 'pickup' && styles.mapModeButtonActive]}
+          >
+            <Text style={[styles.mapModeText, activeMode === 'pickup' && styles.mapModeTextActive]}>📍 Pickup</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={(e) => {
+              e.stopPropagation();
+              setActiveMode('destination');
+            }}
+            style={[styles.mapModeButton, activeMode === 'destination' && styles.mapModeButtonActive]}
+          >
+            <Text style={[styles.mapModeText, activeMode === 'destination' && styles.mapModeTextActive]}>🏁 Drop-off</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <View style={styles.mapControls}>
-        <Pressable accessibilityRole="button" onPress={() => zoomMap('in')} style={styles.mapControlButton}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={(e) => {
+            e.stopPropagation();
+            zoomMap('in');
+          }}
+          style={styles.mapControlButton}
+        >
           <Text style={styles.mapControlText}>+</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" onPress={() => zoomMap('out')} style={styles.mapControlButton}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={(e) => {
+            e.stopPropagation();
+            zoomMap('out');
+          }}
+          style={styles.mapControlButton}
+        >
           <Text style={styles.mapControlText}>-</Text>
         </Pressable>
         {!fullScreen ? (
-          <Pressable accessibilityRole="button" onPress={() => setExpanded(true)} style={styles.mapExpandButton}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={(e) => {
+              e.stopPropagation();
+              setExpanded(true);
+            }}
+            style={styles.mapExpandButton}
+          >
             <Text style={styles.mapExpandText}>Expand</Text>
           </Pressable>
         ) : null}
       </View>
       <View style={styles.mapLegend}>
-        <Text style={styles.mapLegendText}>{mapProviderLabel} / Pickup: {pickupPoint.label}</Text>
-        <Text style={styles.mapLegendText}>Drop-off: {destinationPoint.label}</Text>
+        <Text style={styles.mapLegendText}>{mapProviderLabel}</Text>
+        <Text style={styles.mapLegendText}>📍 Pickup: {pickupPoint.label} {pickupPoint.key === 'custom' ? `(${Number(pickupPoint.lon).toFixed(4)}, ${Number(pickupPoint.lat).toFixed(4)})` : ''}</Text>
+        <Text style={styles.mapLegendText}>🏁 Drop-off: {destinationPoint.label} {destinationPoint.key === 'custom' ? `(${Number(destinationPoint.lon).toFixed(4)}, ${Number(destinationPoint.lat).toFixed(4)})` : ''}</Text>
         {truckPoint ? <Text style={styles.mapLegendText}>Truck: {truckPoint.label}{statusLabel ? ` / ${statusLabel}` : ''}</Text> : null}
       </View>
-    </View>
+    </Pressable>
   );
 
   return (
@@ -3521,8 +3627,41 @@ function ClientQuoteScreen() {
   const vehicleClasses = vehicleClassesQuery.data ?? [];
   const selectedVehicleClass = vehicleClasses.find((vehicleClass) => vehicleClass.id === vehicleClassId);
   const selectedCapacityLabel = selectedVehicleClass?.capacityKg ? `${selectedVehicleClass.capacityKg}kg` : 'class';
-  const pickupOption = getLocationOption(pickupLocationKey);
-  const destinationOption = getLocationOption(destinationLocationKey);
+  const pickupOption = useMemo(() => {
+    if (pickupLocationKey === 'custom') {
+      return {
+        key: 'custom',
+        label: 'Custom pin',
+        lon: pickupLon,
+        lat: pickupLat
+      };
+    }
+    return getLocationOption(pickupLocationKey);
+  }, [pickupLocationKey, pickupLon, pickupLat]);
+
+  const destinationOption = useMemo(() => {
+    if (destinationLocationKey === 'custom') {
+      return {
+        key: 'custom',
+        label: 'Custom pin',
+        lon: destinationLon,
+        lat: destinationLat
+      };
+    }
+    return getLocationOption(destinationLocationKey);
+  }, [destinationLocationKey, destinationLon, destinationLat]);
+
+  const handleMapTouch = useCallback(({ lat, lon, type }: { lat: string; lon: string; type: 'pickup' | 'destination' }) => {
+    if (type === 'pickup') {
+      setPickupLon(lon);
+      setPickupLat(lat);
+      setPickupLocationKey('custom');
+    } else {
+      setDestinationLon(lon);
+      setDestinationLat(lat);
+      setDestinationLocationKey('custom');
+    }
+  }, []);
 
   useEffect(() => {
     if (!vehicleClassId && vehicleClasses[0]) {
@@ -3656,7 +3795,7 @@ function ClientQuoteScreen() {
   return (
     <Screen padded={false} contentStyle={styles.requestFlowContent}>
       <View style={styles.requestMapStage}>
-        <RouteMapPreview pickup={pickupOption} destination={destinationOption} style={styles.requestHeroMap} />
+        <RouteMapPreview pickup={pickupOption} destination={destinationOption} style={styles.requestHeroMap} onMapTouch={handleMapTouch} />
         <View style={styles.requestFloatingHeader}>
           <AppHeader
             eyebrow="KULI Request"
@@ -3678,7 +3817,7 @@ function ClientQuoteScreen() {
             <SectionHeader
               eyebrow="Step 1"
               title="Set your route."
-              description="Choose pickup and drop-off areas. You can fine tune map pins when needed."
+              description="Choose pickup and drop-off areas or tap/touch the map directly to place custom pins."
               action={<StatusBadge tone="dark">Addis Ababa</StatusBadge>}
             />
             <RoutePill pickup={routeSummaryPickup} destination={routeSummaryDestination} />
@@ -3720,23 +3859,6 @@ function ClientQuoteScreen() {
               }}
             />
             <Field label="Drop-off note" value={destinationAddressNote} onChangeText={setDestinationAddressNote} placeholder="Building, gate, floor, or nearby landmark" />
-            <SecondaryButton
-              label={showManualCoordinates ? 'Hide pin details' : 'Adjust map pin'}
-              onPress={() => setShowManualCoordinates((value) => !value)}
-            />
-            {showManualCoordinates ? (
-              <View style={styles.requestManualPanel}>
-                <Text style={styles.muted}>Fine tune generated coordinates only when the selected area is not close enough.</Text>
-                <View style={styles.inlineFields}>
-                  <Field containerStyle={styles.inlineField} label="Pickup lon" value={pickupLon} onChangeText={setPickupLon} placeholder="38.7903" keyboardType="decimal-pad" />
-                  <Field containerStyle={styles.inlineField} label="Pickup lat" value={pickupLat} onChangeText={setPickupLat} placeholder="8.9806" keyboardType="decimal-pad" />
-                </View>
-                <View style={styles.inlineFields}>
-                  <Field containerStyle={styles.inlineField} label="Drop-off lon" value={destinationLon} onChangeText={setDestinationLon} placeholder="38.7578" keyboardType="decimal-pad" />
-                  <Field containerStyle={styles.inlineField} label="Drop-off lat" value={destinationLat} onChangeText={setDestinationLat} placeholder="9.0350" keyboardType="decimal-pad" />
-                </View>
-              </View>
-            ) : null}
             <PrimaryButton label="Continue" onPress={continueToTruckAndLoad} />
           </>
         ) : null}
@@ -9680,6 +9802,35 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     flex: 1,
     height: 'auto'
+  },
+  mapActiveModeRow: {
+    flexDirection: 'row',
+    position: 'absolute',
+    top: spacing.sm,
+    left: spacing.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: radii.sm,
+    padding: 3,
+    gap: spacing.xs,
+    zIndex: 10,
+    borderWidth: 1,
+    borderColor: colors.border
+  },
+  mapModeButton: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.sm
+  },
+  mapModeButtonActive: {
+    backgroundColor: colors.primary
+  },
+  mapModeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text
+  },
+  mapModeTextActive: {
+    color: colors.white
   },
   fullscreenMapShell: {
     backgroundColor: colors.background,
