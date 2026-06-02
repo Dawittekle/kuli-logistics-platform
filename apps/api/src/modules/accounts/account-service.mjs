@@ -40,14 +40,17 @@ export class AccountService {
   }
 
   async syncProfile({ authUser, role, fullName, email, phone }) {
-    const existingUser = await this.userRepository.findBySupabaseUserId(authUser.sub);
+    const existingUser = await this.resolveUserForAuthIdentity(authUser);
+    const normalizedEmail = cleanEmail(email ?? authUser.email);
+    const normalizedPhone = cleanOptional(phone ?? authUser.phone);
 
     if (existingUser) {
-      const updatedUser = await this.userRepository.save({
+      const updatedUser = await saveUserOrConflict(this.userRepository, {
         ...existingUser,
+        supabaseUserId: authUser.sub,
         fullName: pickDefined(fullName, existingUser.fullName),
-        email: pickDefined(email ?? authUser.email, existingUser.email),
-        phone: pickDefined(phone ?? authUser.phone, existingUser.phone)
+        email: pickDefined(normalizedEmail, existingUser.email),
+        phone: pickDefined(normalizedPhone, existingUser.phone)
       });
 
       return {
@@ -61,24 +64,51 @@ export class AccountService {
       supabaseUserId: authUser.sub,
       role,
       fullName,
-      email: email ?? authUser.email,
-      phone: phone ?? authUser.phone
+      email: normalizedEmail,
+      phone: normalizedPhone
     });
 
     return {
-      user: await this.userRepository.save(user),
+      user: await saveUserOrConflict(this.userRepository, user),
       created: true
     };
   }
 
   async getCurrentUser(authUser) {
-    const user = await this.userRepository.findBySupabaseUserId(authUser.sub);
+    const user = await this.resolveUserForAuthIdentity(authUser);
 
     if (!user) {
       throw new AppError(404, 'PROFILE_NOT_FOUND', 'No application profile exists for this identity.');
     }
 
     return user;
+  }
+
+  async resolveUserForAuthIdentity(authUser) {
+    const user = await this.userRepository.findBySupabaseUserId(authUser.sub);
+
+    if (user) {
+      return user;
+    }
+
+    const normalizedEmail = cleanEmail(authUser.email);
+
+    if (!normalizedEmail || !this.userRepository.findByEmail) {
+      return null;
+    }
+
+    const emailUser = await this.userRepository.findByEmail(normalizedEmail);
+
+    if (!emailUser) {
+      return null;
+    }
+
+    return saveUserOrConflict(this.userRepository, {
+      ...emailUser,
+      supabaseUserId: authUser.sub,
+      email: normalizedEmail,
+      authRelinkedAt: new Date().toISOString()
+    });
   }
 
   async updateOwnProfile(authUser, input) {

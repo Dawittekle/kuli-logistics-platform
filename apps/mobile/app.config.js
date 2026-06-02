@@ -29,18 +29,7 @@ const parseEnvFile = () => {
 
 const env = parseEnvFile();
 
-const resolveBoolean = (value, fallback = false) => {
-  if (value === undefined) {
-    return fallback;
-  }
-
-  return ['1', 'true', 'yes', 'on'].includes(String(value).trim().toLowerCase());
-};
-
 const apiBaseUrl = process.env.MOBILE_APP_API_BASE_URL ?? env.MOBILE_APP_API_BASE_URL ?? 'http://localhost:4000/api/v1';
-const demoAuthEnv = process.env.MOBILE_APP_DEMO_AUTH_ENABLED ?? env.MOBILE_APP_DEMO_AUTH_ENABLED;
-const isLocalApi = /^(http:\/\/)?(localhost|127\.0\.0\.1|10\.0\.2\.2)(:|\/|$)/.test(apiBaseUrl);
-
 export default ({ config }) => ({
   ...config,
   name: 'KULI',
@@ -51,7 +40,7 @@ export default ({ config }) => ({
   userInterfaceStyle: 'light',
   jsEngine: 'jsc',
   splash: {
-    backgroundColor: '#0d3446'
+    backgroundColor: '#000000'
   },
   plugins: [
     [
@@ -75,8 +64,10 @@ export default ({ config }) => ({
       apiBaseUrl,
       supabaseUrl: process.env.MOBILE_APP_SUPABASE_URL ?? env.MOBILE_APP_SUPABASE_URL ?? '',
       supabaseAnonKey: process.env.MOBILE_APP_SUPABASE_ANON_KEY ?? env.MOBILE_APP_SUPABASE_ANON_KEY ?? '',
-      demoAuthEnabled: resolveBoolean(demoAuthEnv, isLocalApi),
-      googleMapsApiKey: process.env.MOBILE_APP_GOOGLE_MAPS_API_KEY ?? env.MOBILE_APP_GOOGLE_MAPS_API_KEY ?? ''
+      googleMapsApiKey: process.env.MOBILE_APP_GOOGLE_MAPS_API_KEY ?? env.MOBILE_APP_GOOGLE_MAPS_API_KEY ?? '',
+      authRedirectUrl: process.env.MOBILE_APP_AUTH_REDIRECT_URL ?? env.MOBILE_APP_AUTH_REDIRECT_URL ?? 'kuli://auth/callback',
+      passwordResetRedirectUrl:
+        process.env.MOBILE_APP_PASSWORD_RESET_REDIRECT_URL ?? env.MOBILE_APP_PASSWORD_RESET_REDIRECT_URL ?? 'kuli://auth/reset-password'
     }
   }
 });
