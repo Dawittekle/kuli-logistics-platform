@@ -165,9 +165,7 @@ KULI's core flow turns a freight request into a completed delivery. Here's how i
 
 #### 1. Client Creates a Request
 
-A client opens the mobile app, selects a pickup location and destination (both mapped to coordinates for route calculation), describes the load — item type, weight, dimensions, and any special handling instructions — picks a truck category that fits the job, and chooses a preferred pickup time. The app sends this to the backend which returns a quote: estimated distance, expected travel time, and a price breakdown based on the active pricing rules.
-
-From the same screen, the client sees a list of nearby available trucks ranked by distance, rating, and capacity. They pick which trucks should receive their request.
+ a user opens the mobile app to create a request, they enter their pickup and destination locations, which map directly to coordinates for route tracking. They also fill in cargo details like item type, weight, dimensions, and handling needs, before picking a truck class and scheduled time. The system sends this data to the backend to generate a real-time quote detailing distance, ETA, and the fare breakdown. Right on that same screen, the user can browse active nearby trucks ranked by proximity, customer ratings, and capacity. To finish up, they just select which specific drivers should receive their logistics request
 
 #### 2. Request Becomes Offers
 
