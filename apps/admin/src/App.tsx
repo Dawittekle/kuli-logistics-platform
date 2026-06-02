@@ -417,6 +417,217 @@ type AssistantRouteItem = RouteItem & {
   page: AssistantPageKey;
 };
 
+interface AddisLocationOption {
+  key: string;
+  label: string;
+  area: string;
+  detail: string;
+  lon: string;
+  lat: string;
+}
+
+const addisLocationOptions: AddisLocationOption[] = [
+  { key: 'bole-medhanialem', label: 'Bole Medhanialem', area: 'Bole', detail: 'Airport, hotels, offices', lon: '38.7903', lat: '8.9806' },
+  { key: 'bole-atlas', label: 'Atlas', area: 'Bole', detail: 'Restaurants and apartments', lon: '38.7848', lat: '9.0002' },
+  { key: 'piassa', label: 'Piassa', area: 'Arada', detail: 'Central market streets', lon: '38.7578', lat: '9.0350' },
+  { key: 'merkato', label: 'Merkato', area: 'Addis Ketema', detail: 'Bulk goods and retail', lon: '38.7352', lat: '9.0347' },
+  { key: 'mexico-square', label: 'Mexico Square', area: 'Kirkos', detail: 'Offices and main roads', lon: '38.7468', lat: '9.0109' },
+  { key: 'kazanchis', label: 'Kazanchis', area: 'Kirkos', detail: 'Hotels and apartments', lon: '38.7670', lat: '9.0182' },
+  { key: 'megenagna', label: 'Megenagna', area: 'Yeka', detail: 'Transit and business area', lon: '38.8025', lat: '9.0247' },
+  { key: 'cmc', label: 'CMC', area: 'Yeka', detail: 'Residential compounds', lon: '38.8401', lat: '9.0188' },
+  { key: 'saris', label: 'Saris', area: 'Akaky Kaliti', detail: 'Industrial and warehouses', lon: '38.7689', lat: '8.9408' },
+  { key: 'kality', label: 'Kality', area: 'Akaky Kaliti', detail: 'Warehouses and logistics', lon: '38.7824', lat: '8.8945' },
+  { key: 'lafto', label: 'Lafto', area: 'Nifas Silk-Lafto', detail: 'Residential moves', lon: '38.7205', lat: '8.9671' },
+  { key: 'jemo', label: 'Jemo', area: 'Nifas Silk-Lafto', detail: 'Condos and homes', lon: '38.6867', lat: '8.9417' },
+  { key: 'kolfe', label: 'Kolfe', area: 'Kolfe Keranio', detail: 'West-side neighborhoods', lon: '38.6907', lat: '9.0288' },
+  { key: 'ayat', label: 'Ayat', area: 'Bole', detail: 'East-side homes', lon: '38.8842', lat: '9.0165' },
+  { key: 'goro', label: 'Goro', area: 'Bole', detail: 'Residential and airport side', lon: '38.8211', lat: '8.9644' }
+];
+
+function LocationAutocomplete({
+  label,
+  value,
+  onChange,
+  onSelectCoords
+}: {
+  label: string;
+  value: string;
+  onChange: (address: string) => void;
+  onSelectCoords: (lon: string, lat: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const filteredOptions = useMemo(() => {
+    if (!value) return addisLocationOptions;
+    const query = value.toLowerCase();
+    return addisLocationOptions.filter(
+      (option) =>
+        option.label.toLowerCase().includes(query) ||
+        option.area.toLowerCase().includes(query) ||
+        option.detail.toLowerCase().includes(query)
+    );
+  }, [value]);
+
+  return (
+    <div style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
+      <label style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+        {label}
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => {
+            setTimeout(() => setOpen(false), 200);
+          }}
+          placeholder="Type to search Addis Ababa areas..."
+        />
+      </label>
+      {open && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            right: 0,
+            backgroundColor: '#ffffff',
+            border: '1px solid #ddd',
+            borderRadius: '4px',
+            maxHeight: '200px',
+            overflowY: 'auto',
+            zIndex: 1000,
+            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+          }}
+        >
+          {filteredOptions.map((option) => (
+            <div
+              key={option.key}
+              onClick={() => {
+                onChange(`${option.label}, ${option.area}, Addis Ababa`);
+                onSelectCoords(option.lon, option.lat);
+                setOpen(false);
+              }}
+              style={{
+                padding: '8px 12px',
+                cursor: 'pointer',
+                borderBottom: '1px solid #f0f0f0',
+                color: '#333'
+              }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+              }}
+            >
+              <div style={{ fontWeight: 'bold', fontSize: '14px' }}>{option.label}</div>
+              <div style={{ color: '#666', fontSize: '12px' }}>{option.area} / {option.detail}</div>
+            </div>
+          ))}
+          {filteredOptions.length === 0 && (
+            <div style={{ padding: '8px 12px', color: '#999', fontSize: '13px' }}>
+              No matching areas found
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminRouteMapPreview({
+  pickupLon,
+  pickupLat,
+  destinationLon,
+  destinationLat,
+  pickupLabel,
+  destinationLabel
+}: {
+  pickupLon: string;
+  pickupLat: string;
+  destinationLon: string;
+  destinationLat: string;
+  pickupLabel: string;
+  destinationLabel: string;
+}) {
+  const [routePoints, setRoutePoints] = useState<{ lon: number; lat: number }[]>([]);
+
+  const pLon = Number(pickupLon);
+  const pLat = Number(pickupLat);
+  const dLon = Number(destinationLon);
+  const dLat = Number(destinationLat);
+
+  useEffect(() => {
+    if (!pLon || !pLat || !dLon || !dLat) return;
+    let active = true;
+    const fetchRoute = async () => {
+      try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${pLon},${pLat};${dLon},${dLat}?overview=full&geometries=geojson`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('OSRM request failed');
+        const data = await response.json();
+        if (active && data.routes && data.routes[0]) {
+          const coords = data.routes[0].geometry.coordinates.map(([lon, lat]: [number, number]) => ({ lon, lat }));
+          setRoutePoints(coords);
+        }
+      } catch (err) {
+        console.warn('Admin OSRM routing failed:', err);
+        if (active) {
+          setRoutePoints([{ lon: pLon, lat: pLat }, { lon: dLon, lat: dLat }]);
+        }
+      }
+    };
+
+    fetchRoute();
+    return () => {
+      active = false;
+    };
+  }, [pLon, pLat, dLon, dLat]);
+
+  const coordsPath = useMemo(() => {
+    if (!routePoints.length) return '';
+    const step = Math.max(1, Math.round(routePoints.length / 25));
+    const decimated = routePoints.filter((_, idx) => idx % step === 0 || idx === routePoints.length - 1);
+    return decimated.map(p => `${p.lon},${p.lat}`).join(',');
+  }, [routePoints]);
+
+  const googlePath = useMemo(() => {
+    if (!routePoints.length) return '';
+    const step = Math.max(1, Math.round(routePoints.length / 25));
+    const decimated = routePoints.filter((_, idx) => idx % step === 0 || idx === routePoints.length - 1);
+    return decimated.map(p => `${p.lat},${p.lon}`).join('%7C');
+  }, [routePoints]);
+
+  const staticMapUrl = useMemo(() => {
+    if (!pLon || !pLat || !dLon || !dLat) return '';
+    
+    if (runtimeConfig.googleMapsApiKey) {
+      const markers = [
+        `markers=color:green%7Clabel:P%7C${pLat},${pLon}`,
+        `markers=color:orange%7Clabel:D%7C${dLat},${dLon}`
+      ].join('&');
+      const pathParam = googlePath ? `path=color:0x0000ffff%7Cweight:5%7C${googlePath}` : `path=color:0x0000ffff%7Cweight:5%7C${pLat},${pLon}%7C${dLat},${dLon}`;
+      return `https://maps.googleapis.com/maps/api/staticmap?center=${pLat},${pLon}&zoom=12&size=640x320&scale=2&maptype=roadmap&${markers}&${pathParam}&key=${encodeURIComponent(runtimeConfig.googleMapsApiKey)}`;
+    }
+
+    const ptParam = `${pLon},${pLat},pm2gnm~${dLon},${dLat},pm2rdm`;
+    const plParam = coordsPath ? `&pl=c:0000FFf0,w:5,${coordsPath}` : `&pl=c:0000FFf0,w:5,${pLon},${pLat},${dLon},${dLat}`;
+
+    return `https://static-maps.yandex.ru/1.x/?l=map&size=600,300&pt=${ptParam}${plParam}`;
+  }, [pLon, pLat, dLon, dLat, coordsPath, googlePath]);
+
+  if (!staticMapUrl) return null;
+
+  return (
+    <div style={{ marginTop: '16px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #ddd' }}>
+      <img src={staticMapUrl} alt="Route Map" style={{ width: '100%', height: '220px', objectFit: 'cover', display: 'block' }} />
+      <div style={{ padding: '8px 12px', backgroundColor: '#f9f9f9', fontSize: '12px', color: '#666', borderTop: '1px solid #ddd' }}>
+        <strong>Route Preview:</strong> {pickupLabel || 'Pickup'} to {destinationLabel || 'Drop-off'}
+      </div>
+    </div>
+  );
+}
+
 const roleLabels: Record<Role, string> = {
   client: 'Client',
   truck_owner: 'Truck owner',
@@ -3293,10 +3504,15 @@ function AssistantSupportPanel({ enabled, profile }: { enabled: boolean; profile
               </button>
             </div>
             <div className="support-form-grid">
-              <label>
-                Pickup
-                <input onChange={(event) => setPickupAddress(event.target.value)} value={pickupAddress} />
-              </label>
+              <LocationAutocomplete
+                label="Pickup"
+                value={pickupAddress}
+                onChange={setPickupAddress}
+                onSelectCoords={(lon, lat) => {
+                  setPickupLon(lon);
+                  setPickupLat(lat);
+                }}
+              />
               <label>
                 Pickup lon
                 <input onChange={(event) => setPickupLon(event.target.value)} value={pickupLon} />
@@ -3305,10 +3521,15 @@ function AssistantSupportPanel({ enabled, profile }: { enabled: boolean; profile
                 Pickup lat
                 <input onChange={(event) => setPickupLat(event.target.value)} value={pickupLat} />
               </label>
-              <label>
-                Destination
-                <input onChange={(event) => setDestinationAddress(event.target.value)} value={destinationAddress} />
-              </label>
+              <LocationAutocomplete
+                label="Destination"
+                value={destinationAddress}
+                onChange={setDestinationAddress}
+                onSelectCoords={(lon, lat) => {
+                  setDestinationLon(lon);
+                  setDestinationLat(lat);
+                }}
+              />
               <label>
                 Destination lon
                 <input onChange={(event) => setDestinationLon(event.target.value)} value={destinationLon} />
@@ -3346,6 +3567,14 @@ function AssistantSupportPanel({ enabled, profile }: { enabled: boolean; profile
                 <input onChange={(event) => setEstimatedVolumeCubicMeters(event.target.value)} value={estimatedVolumeCubicMeters} />
               </label>
             </div>
+            <AdminRouteMapPreview
+              pickupLon={pickupLon}
+              pickupLat={pickupLat}
+              destinationLon={destinationLon}
+              destinationLat={destinationLat}
+              pickupLabel={pickupAddress}
+              destinationLabel={destinationAddress}
+            />
           </div>
 
           {quote ? (

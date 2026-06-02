@@ -2944,21 +2944,59 @@ function LocationDropdown({
   avoidKey?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [searchText, setSearchText] = useState('');
   const selected = getLocationOption(selectedKey);
+
+  const filteredOptions = useMemo(() => {
+    if (!searchText) return addisLocationOptions;
+    const query = searchText.toLowerCase();
+    return addisLocationOptions.filter(
+      (option) =>
+        option.label.toLowerCase().includes(query) ||
+        option.area.toLowerCase().includes(query) ||
+        option.detail.toLowerCase().includes(query)
+    );
+  }, [searchText]);
+
+  const displayVal = open ? searchText : selected.label;
 
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <Pressable accessibilityRole="button" onPress={() => setOpen((value) => !value)} style={styles.locationSelectButton}>
-        <View style={styles.flex}>
-          <Text style={styles.locationSelectTitle}>{selected.label}</Text>
-          <Text style={styles.muted}>{selected.area} / {selected.detail}</Text>
-        </View>
-        <Text style={styles.locationChevron}>{open ? 'Close' : 'Change'}</Text>
-      </Pressable>
+      <View style={styles.locationSelectButton}>
+        <TextInput
+          accessibilityRole="text"
+          style={{ flex: 1, fontSize: 16, color: colors.textPrimary, paddingVertical: 4, paddingHorizontal: 0 }}
+          placeholder="Type to search location..."
+          placeholderTextColor={colors.muted}
+          value={displayVal}
+          onChangeText={(text) => {
+            setSearchText(text);
+            if (!open) setOpen(true);
+          }}
+          onFocus={() => {
+            setOpen(true);
+            setSearchText('');
+          }}
+        />
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            if (open) {
+              setOpen(false);
+              setSearchText('');
+            } else {
+              setOpen(true);
+              setSearchText('');
+            }
+          }}
+        >
+          <Text style={styles.locationChevron}>{open ? 'Close' : 'Change'}</Text>
+        </Pressable>
+      </View>
       {open ? (
-        <ScrollView style={styles.locationMenu} contentContainerStyle={styles.locationMenuContent}>
-          {addisLocationOptions.map((option) => {
+        <ScrollView style={styles.locationMenu} contentContainerStyle={styles.locationMenuContent} keyboardShouldPersistTaps="handled">
+          {filteredOptions.map((option) => {
             const selectedOption = option.key === selectedKey;
             const sameAsOtherPoint = option.key === avoidKey;
 
@@ -2971,6 +3009,7 @@ function LocationDropdown({
                 onPress={() => {
                   onSelect(option);
                   setOpen(false);
+                  setSearchText('');
                 }}
                 style={[styles.locationOption, selectedOption && styles.locationOptionSelected, sameAsOtherPoint && styles.buttonDisabled]}
               >
@@ -2982,6 +3021,11 @@ function LocationDropdown({
               </Pressable>
             );
           })}
+          {filteredOptions.length === 0 ? (
+            <View style={{ padding: spacing.md, alignItems: 'center' }}>
+              <Text style={styles.muted}>No matching areas in Addis Ababa</Text>
+            </View>
+          ) : null}
         </ScrollView>
       ) : null}
     </View>
@@ -3153,42 +3197,85 @@ function RouteMapPreview({
 }) {
   const [zoom, setZoom] = useState(12);
   const [expanded, setExpanded] = useState(false);
+  const [routePoints, setRoutePoints] = useState<{ lon: number; lat: number }[]>([]);
+
   const pickupPoint = normalizeMapLocation(pickup, 'Pickup');
   const destinationPoint = normalizeMapLocation(destination, 'Drop-off');
   const truckPoint = truck ? normalizeMapLocation(truck, 'Truck') : undefined;
-  const googleMapUrl = buildGoogleStaticMapUrl({ pickup: pickupPoint, destination: destinationPoint, truck: truckPoint, zoom });
-  const fallbackTileUrl = buildOpenStreetMapTileUrl(pickupPoint, destinationPoint, zoom);
-  const mapProviderLabel = googleMapUrl ? 'Google map' : 'OpenStreetMap preview';
-  const zoomMap = (direction: 'in' | 'out') => setZoom((current) => Math.max(10, Math.min(15, direction === 'in' ? current + 1 : current - 1)));
-  const toPointStyle = (location: { lon: number; lat: number }) => {
-    const lon = Number(location.lon);
-    const lat = Number(location.lat);
-    const left = Math.max(6, Math.min(88, ((lon - 38.65) / (38.91 - 38.65)) * 100));
-    const top = Math.max(8, Math.min(84, (1 - (lat - 8.88) / (9.08 - 8.88)) * 100));
-    return {
-      left: `${left}%` as ViewStyle['left'],
-      top: `${top}%` as ViewStyle['top']
+
+  useEffect(() => {
+    let active = true;
+    const fetchRoute = async () => {
+      try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${pickupPoint.lon},${pickupPoint.lat};${destinationPoint.lon},${destinationPoint.lat}?overview=full&geometries=geojson`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('OSRM request failed');
+        const data = await response.json();
+        if (active && data.routes && data.routes[0]) {
+          const coords = data.routes[0].geometry.coordinates.map(([lon, lat]: [number, number]) => ({ lon, lat }));
+          setRoutePoints(coords);
+        }
+      } catch (err) {
+        console.warn('OSRM routing failed, falling back to straight line:', err);
+        if (active) {
+          setRoutePoints([pickupPoint, destinationPoint]);
+        }
+      }
     };
-  };
+
+    fetchRoute();
+    return () => {
+      active = false;
+    };
+  }, [pickupPoint.lon, pickupPoint.lat, destinationPoint.lon, destinationPoint.lat]);
+
+  const coordsPath = useMemo(() => {
+    if (!routePoints.length) return '';
+    const step = Math.max(1, Math.round(routePoints.length / 25));
+    const decimated = routePoints.filter((_, idx) => idx % step === 0 || idx === routePoints.length - 1);
+    return decimated.map(p => `${p.lon},${p.lat}`).join(',');
+  }, [routePoints]);
+
+  const googlePath = useMemo(() => {
+    if (!routePoints.length) return '';
+    const step = Math.max(1, Math.round(routePoints.length / 25));
+    const decimated = routePoints.filter((_, idx) => idx % step === 0 || idx === routePoints.length - 1);
+    return decimated.map(p => `${p.lat},${p.lon}`).join('%7C');
+  }, [routePoints]);
+
+  const mapProviderLabel = runtimeConfig.googleMapsApiKey ? 'Google map (road path)' : 'OpenStreetMap (road path)';
+
+  const staticMapUrl = useMemo(() => {
+    if (runtimeConfig.googleMapsApiKey) {
+      const markers = [
+        `markers=color:green%7Clabel:P%7C${pickupPoint.lat},${pickupPoint.lon}`,
+        `markers=color:orange%7Clabel:D%7C${destinationPoint.lat},${destinationPoint.lon}`,
+        truckPoint ? `markers=color:blue%7Clabel:T%7C${truckPoint.lat},${truckPoint.lon}` : ''
+      ].filter(Boolean);
+      const pathParam = googlePath ? `path=color:0x0000ffff%7Cweight:5%7C${googlePath}` : `path=color:0x0000ffff%7Cweight:5%7C${pickupPoint.lat},${pickupPoint.lon}%7C${destinationPoint.lat},${destinationPoint.lon}`;
+      return `https://maps.googleapis.com/maps/api/staticmap?center=${pickupPoint.lat},${pickupPoint.lon}&zoom=${zoom}&size=640x320&scale=2&maptype=roadmap&${markers.join('&')}&${pathParam}&key=${encodeURIComponent(runtimeConfig.googleMapsApiKey)}`;
+    }
+
+    const ptParam = [
+      `${pickupPoint.lon},${pickupPoint.lat},pm2gnm`,
+      `${destinationPoint.lon},${destinationPoint.lat},pm2rdm`,
+      truckPoint ? `${truckPoint.lon},${truckPoint.lat},pm2blm` : ''
+    ].filter(Boolean).join('~');
+
+    const plParam = coordsPath ? `&pl=c:0000FFf0,w:5,${coordsPath}` : `&pl=c:0000FFf0,w:5,${pickupPoint.lon},${pickupPoint.lat},${destinationPoint.lon},${destinationPoint.lat}`;
+
+    return `https://static-maps.yandex.ru/1.x/?l=map&size=600,300&pt=${ptParam}${plParam}`;
+  }, [pickupPoint, destinationPoint, truckPoint, zoom, coordsPath, googlePath]);
+
+  const zoomMap = (direction: 'in' | 'out') => setZoom((current) => Math.max(10, Math.min(15, direction === 'in' ? current + 1 : current - 1)));
 
   const renderMap = (fullScreen = false) => (
     <View style={[styles.mapPreview, !fullScreen && style, fullScreen && styles.mapPreviewFullScreen]}>
-      <Image source={{ uri: googleMapUrl || fallbackTileUrl }} resizeMode="cover" style={styles.mapTile} />
+      <Image source={{ uri: staticMapUrl }} resizeMode="cover" style={styles.mapTile} />
       <View style={styles.mapScrim} />
       <View style={styles.mapGridLineVertical} />
       <View style={styles.mapGridLineHorizontal} />
       <View style={styles.mapRoute} />
-      <View style={[styles.mapPin, styles.mapPinPickup, toPointStyle(pickupPoint)]}>
-        <Text style={styles.mapPinText}>P</Text>
-      </View>
-      <View style={[styles.mapPin, styles.mapPinDestination, toPointStyle(destinationPoint)]}>
-        <Text style={styles.mapPinText}>D</Text>
-      </View>
-      {truckPoint ? (
-        <View style={[styles.mapPin, styles.mapPinTruck, toPointStyle(truckPoint)]}>
-          <Text style={styles.mapPinText}>T</Text>
-        </View>
-      ) : null}
       <View style={styles.mapControls}>
         <Pressable accessibilityRole="button" onPress={() => zoomMap('in')} style={styles.mapControlButton}>
           <Text style={styles.mapControlText}>+</Text>
