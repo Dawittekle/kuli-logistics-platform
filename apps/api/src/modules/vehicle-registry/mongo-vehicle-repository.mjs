@@ -60,6 +60,36 @@ export class MongoVehicleRepository {
     return documents.map(normalize);
   }
 
+  async listForAdmin({ verificationStatus, availabilityStatus, search } = {}) {
+    const query = {
+      deletedAt: { $exists: false }
+    };
+
+    if (verificationStatus) {
+      query.verificationStatus = verificationStatus;
+    }
+
+    if (availabilityStatus) {
+      query.availabilityStatus = availabilityStatus;
+    }
+
+    if (search) {
+      const safeSearch = String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const searchExpression = new RegExp(safeSearch, 'i');
+      query.$or = [
+        { licensePlate: searchExpression },
+        { ownerId: searchExpression },
+        { description: searchExpression }
+      ];
+    }
+
+    const documents = await this.collection
+      .find(query, { sort: { verificationSubmittedAt: 1, updatedAt: -1 } })
+      .toArray();
+
+    return documents.map(normalize);
+  }
+
   async findById(id) {
     return normalize(await this.collection.findOne({ _id: id, deletedAt: { $exists: false } }));
   }

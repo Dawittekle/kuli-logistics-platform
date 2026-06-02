@@ -32,6 +32,24 @@ const slugify = (value) =>
 
 const normalizeLicensePlate = (value) => String(value ?? '').trim().toUpperCase().replace(/\s+/g, ' ');
 
+const toAdminFileMetadata = (file) => {
+  if (!file) {
+    return undefined;
+  }
+
+  return {
+    id: file.id,
+    originalFileName: file.originalFileName,
+    mimeType: file.mimeType,
+    sizeBytes: file.sizeBytes,
+    uploadedSizeBytes: file.uploadedSizeBytes,
+    status: file.status,
+    storageProvider: file.storageProvider,
+    visibility: file.visibility,
+    completedAt: file.completedAt
+  };
+};
+
 const assertTruckOwner = (user) => {
   if (user.role !== roles.truckOwner) {
     throw new AppError(403, 'TRUCK_OWNER_REQUIRED', 'Only truck owners can manage vehicles.');
@@ -41,6 +59,12 @@ const assertTruckOwner = (user) => {
 const assertAdmin = (user) => {
   if (user.role !== roles.admin) {
     throw new AppError(403, 'ADMIN_REQUIRED', 'Only admins can perform this vehicle registry action.');
+  }
+};
+
+const assertAssistantOrAdmin = (user) => {
+  if (![roles.assistant, roles.admin].includes(user.role)) {
+    throw new AppError(403, 'ASSISTANT_REQUIRED', 'Only assistants or admins can inspect dispatch vehicles.');
   }
 };
 
@@ -60,13 +84,15 @@ export class VehicleRegistryService {
     vehicleRepository,
     vehicleDocumentRepository,
     fileRepository,
-    auditLogRepository
+    auditLogRepository,
+    userRepository
   }) {
     this.vehicleClassRepository = vehicleClassRepository;
     this.vehicleRepository = vehicleRepository;
     this.vehicleDocumentRepository = vehicleDocumentRepository;
     this.fileRepository = fileRepository;
     this.auditLogRepository = auditLogRepository;
+    this.userRepository = userRepository;
   }
 
   async seedDefaultVehicleClasses() {
@@ -93,6 +119,22 @@ export class VehicleRegistryService {
 
   async listActiveVehicleClasses() {
     return this.vehicleClassRepository.listActive();
+  }
+
+  async listAdminVehicleClasses({ actor }) {
+    assertAdmin(actor);
+    return this.vehicleClassRepository.listForAdmin();
+  }
+
+  async hydrateAdminVehicleDocuments(vehicle) {
+    const documents = await this.vehicleDocumentRepository.listByVehicleId(vehicle.id);
+
+    return Promise.all(
+      documents.map(async (document) => ({
+        ...document,
+        file: toAdminFileMetadata(await this.fileRepository.findById(document.fileId))
+      }))
+    );
   }
 
   async createVehicleClass({ actor, input }) {
@@ -232,7 +274,7 @@ export class VehicleRegistryService {
 
     return {
       ...vehicle,
-      documents: await this.vehicleDocumentRepository.listByVehicleId(vehicle.id)
+      documents: await this.hydrateAdminVehicleDocuments(vehicle)
     };
   }
 
@@ -363,6 +405,62 @@ export class VehicleRegistryService {
     };
   }
 
+  async createAdminVehicleDocumentPreviewUrl({ actor, vehicleId, documentId }) {
+    assertAdmin(actor);
+
+    const vehicle = await this.vehicleRepository.findById(vehicleId);
+
+    if (!vehicle) {
+      throw new AppError(404, 'VEHICLE_NOT_FOUND', 'Vehicle was not found.');
+    }
+
+    const document = await this.vehicleDocumentRepository.findById(documentId);
+
+    if (!document || document.vehicleId !== vehicle.id || document.ownerId !== vehicle.ownerId) {
+      throw new AppError(404, 'VEHICLE_DOCUMENT_NOT_FOUND', 'Vehicle document was not found.');
+    }
+
+    const file = await this.fileRepository.findById(document.fileId);
+
+    if (
+      !file ||
+      file.linkedEntityType !== fileLinkedEntityTypes.vehicle ||
+      file.linkedEntityId !== vehicle.id ||
+      file.ownerId !== vehicle.ownerId ||
+      file.visibility !== 'staff_only'
+    ) {
+      throw new AppError(404, 'VEHICLE_DOCUMENT_FILE_NOT_FOUND', 'Vehicle document file metadata was not found.');
+    }
+
+    if (file.status !== 'uploaded') {
+      throw new AppError(422, 'VEHICLE_DOCUMENT_FILE_NOT_READY', 'Vehicle document upload has not been completed yet.');
+    }
+
+    await this.auditLogRepository.write({
+      id: createId('audit'),
+      actorUserId: actor.id,
+      actorRole: actor.role,
+      action: 'vehicle.document.preview_url.created',
+      targetType: 'vehicle_document',
+      targetId: document.id,
+      metadata: {
+        vehicleId: vehicle.id,
+        fileId: file.id,
+        documentType: document.type,
+        storageProvider: file.storageProvider
+      }
+    });
+
+    return {
+      vehicleId: vehicle.id,
+      documentId: document.id,
+      fileId: file.id,
+      url: `local-dev://signed-read/${file.storageKey}`,
+      expiresInSeconds: 300,
+      file: toAdminFileMetadata(file)
+    };
+  }
+
   async completeFileUpload({ actor, fileId, input = {} }) {
     const file = await this.fileRepository.findById(fileId);
 
@@ -433,6 +531,44 @@ export class VehicleRegistryService {
   async listPendingVerification({ actor }) {
     assertAdmin(actor);
     return this.vehicleRepository.listPendingVerification();
+  }
+
+  async listAdminVehicles({ actor, filters = {} }) {
+    assertAdmin(actor);
+
+    const vehicles = await this.vehicleRepository.listForAdmin(filters);
+
+    return Promise.all(
+      vehicles.map(async (vehicle) => ({
+        ...vehicle,
+        documents: await this.hydrateAdminVehicleDocuments(vehicle)
+      }))
+    );
+  }
+
+  async listAssistantVehicles({ actor, filters = {} }) {
+    assertAssistantOrAdmin(actor);
+
+    const vehicles = await this.vehicleRepository.listForAdmin(filters);
+
+    return Promise.all(
+      vehicles.map(async (vehicle) => {
+        const owner = this.userRepository ? await this.userRepository.findById(vehicle.ownerId) : null;
+
+        return {
+          ...vehicle,
+          owner: owner
+            ? {
+                id: owner.id,
+                fullName: owner.fullName,
+                email: owner.email,
+                phone: owner.phone,
+                accountStatus: owner.accountStatus
+              }
+            : undefined
+        };
+      })
+    );
   }
 
   async decideVerification({ actor, vehicleId, input }) {

@@ -130,14 +130,20 @@ export class SupportService {
     return transitioned;
   }
 
-  async searchClients({ actor, phone }) {
+  async searchClients({ actor, phone, query }) {
     assertAssistantOrAdmin(actor);
 
-    if (!phone) {
+    const search = query ?? phone;
+
+    if (!search) {
       return [];
     }
 
-    return this.userRepository.findClientsByPhone(phone);
+    if (this.userRepository.searchClients) {
+      return this.userRepository.searchClients(search);
+    }
+
+    return this.userRepository.findClientsByPhone(search);
   }
 
   async createAssistedBooking({ actor, input, idempotencyKey }) {

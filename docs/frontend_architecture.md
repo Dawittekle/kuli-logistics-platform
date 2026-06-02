@@ -58,7 +58,7 @@ The admin web app must support:
 - Admin and assistant login.
 - Role-specific navigation.
 - Admin: dashboard, users, vehicles, vehicle classes, pricing, requests, reports, payments, audit logs.
-- Assistant: ticket queue, assisted booking form, client lookup, ticket detail, request creation.
+- Assistant: dashboard, ticket queue, assisted booking form, request oversight, available trucks, client lookup, and notifications.
 
 ## Routing Strategy
 
@@ -106,10 +106,14 @@ After login, route by backend `me.role`, not by local selected role.
   payments
   audit-logs
 /assistant
+  dashboard
+  bookings/new
   tickets
   tickets/:id
-  bookings/new
+  requests
+  trucks
   clients
+  notifications
 ```
 
 Guard routes by backend role and show a clear forbidden state if access is denied.
@@ -263,7 +267,7 @@ Implementation guidance:
 - If truck owner has no approved vehicle, owner home should emphasize registration and verification status.
 - If owner has approved vehicle but is offline, owner home should emphasize availability toggle.
 - If client has active request, client home should show active trip card before creating a new request.
-- Assistant home should default to ticket queue.
+- Assistant home should default to the call-center dashboard with live queue, request, truck, and notification summaries.
 - Admin home should default to operational dashboard.
 
 ## Cache Invalidation
@@ -283,4 +287,3 @@ Examples:
 - Owner acceptance must not be optimistic because concurrency conflicts are expected.
 - Admin document review must handle slow file loading and signed URL expiry.
 - Assisted booking must be fast enough for live calls; minimize required fields and allow notes.
-

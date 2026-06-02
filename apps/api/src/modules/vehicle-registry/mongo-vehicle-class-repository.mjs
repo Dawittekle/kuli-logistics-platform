@@ -43,6 +43,14 @@ export class MongoVehicleClassRepository {
     return documents.map(normalize);
   }
 
+  async listForAdmin() {
+    const documents = await this.collection
+      .find({}, { sort: { active: -1, displayOrder: 1, name: 1 } })
+      .toArray();
+
+    return documents.map(normalize);
+  }
+
   async findById(id) {
     return normalize(await this.collection.findOne({ _id: id, ...notDeleted() }));
   }

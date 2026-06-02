@@ -2,7 +2,7 @@
 
 Project title: **KULI: P2P Logistics Mobile Application On Demand Trucking Service**
 
-Last updated: 2026-06-01
+Last updated: 2026-06-02
 
 Use this document during manual and automated test execution. For every run, update `Actual result`, `Status`, and `Notes`. Unless the test has been executed for the specific build under test, keep `Actual result` as `Not run yet` and `Status` as `Not Run`.
 
@@ -158,12 +158,32 @@ Status values:
 | DEMO-003 | End-to-end role handoff | Verify full client-owner marketplace demo. | Client and owner sessions available; approved online vehicle available. | Demo client plus demo owner. | Client dispatches request.<br>Owner accepts.<br>Owner advances status to completed.<br>Owner confirms cash.<br>Client rates/reports from Activity. | Every state-changing action is backend-confirmed and visible to the other role after refresh/refetch. | Not run yet | Not Run | Best final-demo rehearsal case. |
 | DEMO-004 | Staff mobile block | Verify staff users are not demoed inside mobile. | Staff account exists. | Admin or assistant account. | Sign in on mobile as staff. | Mobile shows forbidden/right workspace state and no marketplace tabs. | Not run yet | Not Run | Staff workflows are tested in web dashboard. |
 
+## 13. Assistant Dashboard
+
+| Test case ID | Feature | Purpose | Preconditions | Test data | Steps | Expected result | Actual result | Status | Notes |
+|---|---|---|---|---|---|---|---|---|---|
+| ASST-001 | Assistant login | Verify assistant users enter the assistant dashboard. | API/admin app running; provisioned assistant account exists. | Assistant staff credentials. | Open admin web app.<br>Sign in as assistant. | User is routed to `/assistant/dashboard`; sidebar shows only Dashboard, New booking, Tickets, Requests, Available trucks, Clients, Notifications, and Sign out. | Not run yet | Not Run | Browser refresh should keep `/assistant/dashboard`. |
+| ASST-002 | Admin login | Verify admin routing is unchanged. | API/admin app running; provisioned admin account exists. | Admin staff credentials. | Open admin web app.<br>Sign in as admin. | User is routed to `/admin/dashboard`; admin sidebar shows admin-only tools. | Not run yet | Not Run | Confirms assistant work did not break admin workspace. |
+| ASST-003 | RBAC | Verify assistant is blocked from admin-only pages. | Assistant signed in. | Assistant session. | Navigate manually to `/admin/pricing`, `/admin/audit`, or call an admin-only endpoint. | Frontend returns to assistant workspace or backend returns `403`; no admin-only data is shown. | Not run yet | Not Run | Backend role guards remain authoritative. |
+| ASST-004 | Ticket create/update | Verify ticket lifecycle actions. | Assistant signed in. | Caller phone, call notes, follow-up date. | Open Tickets.<br>Create ticket.<br>Move through Assigned, In progress, Waiting for client, Closed or Cancelled. | Each transition is backend-confirmed; closed/cancelled tickets cannot be edited. | Automated backend test output: support and marketplace focused tests passed for assistant ticket transitions. | Pass | Manual UI click-through still recommended. |
+| ASST-005 | Client lookup | Verify lookup by phone/email/name. | Assistant signed in; client profiles exist. | Client phone, email, and name fragments. | Open Clients or New booking.<br>Search each value. | Matching client profiles appear with human-readable contact details. | Automated backend test output: client lookup by phone, name, and email passed. | Pass | UI should also be manually checked. |
+| ASST-006 | Assisted quote | Verify quote generation for call-assisted booking. | Assistant signed in; vehicle classes and pricing rule exist. | Pickup Bole, destination Piassa, Small Pickup, 800kg. | Open New booking.<br>Enter route/load.<br>Press Quote. | Quote returns real ETB estimate, route summary, and candidate trucks or a clear empty state. | Not run yet | Not Run | Uses backend quote service; no fake data. |
+| ASST-007 | Assisted request without direct assignment | Verify offer-dispatch assisted booking. | Assistant signed in; quote generated; at least one selected truck. | Selected candidate IDs. | Keep Direct assignment off.<br>Create request. | Backend creates pending request/offers, links ticket if selected, and creates notification intents. | Automated backend test output: assisted booking with ticket linkage and SMS confirmation intent passed. | Pass | Manual UI route should still be exercised. |
+| ASST-008 | Direct truck assignment | Verify assistant can assign a selected online truck immediately. | Assistant signed in; approved online truck exists; quote generated. | Selected online truck. | Turn Direct assignment on.<br>Create and assign truck. | Backend creates accepted request, accepted offer, status event, owner/client notifications, and marks truck Busy. | Automated backend test output: direct truck assignment passed. | Pass | |
+| ASST-009 | Busy truck protection | Verify busy truck cannot be assigned twice. | One assisted request already assigned to a truck. | Same truck ID, second pending request. | Try assigning the same busy truck to another request. | Backend rejects with unavailable/conflict error; second request is not assigned to busy truck. | Automated backend test output: duplicate busy assignment blocked. | Pass | |
+| ASST-010 | Vehicle release after terminal trip | Verify completed/cancelled trip releases busy truck. | Assisted request assigned to truck. | Accepted request. | Advance valid status path to Completed or Cancelled. | Vehicle active trip is cleared and truck can become available again according to owner status. | Automated backend test output: completion released assigned truck. | Pass | Cancelled release should also be manually checked. |
+| ASST-011 | Requests oversight | Verify assistant request detail panel. | Assistant signed in; assisted request exists. | Assisted request with timeline/messages. | Open Requests.<br>Select request.<br>Inspect route, timeline, messages, payment, and assignment controls. | Detail panel shows current backend state and allowed actions only. | Not run yet | Not Run | |
+| ASST-012 | Available trucks | Verify dispatch truck list. | Assistant signed in; vehicles in approved online/busy/offline/pending states exist. | Vehicle records. | Open Available trucks.<br>Filter by status/search.<br>Select a truck. | Cards/table show owner, plate, class, capacity, location, rating/status where available; only online approved trucks can be assigned. | Not run yet | Not Run | |
+| ASST-013 | Notifications | Verify assistant notification inbox. | Assistant signed in; notification records exist. | Assistant notification ID. | Open Notifications.<br>Mark unread notification read. | List updates after backend-confirmed mark-read; unread count decreases. | Not run yet | Not Run | |
+| ASST-014 | Route persistence | Verify assistant route survives refresh. | Assistant signed in. | `/assistant/tickets`, `/assistant/requests`, `/assistant/trucks`. | Open each route.<br>Refresh browser. | Same assistant page reloads; session and route protection remain valid. | Not run yet | Not Run | |
+
 ## Test Execution History
 
 | Date | Build/Commit | Environment | Tester | Test cases run | Pass | Fail | Not Run | Notes |
 |---|---|---|---|---|---:|---:|---:|---|
 | 2026-06-01 | Current local branch | Local repo | Codex | Documentation creation only | 0 | 0 | All | Created test case document; no manual test execution performed. |
 | 2026-06-01 | Current local branch | Local repo | Codex | Mobile UI QA static pass | 5 automated checks | 0 | Manual cases | Ran mobile TypeScript, repo lint, repo typecheck, mobile startup verify, and Expo web export after copy cleanup; manual visual walkthrough not executed. |
+| 2026-06-02 | Current local branch | Local repo | Codex | Assistant backend and admin build checks | Assistant-focused backend cases + admin build | 0 | Manual UI cases | Ran focused Node backend tests for assistant ticket/client lookup/assignment workflows and `npm run build --workspace @kuli/admin`. |
 
 ## Known Testing Gaps
 
@@ -175,3 +195,4 @@ Status values:
 | Real file storage provider may not be configured | VEH-003, TRUST-004 | Test upload intent/metadata locally; verify binary storage when configured. |
 | Live GPS is not implemented | UI-007, TRACK-001 | Test static map preview and manual status tracking only. |
 | Full web dashboard workflows need separate execution | ROLE-003, ROLE-004, vehicle/admin approval support | Mobile must block staff; staff workflows should be tested in admin web. |
+| Assistant UI click-through not fully automated | ASST-001 to ASST-014 | Focused backend tests cover ticket transitions, client lookup, assisted booking, direct assignment, busy conflict, and release after completion. Browser route and visual checks still need manual execution. |

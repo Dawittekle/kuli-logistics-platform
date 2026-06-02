@@ -76,7 +76,13 @@ class MemoryKuliRequestRepository {
 
   async listMine({ userId, role }) {
     return Array.from(this.records.values()).filter((record) =>
-      role === roles.truckOwner ? record.selectedOwnerId === userId : record.clientId === userId
+      role === roles.truckOwner
+        ? record.selectedOwnerId === userId
+        : role === roles.assistant
+          ? record.createdByAssistantId === userId
+          : role === roles.admin
+            ? true
+            : record.clientId === userId
     );
   }
 
@@ -963,4 +969,102 @@ test('assistant can create assisted request with ticket linkage', async () => {
   assert.equal(created.offers.length, 2);
   assert.equal(replay.request.id, created.request.id);
   assert.equal(replay.idempotentReplay, true);
+});
+
+test('assistant can create assisted request with direct truck assignment', async () => {
+  const { service, vehicleRepository, notificationRepository, statusEventRepository } = createService();
+
+  const created = await service.createAssistedRequest({
+    actor: assistant,
+    input: {
+      ...requestInput,
+      hotlineTicketId: 'ticket_direct_001',
+      clientContactSnapshot: {
+        phone: '+251911111111'
+      },
+      directAssignVehicleId: 'veh_one'
+    },
+    idempotencyKey: 'assistant-direct-001'
+  });
+
+  const vehicle = await vehicleRepository.findById('veh_one');
+
+  assert.equal(created.request.status, kuliStatuses.accepted);
+  assert.equal(created.request.selectedVehicleId, 'veh_one');
+  assert.equal(created.request.selectedOwnerId, ownerOne.id);
+  assert.equal(created.offers[0].status, offerStatuses.accepted);
+  assert.equal(vehicle.availabilityStatus, vehicleAvailabilityStatuses.busyOnJob);
+  assert.equal(statusEventRepository.records.at(-1).reason, 'assistant_direct_assignment');
+  assert.equal(notificationRepository.records.some((entry) => entry.type === 'assistant.assignment.created'), true);
+});
+
+test('assistant assignment marks truck busy, blocks duplicate assignment, and releases after completion', async () => {
+  const { service, vehicleRepository } = createService();
+  const first = await service.createAssistedRequest({
+    actor: assistant,
+    input: {
+      ...requestInput,
+      hotlineTicketId: 'ticket_assign_001',
+      clientContactSnapshot: {
+        phone: '+251911111111'
+      }
+    },
+    idempotencyKey: 'assistant-assign-001'
+  });
+
+  const assigned = await service.assignAssistantRequest({
+    actor: assistant,
+    requestId: first.request.id,
+    vehicleId: 'veh_one'
+  });
+  const busyVehicle = await vehicleRepository.findById('veh_one');
+
+  assert.equal(assigned.request.status, kuliStatuses.accepted);
+  assert.equal(busyVehicle.availabilityStatus, vehicleAvailabilityStatuses.busyOnJob);
+
+  const second = await service.createAssistedRequest({
+    actor: assistant,
+    input: {
+      ...requestInput,
+      hotlineTicketId: 'ticket_assign_002',
+      clientContactSnapshot: {
+        phone: '+251922222222'
+      },
+      selectedVehicleIds: ['veh_two']
+    },
+    idempotencyKey: 'assistant-assign-002'
+  });
+
+  await assert.rejects(
+    () =>
+      service.assignAssistantRequest({
+        actor: assistant,
+        requestId: second.request.id,
+        vehicleId: 'veh_one'
+      }),
+    (error) => error instanceof AppError && error.code === 'VEHICLE_NOT_AVAILABLE'
+  );
+
+  let current = assigned.request;
+  for (const status of [
+    kuliStatuses.enRouteToPickup,
+    kuliStatuses.arrivedAtPickup,
+    kuliStatuses.loading,
+    kuliStatuses.inTransit,
+    kuliStatuses.unloading,
+    kuliStatuses.completed
+  ]) {
+    const result = await service.transitionRequestStatus({
+      actor: assistant,
+      requestId: current.id,
+      input: {
+        status
+      }
+    });
+    current = result.request;
+  }
+
+  const releasedVehicle = await vehicleRepository.findById('veh_one');
+  assert.equal(current.status, kuliStatuses.completed);
+  assert.equal(releasedVehicle.availabilityStatus, vehicleAvailabilityStatuses.onlineAvailable);
 });

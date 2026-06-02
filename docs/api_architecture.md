@@ -288,15 +288,21 @@ POST /api/v1/kuli-requests/:id/payment/dispute
 ### Assistant Routes
 
 ```text
+GET /api/v1/assistant/dashboard
 GET /api/v1/assistant/tickets
 POST /api/v1/assistant/tickets
 GET /api/v1/assistant/tickets/:id
 PATCH /api/v1/assistant/tickets/:id/status
+POST /api/v1/assistant/bookings/quote
 POST /api/v1/assistant/bookings
+GET /api/v1/assistant/requests
+POST /api/v1/assistant/requests/:requestId/assign
+GET /api/v1/assistant/trucks
 GET /api/v1/assistant/clients/search
+GET /api/v1/assistant/notifications
 ```
 
-Assisted booking must store `createdByAssistantId` and link the ticket.
+Assisted booking must store `createdByAssistantId` and link the ticket when `hotlineTicketId` is provided. Direct truck assignment is allowed only for approved online vehicles and must mark the vehicle busy through a backend-confirmed transition.
 
 ### Admin Routes
 
