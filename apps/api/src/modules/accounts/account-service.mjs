@@ -40,11 +40,12 @@ export class AccountService {
   }
 
   async syncProfile({ authUser, role, fullName, email, phone }) {
-    const existingUser = await this.userRepository.findBySupabaseUserId(authUser.sub);
+    const existingUser = await this.resolveUserForAuthIdentity(authUser);
 
     if (existingUser) {
       const updatedUser = await this.userRepository.save({
         ...existingUser,
+        supabaseUserId: authUser.sub,
         fullName: pickDefined(fullName, existingUser.fullName),
         email: pickDefined(email ?? authUser.email, existingUser.email),
         phone: pickDefined(phone ?? authUser.phone, existingUser.phone)
@@ -72,13 +73,40 @@ export class AccountService {
   }
 
   async getCurrentUser(authUser) {
-    const user = await this.userRepository.findBySupabaseUserId(authUser.sub);
+    const user = await this.resolveUserForAuthIdentity(authUser);
 
     if (!user) {
       throw new AppError(404, 'PROFILE_NOT_FOUND', 'No application profile exists for this identity.');
     }
 
     return user;
+  }
+
+  async resolveUserForAuthIdentity(authUser) {
+    const user = await this.userRepository.findBySupabaseUserId(authUser.sub);
+
+    if (user) {
+      return user;
+    }
+
+    const normalizedEmail = cleanEmail(authUser.email);
+
+    if (!normalizedEmail || !this.userRepository.findByEmail) {
+      return null;
+    }
+
+    const emailUser = await this.userRepository.findByEmail(normalizedEmail);
+
+    if (!emailUser) {
+      return null;
+    }
+
+    return this.userRepository.save({
+      ...emailUser,
+      supabaseUserId: authUser.sub,
+      email: normalizedEmail,
+      authRelinkedAt: new Date().toISOString()
+    });
   }
 
   async updateOwnProfile(authUser, input) {

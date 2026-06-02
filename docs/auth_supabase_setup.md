@@ -174,6 +174,25 @@ Content-Type: application/json
 
 Admins can also provision additional admin users through the same endpoint with `"role": "admin"`.
 
+## Resetting Local Auth Data
+
+If local MongoDB has stale demo/dev profiles, reset only the KULI app collections and reseed a tiny starter dataset:
+
+```bash
+RESET_KULI_DB_CONFIRM=reset npm run reset:auth-data
+```
+
+The reset script does not delete Supabase Auth users. It clears local MongoDB KULI collections and seeds:
+
+- First admin from `BOOTSTRAP_ADMIN_*`.
+- Client profile for `client4@gmail.com`.
+- Client profile for `temp31549@gmail.com`.
+- Truck-owner profile for `owner1@gmail.com` with one approved online truck.
+- Truck-owner profile for `owner2@gmail.com` with one approved online truck.
+- Active vehicle classes, active ETB pricing, and one starter support ticket.
+
+When a seeded email signs in with a real Supabase account, the backend relinks that profile to the current Supabase user ID.
+
 ## Troubleshooting
 
 ### Profile Check Failed

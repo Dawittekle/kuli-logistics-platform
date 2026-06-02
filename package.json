@@ -15,6 +15,7 @@
     "smoke:critical": "node tools/smoke-critical-workflows.mjs",
     "seed:demo": "node tools/seed-demo-data.mjs",
     "seed:fake-users": "node tools/seed-fake-users.mjs",
+    "reset:auth-data": "node tools/reset-auth-data.mjs",
     "verify:startup": "node tools/verify-startup.mjs",
     "dev:api": "npm run dev --workspace @kuli/api",
     "dev:admin": "npm run dev --workspace @kuli/admin",

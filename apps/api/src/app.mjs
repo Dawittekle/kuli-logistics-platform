@@ -62,7 +62,7 @@ const createRouteRequest = (context) => async (request) => {
   const url = parse(request.url ?? '/', true);
   const path = url.pathname ?? '/';
 
-  const resolveAuth = async ({ required = true } = {}) => {
+  const resolveAuth = async ({ required = true, loadUser = true } = {}) => {
     const authorization = request.headers.authorization;
 
     if (!authorization && !required) {
@@ -73,7 +73,7 @@ const createRouteRequest = (context) => async (request) => {
     }
 
     const authUser = await context.tokenVerifier.verifyAuthorizationHeader(authorization);
-    const currentUser = await context.userRepository.findBySupabaseUserId(authUser.sub);
+    const currentUser = loadUser ? await context.accountService.getCurrentUser(authUser) : null;
 
     return {
       authUser,
@@ -334,7 +334,7 @@ const createRouteRequest = (context) => async (request) => {
   }
 
   if (method === 'POST' && path === '/api/v1/auth/sync-profile') {
-    const { authUser } = await resolveAuth();
+    const { authUser } = await resolveAuth({ loadUser: false });
     const body = await parseJsonBody(request);
     const requestedRole = normalizeRequestedRole(body.role);
     assertPublicRegistrationRole(requestedRole);
@@ -351,10 +351,10 @@ const createRouteRequest = (context) => async (request) => {
   }
 
   if (method === 'GET' && path === '/api/v1/me') {
-    const { authUser, currentUser } = await resolveAuth();
+    const { currentUser } = await resolveAuth();
     assertActiveAccount(currentUser);
 
-    return success(await context.accountService.getCurrentUser(authUser));
+    return success(currentUser);
   }
 
   if (method === 'PATCH' && path === '/api/v1/me') {
