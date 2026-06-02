@@ -610,7 +610,7 @@ Admin dashboard provides operational control over users, reports, vehicles, vehi
 
 ### Functional Description
 
-Assistants handle phone-based bookings and hotline tickets. They can create KULI requests on behalf of clients, update ticket status, and record call notes.
+Assistants handle phone-based bookings and hotline tickets. They can create KULI requests on behalf of clients, update ticket status, record call notes, monitor assistant-created requests, inspect available trucks, and review assistant notifications.
 
 ### Ticket States
 
@@ -623,27 +623,36 @@ Assistants handle phone-based bookings and hotline tickets. They can create KULI
 
 ### User Flow
 
-1. Assistant opens ticket dashboard.
+1. Assistant opens the call-center dashboard.
 2. Assistant claims open ticket or creates assisted booking from live call.
 3. Assistant collects client information.
 4. Assistant searches vehicles and quotes price.
 5. Assistant confirms with client.
 6. Assistant creates KULI request and links ticket.
-7. Assistant sends SMS confirmation.
-8. Ticket closes or remains pending follow-up.
+7. Assistant either notifies selected owners or directly assigns one approved online truck if the client confirms and the backend permits assignment.
+8. Assistant sends SMS/in-app confirmation through the notification system.
+9. Ticket closes or remains pending follow-up.
 
 ### API Interactions
 
+- `GET /api/v1/assistant/dashboard`
 - `GET /api/v1/assistant/tickets`
 - `POST /api/v1/assistant/tickets`
 - `PATCH /api/v1/assistant/tickets/:id/status`
+- `POST /api/v1/assistant/bookings/quote`
 - `POST /api/v1/assistant/bookings`
+- `GET /api/v1/assistant/requests`
+- `POST /api/v1/assistant/requests/:requestId/assign`
+- `GET /api/v1/assistant/trucks`
+- `GET /api/v1/assistant/clients/search`
+- `GET /api/v1/assistant/notifications`
 
 ### Edge Cases
 
 - Assistant unavailable: system creates open missed-call ticket.
 - Client no response: ticket becomes pending client, then cancelled after timeout.
 - No available vehicles: assistant records delay explanation and whether client waits.
+- Selected truck becomes busy before another request: assignment returns a conflict and assistant must choose another approved online truck.
 - Duplicate caller creates multiple tickets: UI should surface recent tickets by phone.
 
 ## Feature 15: Payment Confirmation and Reconciliation

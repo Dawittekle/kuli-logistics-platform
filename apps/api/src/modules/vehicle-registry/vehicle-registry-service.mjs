@@ -62,6 +62,12 @@ const assertAdmin = (user) => {
   }
 };
 
+const assertAssistantOrAdmin = (user) => {
+  if (![roles.assistant, roles.admin].includes(user.role)) {
+    throw new AppError(403, 'ASSISTANT_REQUIRED', 'Only assistants or admins can inspect dispatch vehicles.');
+  }
+};
+
 const assertOwnerVehicle = (vehicle, user) => {
   if (!vehicle) {
     throw new AppError(404, 'VEHICLE_NOT_FOUND', 'Vehicle was not found.');
@@ -78,13 +84,15 @@ export class VehicleRegistryService {
     vehicleRepository,
     vehicleDocumentRepository,
     fileRepository,
-    auditLogRepository
+    auditLogRepository,
+    userRepository
   }) {
     this.vehicleClassRepository = vehicleClassRepository;
     this.vehicleRepository = vehicleRepository;
     this.vehicleDocumentRepository = vehicleDocumentRepository;
     this.fileRepository = fileRepository;
     this.auditLogRepository = auditLogRepository;
+    this.userRepository = userRepository;
   }
 
   async seedDefaultVehicleClasses() {
@@ -535,6 +543,31 @@ export class VehicleRegistryService {
         ...vehicle,
         documents: await this.hydrateAdminVehicleDocuments(vehicle)
       }))
+    );
+  }
+
+  async listAssistantVehicles({ actor, filters = {} }) {
+    assertAssistantOrAdmin(actor);
+
+    const vehicles = await this.vehicleRepository.listForAdmin(filters);
+
+    return Promise.all(
+      vehicles.map(async (vehicle) => {
+        const owner = this.userRepository ? await this.userRepository.findById(vehicle.ownerId) : null;
+
+        return {
+          ...vehicle,
+          owner: owner
+            ? {
+                id: owner.id,
+                fullName: owner.fullName,
+                email: owner.email,
+                phone: owner.phone,
+                accountStatus: owner.accountStatus
+              }
+            : undefined
+        };
+      })
     );
   }
 

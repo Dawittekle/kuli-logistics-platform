@@ -274,9 +274,11 @@ export class MarketplaceService {
       actor,
       input
     });
-    const selectedVehicleIds = input.selectedVehicleIds?.length
-      ? input.selectedVehicleIds
-      : quote.candidates.map((candidate) => candidate.vehicleId).slice(0, 3);
+    const selectedVehicleIds = input.directAssignVehicleId
+      ? [input.directAssignVehicleId]
+      : input.selectedVehicleIds?.length
+        ? input.selectedVehicleIds
+        : quote.candidates.map((candidate) => candidate.vehicleId).slice(0, 3);
 
     if (selectedVehicleIds.length === 0) {
       throw new AppError(422, 'NO_SELECTED_VEHICLES', 'Select at least one candidate vehicle before sending a request.');
@@ -293,14 +295,18 @@ export class MarketplaceService {
       throw new AppError(422, 'NO_ELIGIBLE_SELECTED_VEHICLES', 'Selected vehicles are no longer available.');
     }
 
-    const request = await this.kuliRequestRepository.save({
-      id: createId('kreq'),
+    const directAssignVehicle = input.directAssignVehicleId
+      ? eligibleVehicles.find((vehicle) => vehicle.id === input.directAssignVehicleId)
+      : null;
+    const requestId = createId('kreq');
+    const directOfferId = directAssignVehicle ? createId('offer') : undefined;
+    const requestPayload = {
+      id: requestId,
       requestCode: requestCode(),
       clientId: input.clientId,
       clientContactSnapshot: input.clientContactSnapshot,
       createdByAssistantId: actor.id,
       hotlineTicketId: input.hotlineTicketId,
-      status: kuliStatuses.pending,
       pickupLocation: input.pickupLocation,
       destinationLocation: input.destinationLocation,
       requestedPickupTime: input.requestedPickupTime,
@@ -308,9 +314,113 @@ export class MarketplaceService {
       requestedVehicleClassId: quote.requestedVehicleClass.id,
       quoteSnapshot: quote.quoteSnapshot,
       idempotencyKey
-    });
+    };
 
     const expiresAt = new Date(Date.now() + offerExpiryMinutes * 60 * 1000).toISOString();
+
+    if (input.directAssignVehicleId && !directAssignVehicle) {
+      throw new AppError(409, 'DIRECT_ASSIGN_VEHICLE_NOT_AVAILABLE', 'Selected truck is no longer online and available.');
+    }
+
+    if (directAssignVehicle) {
+      const busyVehicle = await this.vehicleRepository.markBusyIfAvailable({
+        vehicleId: directAssignVehicle.id,
+        activeTripId: requestId
+      });
+
+      if (!busyVehicle) {
+        throw new AppError(409, 'VEHICLE_NOT_AVAILABLE', 'Selected truck is no longer available for assignment.');
+      }
+
+      try {
+        const request = await this.kuliRequestRepository.save({
+          ...requestPayload,
+          status: kuliStatuses.accepted,
+          selectedOwnerId: directAssignVehicle.ownerId,
+          selectedVehicleId: directAssignVehicle.id,
+          acceptedOfferId: directOfferId
+        });
+
+        const offers = await this.tripOfferRepository.insertMany([
+          {
+            id: directOfferId,
+            requestId: request.id,
+            ownerId: directAssignVehicle.ownerId,
+            vehicleId: directAssignVehicle.id,
+            status: offerStatuses.accepted,
+            distanceKmAtOffer: quote.candidates.find((candidate) => candidate.vehicleId === directAssignVehicle.id)?.distanceKm,
+            etaMinutesAtOffer: quote.route.etaMinutes,
+            expiresAt,
+            acceptedAt: new Date().toISOString(),
+            assignedByAssistantId: actor.id
+          }
+        ]);
+
+        await this.recordStatusEvent({
+          request,
+          fromStatus: kuliStatuses.pending,
+          toStatus: kuliStatuses.accepted,
+          actor,
+          reason: 'assistant_direct_assignment'
+        });
+
+        await this.notificationRepository.insertMany(
+          [
+            createNotification({
+              recipientUserId: directAssignVehicle.ownerId,
+              type: 'assistant.assignment.created',
+              title: 'Assigned KULI request',
+              body: 'A hotline assistant assigned your truck to a confirmed KULI request.',
+              data: {
+                requestId: request.id,
+                offerId: directOfferId,
+                hotlineTicketId: input.hotlineTicketId
+              }
+            }),
+            request.clientId
+              ? createNotification({
+                  recipientUserId: request.clientId,
+                  type: 'assistant.request.assigned',
+                  title: 'Truck assigned',
+                  body: 'A KULI assistant assigned a verified truck to your request.',
+                  data: {
+                    requestId: request.id,
+                    vehicleId: directAssignVehicle.id
+                  }
+                })
+              : null
+          ].filter(Boolean)
+        );
+
+        return {
+          request: await this.enrichRequest(request),
+          offers,
+          assignment: {
+            vehicleId: directAssignVehicle.id,
+            ownerId: directAssignVehicle.ownerId,
+            status: 'assigned_by_assistant'
+          },
+          waitingState: {
+            status: 'assigned_by_assistant',
+            offerCount: offers.length,
+            expiresAt
+          }
+        };
+      } catch (error) {
+        await this.vehicleRepository.releaseIfActiveTrip({
+          vehicleId: directAssignVehicle.id,
+          activeTripId: requestId
+        });
+
+        throw error;
+      }
+    }
+
+    const request = await this.kuliRequestRepository.save({
+      ...requestPayload,
+      status: kuliStatuses.pending
+    });
+
     const offers = await this.tripOfferRepository.insertMany(
       eligibleVehicles.map((vehicle) => ({
         id: createId('offer'),
@@ -347,6 +457,144 @@ export class MarketplaceService {
         status: 'waiting_for_owner_acceptance',
         offerCount: offers.length,
         expiresAt
+      }
+    };
+  }
+
+  async assignAssistantRequest({ actor, requestId, vehicleId }) {
+    assertAssistantOrAdmin(actor);
+
+    const request = await this.kuliRequestRepository.findById(requestId);
+
+    if (!request || (actor.role === roles.assistant && request.createdByAssistantId !== actor.id)) {
+      throw new AppError(404, 'KULI_REQUEST_NOT_FOUND', 'KULI request was not found.');
+    }
+
+    if (request.status !== kuliStatuses.pending) {
+      throw new AppError(409, 'REQUEST_NOT_ASSIGNABLE', 'Only waiting assisted requests can be assigned to a truck.');
+    }
+
+    const vehicle = await this.vehicleRepository.findById(vehicleId);
+
+    if (
+      !vehicle ||
+      vehicle.verificationStatus !== verificationStatuses.approved ||
+      vehicle.availabilityStatus !== vehicleAvailabilityStatuses.onlineAvailable
+    ) {
+      throw new AppError(409, 'VEHICLE_NOT_AVAILABLE', 'Selected truck is not approved and online.');
+    }
+
+    const existingOffers = await this.tripOfferRepository.listByRequestId(request.id);
+    let offer = existingOffers.find((entry) => entry.vehicleId === vehicle.id);
+
+    if (offer && ![offerStatuses.sent, offerStatuses.viewed].includes(offer.status)) {
+      throw new AppError(409, 'OFFER_NOT_ASSIGNABLE', 'This truck already has a closed offer for the request.');
+    }
+
+    if (!offer) {
+      const [createdOffer] = await this.tripOfferRepository.insertMany([
+        {
+          id: createId('offer'),
+          requestId: request.id,
+          ownerId: vehicle.ownerId,
+          vehicleId: vehicle.id,
+          status: offerStatuses.sent,
+          expiresAt: new Date(Date.now() + offerExpiryMinutes * 60 * 1000).toISOString(),
+          assignedByAssistantId: actor.id
+        }
+      ]);
+      offer = createdOffer;
+    }
+
+    const busyVehicle = await this.vehicleRepository.markBusyIfAvailable({
+      vehicleId: vehicle.id,
+      activeTripId: request.id
+    });
+
+    if (!busyVehicle) {
+      throw new AppError(409, 'VEHICLE_NOT_AVAILABLE', 'Selected truck is no longer available for assignment.');
+    }
+
+    const acceptedRequest = await this.kuliRequestRepository.acceptPending({
+      requestId: request.id,
+      offerId: offer.id,
+      ownerId: vehicle.ownerId,
+      vehicleId: vehicle.id
+    });
+
+    if (!acceptedRequest) {
+      await this.vehicleRepository.releaseIfActiveTrip({
+        vehicleId: vehicle.id,
+        activeTripId: request.id
+      });
+
+      throw new AppError(409, 'REQUEST_NOT_ASSIGNABLE', 'The request changed before assignment completed.');
+    }
+
+    const acceptedOffer = await this.tripOfferRepository.markAccepted({
+      offerId: offer.id,
+      ownerId: vehicle.ownerId,
+      now: new Date().toISOString()
+    });
+    const expiredCompetingOffers = await this.tripOfferRepository.expireCompeting({
+      requestId: request.id,
+      exceptOfferId: offer.id
+    });
+
+    await this.recordStatusEvent({
+      request: acceptedRequest,
+      fromStatus: request.status,
+      toStatus: kuliStatuses.accepted,
+      actor,
+      reason: 'assistant_direct_assignment'
+    });
+
+    await this.notificationRepository.insertMany(
+      [
+        createNotification({
+          recipientUserId: vehicle.ownerId,
+          type: 'assistant.assignment.created',
+          title: 'Assigned KULI request',
+          body: 'A hotline assistant assigned your truck to a confirmed KULI request.',
+          data: {
+            requestId: acceptedRequest.id,
+            offerId: offer.id
+          }
+        }),
+        acceptedRequest.clientId
+          ? createNotification({
+              recipientUserId: acceptedRequest.clientId,
+              type: 'assistant.request.assigned',
+              title: 'Truck assigned',
+              body: 'A KULI assistant assigned a verified truck to your request.',
+              data: {
+                requestId: acceptedRequest.id,
+                vehicleId: vehicle.id
+              }
+            })
+          : null,
+        ...expiredCompetingOffers.map((expiredOffer) =>
+          createNotification({
+            recipientUserId: expiredOffer.ownerId,
+            type: 'offer.expired',
+            title: 'Request assigned to another truck',
+            body: 'This assisted KULI request is no longer available.',
+            data: {
+              requestId: acceptedRequest.id,
+              offerId: expiredOffer.id
+            }
+          })
+        )
+      ].filter(Boolean)
+    );
+
+    return {
+      request: await this.enrichRequest(acceptedRequest),
+      offer: acceptedOffer,
+      assignment: {
+        vehicleId: vehicle.id,
+        ownerId: vehicle.ownerId,
+        status: 'assigned_by_assistant'
       }
     };
   }

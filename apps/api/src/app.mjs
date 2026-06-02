@@ -577,6 +577,102 @@ const createRouteRequest = (context) => async (request) => {
     );
   }
 
+  if (method === 'GET' && path === '/api/v1/assistant/dashboard') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.assistant, roles.admin]);
+
+    const [tickets, requests, trucks, notifications] = await Promise.all([
+      context.supportService.listTickets({ actor: currentUser }),
+      context.marketplaceService.listMine({ actor: currentUser }),
+      context.vehicleRegistryService.listAssistantVehicles({ actor: currentUser }),
+      context.notificationRepository.listByRecipientId(currentUser.id)
+    ]);
+    const ticketCount = (status) => tickets.filter((ticket) => ticket.status === status).length;
+    const truckCount = (status) => trucks.filter((truck) => truck.availabilityStatus === status).length;
+    const activeStatuses = ['pending', 'accepted', 'en_route_to_pickup', 'arrived_at_pickup', 'loading', 'in_transit', 'unloading'];
+
+    return success({
+      tickets: {
+        total: tickets.length,
+        open: ticketCount('open'),
+        assigned: ticketCount('assigned'),
+        inProgress: ticketCount('in_progress'),
+        pendingClient: ticketCount('pending_client')
+      },
+      requests: {
+        total: requests.length,
+        active: requests.filter((entry) => activeStatuses.includes(entry.status)).length,
+        completed: requests.filter((entry) => entry.status === 'completed').length
+      },
+      trucks: {
+        total: trucks.length,
+        online: truckCount('online_available'),
+        busy: truckCount('busy_on_job'),
+        offline: truckCount('offline'),
+        pendingVerification: trucks.filter((truck) => truck.verificationStatus === 'pending').length
+      },
+      notifications: {
+        total: notifications.length,
+        unread: notifications.filter((entry) => entry.deliveryStatus !== 'read').length
+      }
+    });
+  }
+
+  if (method === 'GET' && path === '/api/v1/assistant/requests') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.assistant, roles.admin]);
+
+    return success(
+      await context.marketplaceService.listMine({
+        actor: currentUser
+      })
+    );
+  }
+
+  if (method === 'POST' && path.startsWith('/api/v1/assistant/requests/') && path.endsWith('/assign')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.assistant, roles.admin]);
+
+    const requestId = path.split('/')[5];
+    const body = await parseJsonBody(request);
+
+    return success(
+      await context.marketplaceService.assignAssistantRequest({
+        actor: currentUser,
+        requestId,
+        vehicleId: body.vehicleId
+      })
+    );
+  }
+
+  if (method === 'GET' && path === '/api/v1/assistant/trucks') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.assistant, roles.admin]);
+
+    return success(
+      await context.vehicleRegistryService.listAssistantVehicles({
+        actor: currentUser,
+        filters: {
+          verificationStatus: url.query.verificationStatus,
+          availabilityStatus: url.query.availabilityStatus,
+          search: url.query.search
+        }
+      })
+    );
+  }
+
+  if (method === 'GET' && path === '/api/v1/assistant/notifications') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.assistant, roles.admin]);
+
+    return success(await context.notificationRepository.listByRecipientId(currentUser.id));
+  }
+
   if (method === 'GET' && path === '/api/v1/assistant/clients/search') {
     const { currentUser } = await resolveAuth();
     assertActiveAccount(currentUser);
@@ -585,7 +681,8 @@ const createRouteRequest = (context) => async (request) => {
     return success(
       await context.supportService.searchClients({
         actor: currentUser,
-        phone: url.query.phone
+        phone: url.query.phone,
+        query: url.query.query ?? url.query.q ?? url.query.search
       })
     );
   }
@@ -1239,7 +1336,8 @@ export const createAppContext = async (config = env) => {
     vehicleRepository,
     vehicleDocumentRepository,
     fileRepository,
-    auditLogRepository
+    auditLogRepository,
+    userRepository
   });
   const quoteService = new QuoteService({
     pricingRuleRepository,

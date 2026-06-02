@@ -99,16 +99,27 @@ class MemoryHotlineTicketRepository {
 }
 
 class MemoryUserRepository {
+  constructor() {
+    this.clients = [
+      {
+        id: 'usr_client_001',
+        role: roles.client,
+        phone: '+251911111111',
+        fullName: 'Abebe Bekele',
+        email: 'abebe@example.com'
+      }
+    ];
+  }
+
   async findClientsByPhone(phone) {
-    return phone === '+251911111111'
-      ? [
-          {
-            id: 'usr_client_001',
-            role: roles.client,
-            phone
-          }
-        ]
-      : [];
+    return this.clients.filter((client) => client.phone === phone);
+  }
+
+  async searchClients(query) {
+    const normalized = String(query).toLowerCase();
+    return this.clients.filter((client) =>
+      `${client.phone} ${client.fullName} ${client.email}`.toLowerCase().includes(normalized)
+    );
   }
 }
 
@@ -323,6 +334,22 @@ test('assistant can look up client profile by phone', async () => {
 
   assert.equal(results.length, 1);
   assert.equal(results[0].role, roles.client);
+});
+
+test('assistant can look up client profile by name or email query', async () => {
+  const { service } = createService();
+  const byName = await service.searchClients({
+    actor: assistant,
+    query: 'Abebe'
+  });
+  const byEmail = await service.searchClients({
+    actor: assistant,
+    query: 'abebe@example.com'
+  });
+
+  assert.equal(byName.length, 1);
+  assert.equal(byEmail.length, 1);
+  assert.equal(byName[0].id, 'usr_client_001');
 });
 
 test('pending-client timeout job cancels stale tickets', async () => {

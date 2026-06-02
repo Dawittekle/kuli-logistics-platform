@@ -78,6 +78,7 @@ type DocumentPreview = {
 type Vehicle = {
   id: string;
   ownerId: string;
+  owner?: Pick<UserProfile, 'id' | 'fullName' | 'email' | 'phone' | 'accountStatus'>;
   licensePlate: string;
   vehicleClassSnapshot?: {
     name: string;
@@ -88,6 +89,14 @@ type Vehicle = {
   description?: string;
   verificationStatus: 'draft' | 'pending' | 'approved' | 'rejected';
   availabilityStatus: string;
+  activeTripId?: string;
+  currentLocation?: {
+    addressText?: string;
+    point?: {
+      coordinates?: [number, number];
+    };
+  };
+  currentLocationUpdatedAt?: string;
   rejectionReason?: string;
   documents?: VehicleDocument[];
 };
@@ -304,12 +313,73 @@ type KuliRequest = {
   };
   selectedOwnerId?: string;
   selectedVehicleId?: string;
+  createdByAssistantId?: string;
+  hotlineTicketId?: string;
+  clientContactSnapshot?: {
+    fullName?: string;
+    phone?: string;
+    email?: string;
+  };
   quoteSnapshot?: {
     currency?: string;
     totalEstimate?: number;
   };
+  payment?: PaymentRecord;
   createdAt?: string;
   updatedAt?: string;
+};
+
+type NotificationRecord = {
+  id: string;
+  recipientUserId: string;
+  type: string;
+  title: string;
+  body?: string;
+  deliveryStatus: 'pending' | 'read' | 'sent' | 'failed';
+  data?: Record<string, unknown>;
+  createdAt?: string;
+};
+
+type AssistantDashboardMetrics = {
+  tickets: {
+    total: number;
+    open: number;
+    assigned: number;
+    inProgress: number;
+    pendingClient: number;
+  };
+  requests: {
+    total: number;
+    active: number;
+    completed: number;
+  };
+  trucks: {
+    total: number;
+    online: number;
+    busy: number;
+    offline: number;
+    pendingVerification: number;
+  };
+  notifications: {
+    total: number;
+    unread: number;
+  };
+};
+
+type AssistantAssignmentResult = {
+  request: KuliRequest;
+  offer?: {
+    id: string;
+    requestId: string;
+    vehicleId: string;
+    ownerId: string;
+    status: string;
+  };
+  assignment: {
+    vehicleId: string;
+    ownerId: string;
+    status: string;
+  };
 };
 
 type StatusEvent = {
@@ -335,7 +405,7 @@ type RouteItem = {
 };
 
 type AdminPageKey = 'dashboard' | 'users' | 'verification' | 'vehicleClasses' | 'pricing' | 'reports' | 'payments' | 'kuliRequests' | 'audit';
-type AssistantPageKey = 'tickets' | 'booking' | 'clients';
+type AssistantPageKey = 'dashboard' | 'booking' | 'tickets' | 'requests' | 'trucks' | 'clients' | 'notifications';
 
 type AdminRouteItem = RouteItem & {
   page: AdminPageKey;
@@ -437,9 +507,13 @@ const adminRoutes: AdminRouteItem[] = [
 ];
 
 const assistantRoutes: AssistantRouteItem[] = [
+  { path: '/assistant/dashboard', page: 'dashboard', label: 'Dashboard', icon: Gauge, detail: 'Live call-center queues, trucks, requests, and alerts.' },
+  { path: '/assistant/bookings/new', page: 'booking', label: 'New booking', icon: Truck, detail: 'Create assisted KULI requests during live calls.' },
   { path: '/assistant/tickets', page: 'tickets', label: 'Tickets', icon: ClipboardList, detail: 'Claim, update, and close hotline tickets.' },
-  { path: '/assistant/bookings/new', page: 'booking', label: 'Assisted Booking', icon: Truck, detail: 'Create KULI requests during live calls.' },
-  { path: '/assistant/clients', page: 'clients', label: 'Client Lookup', icon: UsersRound, detail: 'Find clients by phone for assisted requests.' }
+  { path: '/assistant/requests', page: 'requests', label: 'Requests', icon: MapPin, detail: 'Track assisted KULI requests and support timelines.' },
+  { path: '/assistant/trucks', page: 'trucks', label: 'Available trucks', icon: Truck, detail: 'Find approved online trucks and assign them to waiting requests.' },
+  { path: '/assistant/clients', page: 'clients', label: 'Clients', icon: UsersRound, detail: 'Find clients by phone, email, or name.' },
+  { path: '/assistant/notifications', page: 'notifications', label: 'Notifications', icon: Bell, detail: 'Review assistant alerts and mark updates read.' }
 ];
 
 const routeAliases: Record<string, string> = {
@@ -447,7 +521,7 @@ const routeAliases: Record<string, string> = {
   '/admin': '/admin/dashboard',
   '/admin/vehicles/pending': '/admin/verification',
   '/admin/audit-logs': '/admin/audit',
-  '/assistant': '/assistant/tickets'
+  '/assistant': '/assistant/dashboard'
 };
 
 const normalizeWorkspacePath = (pathname: string, routes: RouteItem[]) => {
@@ -2110,6 +2184,20 @@ const paymentTone = (status: PaymentRecord['status']): 'ready' | 'warn' | 'block
 
 const formatMoney = (currency = 'ETB', amount = 0) => `${currency} ${Number(amount).toFixed(2)}`;
 
+const requestTone = (status: KuliRequest['status']): 'ready' | 'warn' | 'blocked' | 'muted' => {
+  if (status === 'completed') {
+    return 'ready';
+  }
+
+  if (['cancelled', 'timed_out'].includes(status)) {
+    return 'blocked';
+  }
+
+  return status === 'pending' ? 'warn' : 'muted';
+};
+
+const activeRequestStatuses: KuliRequest['status'][] = ['pending', 'accepted', 'en_route_to_pickup', 'arrived_at_pickup', 'loading', 'in_transit', 'unloading'];
+
 const nextTicketStatuses = (ticket?: HotlineTicket): TicketStatus[] => {
   if (!ticket) {
     return [];
@@ -2125,6 +2213,27 @@ const nextTicketStatuses = (ticket?: HotlineTicket): TicketStatus[] => {
   };
 
   return transitions[ticket.status] ?? [];
+};
+
+const nextRequestStatuses = (request?: KuliRequest): KuliRequest['status'][] => {
+  if (!request) {
+    return [];
+  }
+
+  const transitions: Record<KuliRequest['status'], KuliRequest['status'][]> = {
+    pending: ['cancelled'],
+    accepted: ['en_route_to_pickup', 'cancelled'],
+    en_route_to_pickup: ['arrived_at_pickup', 'cancelled'],
+    arrived_at_pickup: ['loading', 'cancelled'],
+    loading: ['in_transit', 'cancelled'],
+    in_transit: ['unloading', 'cancelled'],
+    unloading: ['completed', 'cancelled'],
+    completed: [],
+    cancelled: [],
+    timed_out: []
+  };
+
+  return transitions[request.status] ?? [];
 };
 
 const buildAssistantLocation = ({ address, lon, lat }: { address: string; lon: string; lat: string }): GeoLocationInput => ({
@@ -2840,6 +2949,7 @@ function AssistantSupportPanel({ enabled, profile }: { enabled: boolean; profile
   const [estimatedWeightKg, setEstimatedWeightKg] = useState('800');
   const [estimatedVolumeCubicMeters, setEstimatedVolumeCubicMeters] = useState('8');
   const [selectedVehicleIds, setSelectedVehicleIds] = useState<string[]>([]);
+  const [directAssign, setDirectAssign] = useState(false);
   const [quote, setQuote] = useState<AssistedQuoteResult | null>(null);
   const [quotePending, setQuotePending] = useState(false);
   const [bookingPending, setBookingPending] = useState(false);
@@ -2962,7 +3072,7 @@ function AssistantSupportPanel({ enabled, profile }: { enabled: boolean; profile
     setTicketError('');
 
     try {
-      const result = (await kuliApi.request(`/assistant/clients/search?phone=${encodeURIComponent(clientSearchPhone.trim())}`)) as ApiEnvelope<UserProfile[]>;
+      const result = (await kuliApi.request(`/assistant/clients/search?query=${encodeURIComponent(clientSearchPhone.trim())}`)) as ApiEnvelope<UserProfile[]>;
       setClientResults(result.data);
       setSelectedClientId(result.data[0]?.id ?? '');
     } catch (error) {
@@ -3045,12 +3155,13 @@ function AssistantSupportPanel({ enabled, profile }: { enabled: boolean; profile
           clientContactSnapshot: {
             phone: clientSearchPhone.trim() || selectedTicket.callerPhone
           },
-          selectedVehicleIds
+          selectedVehicleIds,
+          directAssignVehicleId: directAssign ? selectedVehicleIds[0] : undefined
         }
       })) as ApiEnvelope<AssistedBookingResult>;
 
       setBookingResult(result.data);
-      setTicketMessage('Assisted booking created and SMS confirmation intent recorded.');
+      setTicketMessage(directAssign ? 'Assisted booking created, truck assigned, and SMS confirmation intent recorded.' : 'Assisted booking created and SMS confirmation intent recorded.');
       await queryClient.invalidateQueries({ queryKey: ['assistant-tickets'] });
     } catch (error) {
       setTicketError(getErrorMessage(error));
@@ -3106,6 +3217,7 @@ function AssistantSupportPanel({ enabled, profile }: { enabled: boolean; profile
                   setBookingResult(null);
                   setQuote(null);
                   setSelectedVehicleIds([]);
+                  setDirectAssign(false);
                 }}
                 type="button"
               >
@@ -3170,14 +3282,14 @@ function AssistantSupportPanel({ enabled, profile }: { enabled: boolean; profile
             <div className="detail-heading">
               <div>
                 <h3>Client lookup</h3>
-                <p className="muted">Search existing clients by phone; assisted bookings can still use a caller snapshot when no app profile exists.</p>
+                <p className="muted">Search existing clients by phone, email, or name. Assisted bookings can still use a caller snapshot when no app profile exists.</p>
               </div>
               <button className="icon-button" disabled={clientLookupPending} onClick={searchClients} type="button">
                 {clientLookupPending ? 'Searching...' : 'Search'}
               </button>
             </div>
             <label>
-              Phone
+              Phone, email, or name
               <input onChange={(event) => setClientSearchPhone(event.target.value)} value={clientSearchPhone} />
             </label>
             <div className="client-result-list">
@@ -3281,8 +3393,17 @@ function AssistantSupportPanel({ enabled, profile }: { enabled: boolean; profile
                   </button>
                 ))}
               </div>
+              <div className="support-card support-card--inline">
+                <div>
+                  <strong>Direct assignment</strong>
+                  <p className="muted">Turn this on to assign the first selected truck immediately and mark it busy. Leave it off to notify selected owners and wait for acceptance.</p>
+                </div>
+                <button className={`status-toggle ${directAssign ? 'is-active' : ''}`} disabled={selectedVehicleIds.length === 0} onClick={() => setDirectAssign((current) => !current)} type="button">
+                  {directAssign ? 'Direct assign on' : 'Send offers'}
+                </button>
+              </div>
               <button className="icon-button" disabled={bookingPending || selectedVehicleIds.length === 0 || !canBook} onClick={createBooking} type="button">
-                {bookingPending ? 'Creating...' : `Create request (${selectedVehicleIds.length} selected)`}
+                {bookingPending ? 'Creating...' : directAssign ? 'Create and assign truck' : `Create request (${selectedVehicleIds.length} selected)`}
               </button>
             </div>
           ) : null}
@@ -3302,6 +3423,993 @@ function AssistantSupportPanel({ enabled, profile }: { enabled: boolean; profile
         </div>
       </div>
     </section>
+  );
+}
+
+function AssistantDashboardPanel({ enabled, profile }: { enabled: boolean; profile: UserProfile }) {
+  const dashboardQuery = useQuery({
+    enabled,
+    queryKey: ['assistant-dashboard'],
+    queryFn: async () => ((await kuliApi.request('/assistant/dashboard')) as ApiEnvelope<AssistantDashboardMetrics>).data
+  });
+  const metrics = dashboardQuery.data;
+
+  if (!enabled) {
+    return null;
+  }
+
+  return (
+    <>
+      <PageIntro
+        eyebrow="Call-center desk"
+        title={`Welcome${profile.fullName ? `, ${profile.fullName.split(' ')[0]}` : ''}`}
+        description="Watch active calls, assisted requests, online truck supply, and assistant alerts from one dispatch dashboard."
+        action={(
+          <button className="secondary-action" type="button" onClick={() => dashboardQuery.refetch()}>
+            <RefreshCw aria-hidden="true" size={16} />
+            Refresh
+          </button>
+        )}
+      />
+      {dashboardQuery.isError ? <p className="field-error">{getErrorMessage(dashboardQuery.error)}</p> : null}
+      <section className="summary-grid panel--wide" aria-label="Assistant dashboard summary">
+        <SummaryCard icon={ClipboardList} label="Open tickets" value={metrics?.tickets.open ?? 0} tone={(metrics?.tickets.open ?? 0) ? 'warn' : 'ready'} helper="Waiting for claim" />
+        <SummaryCard icon={MapPin} label="Active requests" value={metrics?.requests.active ?? 0} tone={(metrics?.requests.active ?? 0) ? 'warn' : 'ready'} helper="Created or supported by you" />
+        <SummaryCard icon={Truck} label="Online trucks" value={metrics?.trucks.online ?? 0} tone={(metrics?.trucks.online ?? 0) ? 'ready' : 'warn'} helper="Approved and available" />
+        <SummaryCard icon={Bell} label="Unread alerts" value={metrics?.notifications.unread ?? 0} tone={(metrics?.notifications.unread ?? 0) ? 'warn' : 'ready'} helper="Assistant notifications" />
+      </section>
+      <section className="dashboard-structure panel--wide">
+        <div className="dashboard-structure__main">
+          <div className="panel">
+            <div className="panel__header">
+              <div>
+                <p className="eyebrow">Ticket health</p>
+                <h2>Call queue</h2>
+              </div>
+              <StatusBadge tone={(metrics?.tickets.pendingClient ?? 0) ? 'warn' : 'ready'}>{metrics?.tickets.total ?? 0} tickets</StatusBadge>
+            </div>
+            <div className="work-preview-list">
+              <div className="work-preview-row"><span><strong>Assigned</strong><small>Tickets claimed by assistants</small></span><StatusBadge tone="muted">{metrics?.tickets.assigned ?? 0}</StatusBadge></div>
+              <div className="work-preview-row"><span><strong>In progress</strong><small>Live support work</small></span><StatusBadge tone="warn">{metrics?.tickets.inProgress ?? 0}</StatusBadge></div>
+              <div className="work-preview-row"><span><strong>Waiting for client</strong><small>Follow-up needed</small></span><StatusBadge tone={(metrics?.tickets.pendingClient ?? 0) ? 'warn' : 'ready'}>{metrics?.tickets.pendingClient ?? 0}</StatusBadge></div>
+            </div>
+          </div>
+          <div className="panel">
+            <div className="panel__header">
+              <div>
+                <p className="eyebrow">Truck supply</p>
+                <h2>Availability snapshot</h2>
+              </div>
+              <StatusBadge tone="ready">{metrics?.trucks.total ?? 0} trucks</StatusBadge>
+            </div>
+            <div className="work-preview-list">
+              <div className="work-preview-row"><span><strong>Busy</strong><small>Currently assigned to a job</small></span><StatusBadge tone="warn">{metrics?.trucks.busy ?? 0}</StatusBadge></div>
+              <div className="work-preview-row"><span><strong>Offline</strong><small>Approved but not available</small></span><StatusBadge tone="muted">{metrics?.trucks.offline ?? 0}</StatusBadge></div>
+              <div className="work-preview-row"><span><strong>Pending verification</strong><small>Cannot receive work yet</small></span><StatusBadge tone={(metrics?.trucks.pendingVerification ?? 0) ? 'warn' : 'ready'}>{metrics?.trucks.pendingVerification ?? 0}</StatusBadge></div>
+            </div>
+          </div>
+        </div>
+        <aside className="dashboard-structure__side">
+          <div className="panel">
+            <div className="panel__header">
+              <div>
+                <p className="eyebrow">Operating rule</p>
+                <h2>Backend-confirmed only</h2>
+              </div>
+              <StatusBadge tone="ready">Protected</StatusBadge>
+            </div>
+            <p className="muted">Bookings, assignment, ticket status, request status, and notifications are all written through the API. The console does not fake success states.</p>
+          </div>
+        </aside>
+      </section>
+    </>
+  );
+}
+
+function AssistantTicketsPanel({ enabled, profile }: { enabled: boolean; profile: UserProfile }) {
+  const queryClient = useQueryClient();
+  const [ticketFilter, setTicketFilter] = useState<TicketStatus | ''>('open');
+  const [callerFilter, setCallerFilter] = useState('');
+  const [selectedTicketId, setSelectedTicketId] = useState('');
+  const [source, setSource] = useState<TicketSource>('incoming_call');
+  const [callerPhone, setCallerPhone] = useState('+251911111111');
+  const [callSummary, setCallSummary] = useState('');
+  const [followUpAt, setFollowUpAt] = useState('');
+  const [pendingAction, setPendingAction] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const ticketsQuery = useQuery({
+    enabled,
+    queryKey: ['assistant-tickets-page', ticketFilter, callerFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+
+      if (ticketFilter) {
+        params.set('status', ticketFilter);
+      }
+
+      if (callerFilter.trim()) {
+        params.set('callerPhone', callerFilter.trim());
+      }
+
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      return ((await kuliApi.request(`/assistant/tickets${suffix}`)) as ApiEnvelope<HotlineTicket[]>).data;
+    }
+  });
+  const tickets = ticketsQuery.data ?? [];
+  const selectedTicket = tickets.find((ticket) => ticket.id === selectedTicketId) ?? tickets[0];
+  const canEditTicket = selectedTicket && !['closed', 'cancelled'].includes(selectedTicket.status);
+
+  useEffect(() => {
+    if (!selectedTicketId && tickets[0]) {
+      setSelectedTicketId(tickets[0].id);
+      setCallSummary(tickets[0].callSummary ?? '');
+      setFollowUpAt(tickets[0].followUpAt ?? '');
+    }
+  }, [selectedTicketId, tickets]);
+
+  if (!enabled) {
+    return null;
+  }
+
+  const createTicket = async () => {
+    if (!callerPhone.trim()) {
+      setError('Caller phone is required.');
+      return;
+    }
+
+    setPendingAction('create');
+    setError('');
+    setMessage('');
+
+    try {
+      const result = (await kuliApi.request('/assistant/tickets', {
+        method: 'POST',
+        body: {
+          source,
+          callerPhone: callerPhone.trim(),
+          callSummary: callSummary.trim() || undefined,
+          followUpAt: followUpAt.trim() || undefined
+        }
+      })) as ApiEnvelope<HotlineTicket>;
+
+      setSelectedTicketId(result.data.id);
+      setMessage('Ticket created.');
+      await queryClient.invalidateQueries({ queryKey: ['assistant-tickets-page'] });
+      await queryClient.invalidateQueries({ queryKey: ['assistant-dashboard'] });
+    } catch (ticketError) {
+      setError(getErrorMessage(ticketError));
+    } finally {
+      setPendingAction('');
+    }
+  };
+
+  const transitionTicket = async (status: TicketStatus) => {
+    if (!selectedTicket || !canEditTicket) {
+      return;
+    }
+
+    setPendingAction(status);
+    setError('');
+    setMessage('');
+
+    try {
+      const result = (await kuliApi.request(`/assistant/tickets/${selectedTicket.id}/status`, {
+        method: 'PATCH',
+        body: {
+          status,
+          callSummary: callSummary.trim() || undefined,
+          followUpAt: followUpAt.trim() || undefined,
+          cancellationReason: status === 'cancelled' ? 'cancelled_by_staff' : undefined
+        }
+      })) as ApiEnvelope<HotlineTicket>;
+
+      setSelectedTicketId(result.data.id);
+      setMessage(`Ticket moved to ${ticketStatusLabels[status]}.`);
+      await queryClient.invalidateQueries({ queryKey: ['assistant-tickets-page'] });
+      await queryClient.invalidateQueries({ queryKey: ['assistant-dashboard'] });
+    } catch (ticketError) {
+      setError(getErrorMessage(ticketError));
+    } finally {
+      setPendingAction('');
+    }
+  };
+
+  return (
+    <>
+      <PageIntro
+        eyebrow="Hotline queue"
+        title="Tickets"
+        description="Claim calls, record notes, move tickets through support states, and link bookings when the caller is ready."
+        action={<StatusBadge tone={ticketsQuery.isError ? 'blocked' : tickets.length ? 'warn' : 'ready'}>{tickets.length} visible</StatusBadge>}
+      />
+      {error ? <p className="field-error" role="alert">{error}</p> : null}
+      {message ? <p className="muted">{message}</p> : null}
+      {ticketsQuery.isError ? <p className="field-error">{getErrorMessage(ticketsQuery.error)}</p> : null}
+      <section className="panel panel--wide">
+        <div className="panel__header">
+          <div>
+            <p className="eyebrow">Ticket workbench</p>
+            <h2>Queue and call detail</h2>
+          </div>
+          <button className="secondary-action" type="button" onClick={() => ticketsQuery.refetch()}>
+            <RefreshCw aria-hidden="true" size={16} />
+            Refresh
+          </button>
+        </div>
+        <div className="support-toolbar support-toolbar--triple">
+          <label>
+            Status
+            <select onChange={(event) => setTicketFilter(event.target.value as TicketStatus | '')} value={ticketFilter}>
+              <option value="">All statuses</option>
+              {Object.entries(ticketStatusLabels).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Caller
+            <span className="input-with-icon">
+              <Search aria-hidden="true" size={16} />
+              <input onChange={(event) => setCallerFilter(event.target.value)} placeholder="+251..." value={callerFilter} />
+            </span>
+          </label>
+          <label>
+            Assigned to
+            <span className="input-static">{profile.fullName || profile.email || 'Current assistant'}</span>
+          </label>
+        </div>
+        <div className="admin-split admin-split--detail-heavy">
+          <div className="queue-list queue-list--sticky">
+            {ticketsQuery.isLoading ? <p className="muted">Loading tickets...</p> : null}
+            {tickets.length === 0 && !ticketsQuery.isLoading ? <EmptyState title="No tickets found" description="Try another status or create a new ticket from the form below." /> : null}
+            {tickets.map((ticket) => (
+              <button
+                className={`queue-item ${selectedTicket?.id === ticket.id ? 'is-selected' : ''}`}
+                key={ticket.id}
+                onClick={() => {
+                  setSelectedTicketId(ticket.id);
+                  setCallSummary(ticket.callSummary ?? '');
+                  setFollowUpAt(ticket.followUpAt ?? '');
+                  setError('');
+                  setMessage('');
+                }}
+                type="button"
+              >
+                <strong>{ticket.ticketCode}</strong>
+                <span>{ticket.callerPhone || 'No caller phone'} / {humanize(ticket.source)}</span>
+                <StatusBadge tone={ticketTone(ticket.status)}>{ticketStatusLabels[ticket.status]}</StatusBadge>
+              </button>
+            ))}
+            <div className="support-card">
+              <h3>Create ticket</h3>
+              <div className="source-picker">
+                {ticketSources.map((option) => (
+                  <button className={source === option.value ? 'is-active' : ''} key={option.value} onClick={() => setSource(option.value)} type="button">
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <label>
+                Caller phone
+                <input onChange={(event) => setCallerPhone(event.target.value)} value={callerPhone} />
+              </label>
+              <label>
+                Follow up
+                <input onChange={(event) => setFollowUpAt(event.target.value)} placeholder="2026-05-21T12:00:00.000Z" value={followUpAt} />
+              </label>
+              <button className="icon-button" disabled={pendingAction === 'create'} onClick={createTicket} type="button">
+                {pendingAction === 'create' ? 'Creating...' : 'Create ticket'}
+              </button>
+            </div>
+          </div>
+          <div className="detail-workspace">
+            {selectedTicket ? (
+              <>
+                <div className="vehicle-summary-card">
+                  <div>
+                    <p className="eyebrow">Selected ticket</p>
+                    <h3>{selectedTicket.ticketCode}</h3>
+                    <p className="muted">{selectedTicket.callSummary || 'No call notes recorded yet.'}</p>
+                  </div>
+                  <StatusBadge tone={ticketTone(selectedTicket.status)}>{ticketStatusLabels[selectedTicket.status]}</StatusBadge>
+                  <div className="info-strip info-strip--four">
+                    <InfoPill label="Caller" value={selectedTicket.callerPhone || 'Not recorded'} />
+                    <InfoPill label="Client" value={selectedTicket.clientId || 'Snapshot only'} />
+                    <InfoPill label="Request" value={selectedTicket.requestId || 'Not linked'} />
+                    <InfoPill label="Follow up" value={formatDateTime(selectedTicket.followUpAt)} />
+                  </div>
+                </div>
+                <label className="decision-label">
+                  Call notes
+                  <textarea disabled={!canEditTicket} onChange={(event) => setCallSummary(event.target.value)} placeholder="Caller context, building access, load notes, confirmation details." value={callSummary} />
+                </label>
+                <label>
+                  Follow up
+                  <input disabled={!canEditTicket} onChange={(event) => setFollowUpAt(event.target.value)} value={followUpAt} />
+                </label>
+                <div className="decision-actions">
+                  {nextTicketStatuses(selectedTicket).map((status) => (
+                    <button
+                      className={status === 'cancelled' ? 'danger-button' : 'icon-button'}
+                      disabled={Boolean(pendingAction)}
+                      key={status}
+                      onClick={() => transitionTicket(status)}
+                      type="button"
+                    >
+                      {pendingAction === status ? 'Working...' : ticketStatusLabels[status]}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <EmptyState title="Select a ticket" description="Caller details, notes, timeline state, and transition actions appear here." />
+            )}
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function AssistantRequestsPanel({ enabled }: { enabled: boolean }) {
+  const queryClient = useQueryClient();
+  const [statusFilter, setStatusFilter] = useState<KuliRequest['status'] | ''>('');
+  const [search, setSearch] = useState('');
+  const [selectedRequestId, setSelectedRequestId] = useState('');
+  const [selectedTruckId, setSelectedTruckId] = useState('');
+  const [pendingAction, setPendingAction] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const requestsQuery = useQuery({
+    enabled,
+    queryKey: ['assistant-requests'],
+    queryFn: async () => ((await kuliApi.request('/assistant/requests')) as ApiEnvelope<KuliRequest[]>).data
+  });
+  const trucksQuery = useQuery({
+    enabled,
+    queryKey: ['assistant-trucks', 'online-for-request'],
+    queryFn: async () => ((await kuliApi.request('/assistant/trucks?verificationStatus=approved&availabilityStatus=online_available')) as ApiEnvelope<Vehicle[]>).data
+  });
+  const requests = requestsQuery.data ?? [];
+  const filteredRequests = requests.filter((request) => {
+    const haystack = `${request.requestCode} ${request.clientId ?? ''} ${request.clientContactSnapshot?.phone ?? ''} ${request.pickupLocation?.addressText ?? ''} ${request.destinationLocation?.addressText ?? ''}`.toLowerCase();
+    return (!statusFilter || request.status === statusFilter) && (!search.trim() || haystack.includes(search.trim().toLowerCase()));
+  });
+  const selectedRequest = requests.find((request) => request.id === selectedRequestId) ?? filteredRequests[0] ?? requests[0];
+  const eventsQuery = useQuery({
+    enabled: enabled && Boolean(selectedRequest?.id),
+    queryKey: ['assistant-requests', selectedRequest?.id, 'events'],
+    queryFn: async () => ((await kuliApi.request(`/kuli-requests/${selectedRequest?.id}/events`)) as ApiEnvelope<StatusEvent[]>).data
+  });
+  const messagesQuery = useQuery({
+    enabled: enabled && Boolean(selectedRequest?.id),
+    queryKey: ['assistant-requests', selectedRequest?.id, 'messages'],
+    queryFn: async () => ((await kuliApi.request(`/kuli-requests/${selectedRequest?.id}/messages`)) as ApiEnvelope<Array<{ id: string; body: string; senderDisplayName?: string; senderRole?: Role; createdAt?: string }>>).data
+  });
+  const activeRequests = requests.filter((request) => activeRequestStatuses.includes(request.status)).length;
+
+  useEffect(() => {
+    if (!selectedRequestId && filteredRequests[0]) {
+      setSelectedRequestId(filteredRequests[0].id);
+    }
+  }, [filteredRequests, selectedRequestId]);
+
+  if (!enabled) {
+    return null;
+  }
+
+  const assignTruck = async () => {
+    if (!selectedRequest || !selectedTruckId) {
+      setError('Select a waiting request and an online truck first.');
+      return;
+    }
+
+    setPendingAction('assign');
+    setError('');
+    setMessage('');
+
+    try {
+      const result = (await kuliApi.request(`/assistant/requests/${selectedRequest.id}/assign`, {
+        method: 'POST',
+        body: {
+          vehicleId: selectedTruckId
+        }
+      })) as ApiEnvelope<AssistantAssignmentResult>;
+
+      setMessage(`${result.data.request.requestCode} assigned to ${result.data.assignment.vehicleId}.`);
+      await queryClient.invalidateQueries({ queryKey: ['assistant-requests'] });
+      await queryClient.invalidateQueries({ queryKey: ['assistant-trucks'] });
+      await queryClient.invalidateQueries({ queryKey: ['assistant-dashboard'] });
+    } catch (assignError) {
+      setError(getErrorMessage(assignError));
+    } finally {
+      setPendingAction('');
+    }
+  };
+
+  const transitionRequest = async (status: KuliRequest['status']) => {
+    if (!selectedRequest) {
+      return;
+    }
+
+    setPendingAction(status);
+    setError('');
+    setMessage('');
+
+    try {
+      await kuliApi.request(`/kuli-requests/${selectedRequest.id}/status`, {
+        method: 'PATCH',
+        body: {
+          status,
+          reason: status === 'cancelled' ? 'assistant_cancelled' : `assistant_${status}`
+        }
+      });
+      setMessage(`Request moved to ${humanRequestStatus(status)}.`);
+      await queryClient.invalidateQueries({ queryKey: ['assistant-requests'] });
+      await queryClient.invalidateQueries({ queryKey: ['assistant-trucks'] });
+      await queryClient.invalidateQueries({ queryKey: ['assistant-dashboard'] });
+    } catch (statusError) {
+      setError(getErrorMessage(statusError));
+    } finally {
+      setPendingAction('');
+    }
+  };
+
+  return (
+    <>
+      <PageIntro
+        eyebrow="Assisted requests"
+        title="Requests"
+        description="Monitor assistant-created KULI requests, assign online trucks, inspect timelines, and keep support notes close."
+        action={<StatusBadge tone={requestsQuery.isError ? 'blocked' : activeRequests ? 'warn' : 'ready'}>{activeRequests} active</StatusBadge>}
+      />
+      {error ? <p className="field-error" role="alert">{error}</p> : null}
+      {message ? <p className="muted">{message}</p> : null}
+      {requestsQuery.isError ? <p className="field-error">{getErrorMessage(requestsQuery.error)}</p> : null}
+      <section className="panel panel--wide">
+        <div className="panel__header">
+          <div>
+            <p className="eyebrow">Request workbench</p>
+            <h2>List, assignment, and timeline</h2>
+          </div>
+          <button className="secondary-action" type="button" onClick={() => {
+            requestsQuery.refetch();
+            trucksQuery.refetch();
+            eventsQuery.refetch();
+            messagesQuery.refetch();
+          }}>
+            <RefreshCw aria-hidden="true" size={16} />
+            Refresh
+          </button>
+        </div>
+        <div className="support-toolbar">
+          <label>
+            Status
+            <select onChange={(event) => setStatusFilter(event.target.value as KuliRequest['status'] | '')} value={statusFilter}>
+              <option value="">All statuses</option>
+              {requestStatusOptions.map((status) => (
+                <option key={status} value={status}>{humanRequestStatus(status)}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Search
+            <span className="input-with-icon">
+              <Search aria-hidden="true" size={16} />
+              <input onChange={(event) => setSearch(event.target.value)} placeholder="Request, caller, route" value={search} />
+            </span>
+          </label>
+        </div>
+        <div className="request-oversight-layout">
+          <div className="queue-list queue-list--sticky">
+            {filteredRequests.length === 0 ? <EmptyState title="No assisted requests found" description="Create a booking or adjust the filters." /> : null}
+            {filteredRequests.map((request) => (
+              <button
+                className={`queue-item request-card-row ${selectedRequest?.id === request.id ? 'is-selected' : ''}`}
+                key={request.id}
+                onClick={() => {
+                  setSelectedRequestId(request.id);
+                  setError('');
+                  setMessage('');
+                }}
+                type="button"
+              >
+                <span className="request-card-row__top">
+                  <strong>{request.requestCode}</strong>
+                  <StatusBadge tone={requestTone(request.status)}>{humanRequestStatus(request.status)}</StatusBadge>
+                </span>
+                <span>{request.pickupLocation?.addressText || 'Pickup'} to {request.destinationLocation?.addressText || 'Destination'}</span>
+                <small>{formatMoney(request.quoteSnapshot?.currency, request.quoteSnapshot?.totalEstimate)} / {request.hotlineTicketId || 'No ticket'}</small>
+              </button>
+            ))}
+          </div>
+          <div className="request-inspector">
+            {selectedRequest ? (
+              <>
+                <div className="vehicle-summary-card">
+                  <div>
+                    <p className="eyebrow">Request detail</p>
+                    <h3>{selectedRequest.requestCode}</h3>
+                    <p className="muted">{selectedRequest.pickupLocation?.addressText || 'Pickup'} to {selectedRequest.destinationLocation?.addressText || 'Destination'}</p>
+                  </div>
+                  <StatusBadge tone={requestTone(selectedRequest.status)}>{humanRequestStatus(selectedRequest.status)}</StatusBadge>
+                  <div className="info-strip info-strip--four">
+                    <InfoPill label="Caller" value={selectedRequest.clientContactSnapshot?.phone || selectedRequest.clientId || 'Snapshot'} />
+                    <InfoPill label="Owner" value={selectedRequest.selectedOwnerId || 'Not assigned'} />
+                    <InfoPill label="Vehicle" value={selectedRequest.selectedVehicleId || 'Not assigned'} />
+                    <InfoPill label="Payment" value={selectedRequest.payment ? humanPaymentStatus(selectedRequest.payment.status) : 'No record'} />
+                  </div>
+                </div>
+                {selectedRequest.status === 'pending' ? (
+                  <div className="support-card">
+                    <div className="detail-heading">
+                      <div>
+                        <p className="eyebrow">Assignment</p>
+                        <h3>Assign an online truck</h3>
+                        <p className="muted">Only approved online trucks are listed. The backend marks the assigned truck busy.</p>
+                      </div>
+                    </div>
+                    <label>
+                      Online truck
+                      <select onChange={(event) => setSelectedTruckId(event.target.value)} value={selectedTruckId}>
+                        <option value="">Select a truck</option>
+                        {(trucksQuery.data ?? []).map((truck) => (
+                          <option key={truck.id} value={truck.id}>{truck.licensePlate} / {truck.vehicleClassSnapshot?.name || 'Truck'} / {truck.owner?.fullName || truck.ownerId}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <button className="icon-button" disabled={pendingAction === 'assign' || !selectedTruckId} onClick={assignTruck} type="button">
+                      {pendingAction === 'assign' ? 'Assigning...' : 'Assign truck'}
+                    </button>
+                  </div>
+                ) : null}
+                <div className="decision-actions">
+                  {nextRequestStatuses(selectedRequest).map((status) => (
+                    <button
+                      className={status === 'cancelled' ? 'danger-button' : 'icon-button'}
+                      disabled={Boolean(pendingAction)}
+                      key={status}
+                      onClick={() => transitionRequest(status)}
+                      type="button"
+                    >
+                      {pendingAction === status ? 'Updating...' : humanRequestStatus(status)}
+                    </button>
+                  ))}
+                </div>
+                <div className="timeline-panel">
+                  <div className="detail-heading">
+                    <div>
+                      <p className="eyebrow">Timeline</p>
+                      <h3>Status events</h3>
+                    </div>
+                    <StatusBadge tone={eventsQuery.isFetching ? 'warn' : 'ready'}>{eventsQuery.data?.length ?? 0} events</StatusBadge>
+                  </div>
+                  {(eventsQuery.data ?? []).length === 0 ? <p className="muted">No status events returned yet.</p> : null}
+                  {(eventsQuery.data ?? []).map((event) => (
+                    <TimelineEventRow event={event} key={event.id} />
+                  ))}
+                </div>
+                <div className="support-card">
+                  <div className="detail-heading">
+                    <div>
+                      <p className="eyebrow">Messages</p>
+                      <h3>Request thread</h3>
+                    </div>
+                    <StatusBadge tone="muted">{messagesQuery.data?.length ?? 0} messages</StatusBadge>
+                  </div>
+                  {(messagesQuery.data ?? []).length === 0 ? <p className="muted">No request messages yet.</p> : null}
+                  {(messagesQuery.data ?? []).slice(0, 5).map((entry) => (
+                    <div className="work-preview-row" key={entry.id}>
+                      <span><strong>{entry.senderDisplayName || humanRole(entry.senderRole)}</strong><small>{entry.body}</small></span>
+                      <time>{formatDateTime(entry.createdAt)}</time>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <EmptyState title="Select a request" description="Route, assignment, timeline, messages, and payment state appear here." />
+            )}
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function AssistantTrucksPanel({ enabled }: { enabled: boolean }) {
+  const queryClient = useQueryClient();
+  const [availabilityFilter, setAvailabilityFilter] = useState('online_available');
+  const [verificationFilter, setVerificationFilter] = useState<Vehicle['verificationStatus'] | ''>('approved');
+  const [search, setSearch] = useState('');
+  const [selectedTruckId, setSelectedTruckId] = useState('');
+  const [selectedRequestId, setSelectedRequestId] = useState('');
+  const [pendingAssign, setPendingAssign] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const trucksQuery = useQuery({
+    enabled,
+    queryKey: ['assistant-trucks', verificationFilter, availabilityFilter, search],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+
+      if (verificationFilter) {
+        params.set('verificationStatus', verificationFilter);
+      }
+
+      if (availabilityFilter) {
+        params.set('availabilityStatus', availabilityFilter);
+      }
+
+      if (search.trim()) {
+        params.set('search', search.trim());
+      }
+
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      return ((await kuliApi.request(`/assistant/trucks${suffix}`)) as ApiEnvelope<Vehicle[]>).data;
+    }
+  });
+  const requestsQuery = useQuery({
+    enabled,
+    queryKey: ['assistant-requests', 'pending-for-trucks'],
+    queryFn: async () => ((await kuliApi.request('/assistant/requests')) as ApiEnvelope<KuliRequest[]>).data
+  });
+  const trucks = trucksQuery.data ?? [];
+  const selectedTruck = trucks.find((truck) => truck.id === selectedTruckId) ?? trucks[0];
+  const pendingRequests = (requestsQuery.data ?? []).filter((request) => request.status === 'pending');
+
+  useEffect(() => {
+    if (!selectedTruckId && trucks[0]) {
+      setSelectedTruckId(trucks[0].id);
+    }
+  }, [selectedTruckId, trucks]);
+
+  if (!enabled) {
+    return null;
+  }
+
+  const assignTruck = async () => {
+    if (!selectedTruck || !selectedRequestId) {
+      setError('Select an online truck and a waiting request first.');
+      return;
+    }
+
+    setPendingAssign(true);
+    setError('');
+    setMessage('');
+
+    try {
+      const result = (await kuliApi.request(`/assistant/requests/${selectedRequestId}/assign`, {
+        method: 'POST',
+        body: {
+          vehicleId: selectedTruck.id
+        }
+      })) as ApiEnvelope<AssistantAssignmentResult>;
+
+      setMessage(`${selectedTruck.licensePlate} assigned to ${result.data.request.requestCode}.`);
+      await queryClient.invalidateQueries({ queryKey: ['assistant-trucks'] });
+      await queryClient.invalidateQueries({ queryKey: ['assistant-requests'] });
+      await queryClient.invalidateQueries({ queryKey: ['assistant-dashboard'] });
+    } catch (assignError) {
+      setError(getErrorMessage(assignError));
+    } finally {
+      setPendingAssign(false);
+    }
+  };
+
+  return (
+    <>
+      <PageIntro
+        eyebrow="Dispatch supply"
+        title="Available trucks"
+        description="Review verified truck supply, owner contact context, location state, and assign online trucks to waiting assisted requests."
+        action={<StatusBadge tone={trucksQuery.isError ? 'blocked' : trucks.some((truck) => truck.availabilityStatus === 'online_available') ? 'ready' : 'warn'}>{trucks.length} trucks</StatusBadge>}
+      />
+      {error ? <p className="field-error" role="alert">{error}</p> : null}
+      {message ? <p className="muted">{message}</p> : null}
+      {trucksQuery.isError ? <p className="field-error">{getErrorMessage(trucksQuery.error)}</p> : null}
+      <section className="panel panel--wide">
+        <div className="panel__header">
+          <div>
+            <p className="eyebrow">Truck workbench</p>
+            <h2>Supply list and assignment</h2>
+          </div>
+          <button className="secondary-action" type="button" onClick={() => {
+            trucksQuery.refetch();
+            requestsQuery.refetch();
+          }}>
+            <RefreshCw aria-hidden="true" size={16} />
+            Refresh
+          </button>
+        </div>
+        <div className="support-toolbar support-toolbar--triple">
+          <label>
+            Verification
+            <select onChange={(event) => setVerificationFilter(event.target.value as Vehicle['verificationStatus'] | '')} value={verificationFilter}>
+              <option value="">All</option>
+              {verificationStatusOptions.map((status) => (
+                <option key={status} value={status}>{humanVerificationStatus(status)}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Availability
+            <select onChange={(event) => setAvailabilityFilter(event.target.value)} value={availabilityFilter}>
+              <option value="">All</option>
+              {Object.entries(availabilityStatusLabels).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Search
+            <span className="input-with-icon">
+              <Search aria-hidden="true" size={16} />
+              <input onChange={(event) => setSearch(event.target.value)} placeholder="Plate, owner, notes" value={search} />
+            </span>
+          </label>
+        </div>
+        <div className="admin-split admin-split--detail-heavy">
+          <div className="queue-list queue-list--sticky">
+            {trucks.length === 0 ? <EmptyState title="No trucks found" description="Adjust filters or ask owners to bring approved trucks online." /> : null}
+            {trucks.map((truck) => (
+              <button
+                className={`queue-item ${selectedTruck?.id === truck.id ? 'is-selected' : ''}`}
+                key={truck.id}
+                onClick={() => {
+                  setSelectedTruckId(truck.id);
+                  setError('');
+                  setMessage('');
+                }}
+                type="button"
+              >
+                <strong>{truck.licensePlate}</strong>
+                <span>{truck.vehicleClassSnapshot?.name || 'Truck'} / {truck.capacityKg ?? 0}kg / {truck.owner?.fullName || truck.ownerId}</span>
+                <StatusBadge tone={truck.availabilityStatus === 'online_available' ? 'ready' : truck.availabilityStatus === 'busy_on_job' ? 'warn' : truck.verificationStatus === 'rejected' ? 'blocked' : 'muted'}>
+                  {humanAvailabilityStatus(truck.availabilityStatus)}
+                </StatusBadge>
+              </button>
+            ))}
+          </div>
+          <div className="detail-workspace">
+            {selectedTruck ? (
+              <>
+                <div className="vehicle-summary-card">
+                  <div>
+                    <p className="eyebrow">Truck detail</p>
+                    <h3>{selectedTruck.licensePlate}</h3>
+                    <p className="muted">{selectedTruck.description || selectedTruck.currentLocation?.addressText || 'No truck note or location label submitted.'}</p>
+                  </div>
+                  <StatusBadge tone={selectedTruck.availabilityStatus === 'online_available' ? 'ready' : selectedTruck.availabilityStatus === 'busy_on_job' ? 'warn' : 'muted'}>
+                    {humanAvailabilityStatus(selectedTruck.availabilityStatus)}
+                  </StatusBadge>
+                  <div className="info-strip info-strip--four">
+                    <InfoPill label="Owner" value={selectedTruck.owner?.fullName || selectedTruck.owner?.phone || selectedTruck.ownerId} />
+                    <InfoPill label="Class" value={selectedTruck.vehicleClassSnapshot?.name || 'Truck'} />
+                    <InfoPill label="Capacity" value={`${selectedTruck.capacityKg ?? 0}kg`} />
+                    <InfoPill label="Volume" value={`${selectedTruck.capacityCubicMeters ?? 0}m3`} />
+                  </div>
+                </div>
+                <div className="support-card">
+                  <div className="detail-heading">
+                    <div>
+                      <p className="eyebrow">Assignment</p>
+                      <h3>Assign to waiting request</h3>
+                      <p className="muted">Busy trucks cannot be assigned again. Completed or cancelled trips release the truck through backend status rules.</p>
+                    </div>
+                    <StatusBadge tone={selectedTruck.availabilityStatus === 'online_available' ? 'ready' : 'warn'}>
+                      {selectedTruck.availabilityStatus === 'online_available' ? 'Assignable' : 'Not assignable'}
+                    </StatusBadge>
+                  </div>
+                  <label>
+                    Waiting request
+                    <select onChange={(event) => setSelectedRequestId(event.target.value)} value={selectedRequestId}>
+                      <option value="">Select a request</option>
+                      {pendingRequests.map((request) => (
+                        <option key={request.id} value={request.id}>{request.requestCode} / {request.pickupLocation?.addressText || 'Pickup'} to {request.destinationLocation?.addressText || 'Destination'}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button className="icon-button" disabled={pendingAssign || selectedTruck.availabilityStatus !== 'online_available' || !selectedRequestId} onClick={assignTruck} type="button">
+                    {pendingAssign ? 'Assigning...' : 'Assign truck'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <EmptyState title="Select a truck" description="Owner, capacity, location, status, and assignment controls appear here." />
+            )}
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function AssistantClientsPanel({ enabled }: { enabled: boolean }) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<UserProfile[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+
+  if (!enabled) {
+    return null;
+  }
+
+  const searchClients = async () => {
+    if (!query.trim()) {
+      setError('Enter a phone, email, or name to search.');
+      return;
+    }
+
+    setPending(true);
+    setError('');
+
+    try {
+      const result = (await kuliApi.request(`/assistant/clients/search?query=${encodeURIComponent(query.trim())}`)) as ApiEnvelope<UserProfile[]>;
+      setResults(result.data);
+      setSelectedClientId(result.data[0]?.id ?? '');
+    } catch (searchError) {
+      setError(getErrorMessage(searchError));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const selectedClient = results.find((client) => client.id === selectedClientId) ?? results[0];
+
+  return (
+    <>
+      <PageIntro
+        eyebrow="Caller identity"
+        title="Clients"
+        description="Search existing client profiles. If no profile exists, assisted bookings can still keep a caller contact snapshot."
+        action={<StatusBadge tone={results.length ? 'ready' : 'muted'}>{results.length} matches</StatusBadge>}
+      />
+      {error ? <p className="field-error" role="alert">{error}</p> : null}
+      <section className="panel panel--wide">
+        <div className="panel__header">
+          <div>
+            <p className="eyebrow">Client lookup</p>
+            <h2>Search and profile context</h2>
+          </div>
+          <button className="icon-button" disabled={pending} onClick={searchClients} type="button">
+            {pending ? 'Searching...' : 'Search'}
+          </button>
+        </div>
+        <div className="support-toolbar">
+          <label>
+            Phone, email, or name
+            <span className="input-with-icon">
+              <Search aria-hidden="true" size={16} />
+              <input onChange={(event) => setQuery(event.target.value)} placeholder="+251911..., abebe@example.com, Abebe" value={query} />
+            </span>
+          </label>
+          <label>
+            Profile creation
+            <span className="input-static">Use caller snapshot when no Supabase profile exists</span>
+          </label>
+        </div>
+        <div className="split-panel">
+          <div className="queue-list">
+            {results.length === 0 ? <EmptyState title="No selected client" description="Search for an existing client before linking a booking. A caller snapshot remains available for phone-only customers." /> : null}
+            {results.map((client) => (
+              <button className={`queue-item ${selectedClient?.id === client.id ? 'is-selected' : ''}`} key={client.id} onClick={() => setSelectedClientId(client.id)} type="button">
+                <strong>{client.fullName || client.email || client.phone || 'Unnamed client'}</strong>
+                <span>{client.phone || client.email || client.id}</span>
+                <StatusBadge tone={client.accountStatus === 'active' ? 'ready' : 'warn'}>{humanAccountStatus(client.accountStatus)}</StatusBadge>
+              </button>
+            ))}
+          </div>
+          <div className="decision-panel">
+            {selectedClient ? (
+              <>
+                <div className="detail-heading">
+                  <div>
+                    <p className="eyebrow">Client profile</p>
+                    <h3>{selectedClient.fullName || selectedClient.email || selectedClient.phone}</h3>
+                    <p className="muted">{selectedClient.id}</p>
+                  </div>
+                  <StatusBadge tone={selectedClient.accountStatus === 'active' ? 'ready' : 'warn'}>{humanAccountStatus(selectedClient.accountStatus)}</StatusBadge>
+                </div>
+                <div className="detail-grid">
+                  <span>Phone <strong>{selectedClient.phone || 'Not set'}</strong></span>
+                  <span>Email <strong>{selectedClient.email || 'Not set'}</strong></span>
+                  <span>Role <strong>{roleLabels[selectedClient.role]}</strong></span>
+                  <span>Created <strong>{formatDate(selectedClient.createdAt)}</strong></span>
+                </div>
+              </>
+            ) : (
+              <EmptyState title="No client selected" description="Client details appear here after a successful lookup." />
+            )}
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function AssistantNotificationsPanel({ enabled }: { enabled: boolean }) {
+  const queryClient = useQueryClient();
+  const [pendingReadId, setPendingReadId] = useState('');
+  const [error, setError] = useState('');
+  const notificationsQuery = useQuery({
+    enabled,
+    queryKey: ['assistant-notifications'],
+    queryFn: async () => ((await kuliApi.request('/assistant/notifications')) as ApiEnvelope<NotificationRecord[]>).data
+  });
+  const notifications = notificationsQuery.data ?? [];
+  const unreadCount = notifications.filter((notification) => notification.deliveryStatus !== 'read').length;
+
+  if (!enabled) {
+    return null;
+  }
+
+  const markRead = async (notificationId: string) => {
+    setPendingReadId(notificationId);
+    setError('');
+
+    try {
+      await kuliApi.request(`/notifications/${notificationId}/read`, { method: 'PATCH' });
+      await queryClient.invalidateQueries({ queryKey: ['assistant-notifications'] });
+      await queryClient.invalidateQueries({ queryKey: ['assistant-dashboard'] });
+    } catch (readError) {
+      setError(getErrorMessage(readError));
+    } finally {
+      setPendingReadId('');
+    }
+  };
+
+  return (
+    <>
+      <PageIntro
+        eyebrow="Assistant alerts"
+        title="Notifications"
+        description="Review assistant-specific operational alerts and mark them read after action."
+        action={<StatusBadge tone={unreadCount ? 'warn' : 'ready'}>{unreadCount} unread</StatusBadge>}
+      />
+      {error ? <p className="field-error" role="alert">{error}</p> : null}
+      {notificationsQuery.isError ? <p className="field-error">{getErrorMessage(notificationsQuery.error)}</p> : null}
+      <section className="panel panel--wide">
+        <div className="panel__header">
+          <div>
+            <p className="eyebrow">Notification center</p>
+            <h2>Updates</h2>
+          </div>
+          <button className="secondary-action" type="button" onClick={() => notificationsQuery.refetch()}>
+            <RefreshCw aria-hidden="true" size={16} />
+            Refresh
+          </button>
+        </div>
+        <div className="notification-list">
+          {notificationsQuery.isLoading ? <p className="muted">Loading notifications...</p> : null}
+          {notifications.length === 0 && !notificationsQuery.isLoading ? <EmptyState title="No updates yet" description="Ticket, request, assignment, and support notifications will appear here." /> : null}
+          {notifications.map((notification) => (
+            <div className="notification-card" key={notification.id}>
+              <span className="notification-card__icon">
+                <Bell aria-hidden="true" size={18} />
+              </span>
+              <span>
+                <strong>{notification.title}</strong>
+                <small>{notification.body || humanize(notification.type)}</small>
+                <em>{formatDateTime(notification.createdAt)}</em>
+              </span>
+              <span className="document-review-card__actions">
+                <StatusBadge tone={notification.deliveryStatus === 'read' ? 'muted' : 'warn'}>{notification.deliveryStatus === 'read' ? 'Read' : 'Unread'}</StatusBadge>
+                {notification.deliveryStatus !== 'read' ? (
+                  <button className="secondary-action secondary-action--compact" disabled={pendingReadId === notification.id} onClick={() => markRead(notification.id)} type="button">
+                    {pendingReadId === notification.id ? 'Saving...' : 'Mark read'}
+                  </button>
+                ) : null}
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -3359,6 +4467,27 @@ function AdminRouteOutlet({ page }: { page: AdminPageKey }) {
       return <AdminAuditLogPanel enabled />;
     default:
       return <AdminDashboardPanel enabled />;
+  }
+}
+
+function AssistantRouteOutlet({ page, profile }: { page: AssistantPageKey; profile: UserProfile }) {
+  switch (page) {
+    case 'dashboard':
+      return <AssistantDashboardPanel enabled profile={profile} />;
+    case 'booking':
+      return <AssistantSupportPanel enabled profile={profile} />;
+    case 'tickets':
+      return <AssistantTicketsPanel enabled profile={profile} />;
+    case 'requests':
+      return <AssistantRequestsPanel enabled />;
+    case 'trucks':
+      return <AssistantTrucksPanel enabled />;
+    case 'clients':
+      return <AssistantClientsPanel enabled />;
+    case 'notifications':
+      return <AssistantNotificationsPanel enabled />;
+    default:
+      return <AssistantDashboardPanel enabled profile={profile} />;
   }
 }
 
@@ -3452,7 +4581,7 @@ function StaffWorkspace({ profile, onSignOut }: { profile: UserProfile; onSignOu
         </header>
 
         <div className="panel-grid">
-          {workspace === 'admin' ? <AdminRouteOutlet page={(activeRoute as AdminRouteItem).page} /> : <AssistantSupportPanel enabled profile={profile} />}
+          {workspace === 'admin' ? <AdminRouteOutlet page={(activeRoute as AdminRouteItem).page} /> : <AssistantRouteOutlet page={(activeRoute as AssistantRouteItem).page} profile={profile} />}
         </div>
       </section>
     </main>

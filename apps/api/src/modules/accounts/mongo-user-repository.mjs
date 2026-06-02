@@ -81,6 +81,35 @@ export class MongoUserRepository {
     return documents.map(normalizeMongoUser);
   }
 
+  async searchClients(query) {
+    const search = String(query ?? '').trim();
+
+    if (!search) {
+      return [];
+    }
+
+    const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const searchExpression = new RegExp(escaped, 'i');
+    const documents = await this.collection
+      .find(
+        {
+          role: 'client',
+          $or: [
+            { phone: searchExpression },
+            { email: searchExpression },
+            { fullName: searchExpression }
+          ]
+        },
+        {
+          sort: { createdAt: -1 },
+          limit: 20
+        }
+      )
+      .toArray();
+
+    return documents.map(normalizeMongoUser);
+  }
+
   async save(user) {
     const now = new Date().toISOString();
     const record = {
