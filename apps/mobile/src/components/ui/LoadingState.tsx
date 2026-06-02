@@ -1,4 +1,5 @@
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View, Animated } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 
 import { colors, radii, spacing, typography } from '../../theme';
@@ -10,14 +11,33 @@ type LoadingStateProps = {
 };
 
 export function LoadingState({ title = 'Loading', message = 'Preparing the latest KULI details.', style }: LoadingStateProps) {
+  const pulse = useRef(new Animated.Value(0.96)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1.02,
+          duration: 1200,
+          useNativeDriver: true
+        }),
+        Animated.timing(pulse, {
+          toValue: 0.96,
+          duration: 1200,
+          useNativeDriver: true
+        })
+      ])
+    ).start();
+  }, [pulse]);
+
   return (
-    <View style={[styles.container, style]}>
-      <ActivityIndicator color={colors.black} size="small" />
+    <Animated.View style={[styles.container, { transform: [{ scale: pulse }] }, style]}>
+      <ActivityIndicator color={colors.primary} size="small" />
       <View style={styles.copy}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.message}>{message}</Text>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -49,4 +69,3 @@ const styles = StyleSheet.create({
     lineHeight: typography.caption.lineHeight
   }
 });
-

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Image,
   KeyboardAvoidingView,
   Linking,
@@ -712,6 +713,7 @@ function Field({
   containerStyle?: StyleProp<ViewStyle>;
 }) {
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [focused, setFocused] = useState(false);
   const isPassword = Boolean(secureTextEntry);
 
   return (
@@ -726,7 +728,13 @@ function Field({
           placeholder={placeholder}
           placeholderTextColor="#829197"
           secureTextEntry={isPassword && !passwordVisible}
-          style={[styles.input, isPassword && styles.inputWithIcon]}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          style={[
+            styles.input,
+            isPassword && styles.inputWithIcon,
+            focused && { borderColor: colors.primary, backgroundColor: '#FFFFFF' }
+          ]}
           value={value}
         />
         {isPassword ? (
@@ -877,6 +885,35 @@ function PhoneValidationHint({ value }: { value: string }) {
 }
 
 function SplashScreen({ compact = false }: { compact?: boolean }) {
+  const dot1 = useRef(new Animated.Value(0.25)).current;
+  const dot2 = useRef(new Animated.Value(0.25)).current;
+  const dot3 = useRef(new Animated.Value(0.25)).current;
+
+  useEffect(() => {
+    const pulseDot = (val: Animated.Value, delay: number) => {
+      return Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(val, { toValue: 1.0, duration: 300, useNativeDriver: true }),
+        Animated.timing(val, { toValue: 0.25, duration: 400, useNativeDriver: true }),
+        Animated.delay(500)
+      ]);
+    };
+
+    const anim = Animated.loop(
+      Animated.parallel([
+        pulseDot(dot1, 0),
+        pulseDot(dot2, 200),
+        pulseDot(dot3, 400)
+      ])
+    );
+
+    anim.start();
+
+    return () => {
+      anim.stop();
+    };
+  }, [dot1, dot2, dot3]);
+
   return (
     <SafeAreaView style={styles.splashScreen}>
       <View style={styles.splashGrain} />
@@ -885,9 +922,9 @@ function SplashScreen({ compact = false }: { compact?: boolean }) {
           <Text style={styles.splashLogoText}>KULI</Text>
         </View>
         <View style={styles.splashDots} accessibilityElementsHidden>
-          <View style={[styles.splashDot, styles.splashDotMuted]} />
-          <View style={styles.splashDot} />
-          <View style={[styles.splashDot, styles.splashDotMuted]} />
+          <Animated.View style={[styles.splashDot, { opacity: dot1 }]} />
+          <Animated.View style={[styles.splashDot, { opacity: dot2 }]} />
+          <Animated.View style={[styles.splashDot, { opacity: dot3 }]} />
         </View>
       </View>
       <View style={styles.splashFooter}>
