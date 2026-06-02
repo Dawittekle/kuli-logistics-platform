@@ -45,6 +45,9 @@ const toAdminFileMetadata = (file) => {
     uploadedSizeBytes: file.uploadedSizeBytes,
     status: file.status,
     storageProvider: file.storageProvider,
+    storageKey: file.storageKey,
+    gridFsBucket: file.gridFsBucket,
+    gridFsFileId: file.gridFsFileId,
     visibility: file.visibility,
     completedAt: file.completedAt
   };
@@ -88,6 +91,7 @@ export class VehicleRegistryService {
     vehicleRepository,
     vehicleDocumentRepository,
     fileRepository,
+    fileStorage,
     auditLogRepository,
     userRepository
   }) {
@@ -95,6 +99,7 @@ export class VehicleRegistryService {
     this.vehicleRepository = vehicleRepository;
     this.vehicleDocumentRepository = vehicleDocumentRepository;
     this.fileRepository = fileRepository;
+    this.fileStorage = fileStorage;
     this.auditLogRepository = auditLogRepository;
     this.userRepository = userRepository;
   }
@@ -358,8 +363,11 @@ export class VehicleRegistryService {
       ownerId: actor.id,
       linkedEntityType: fileLinkedEntityTypes.vehicle,
       linkedEntityId: input.vehicleId,
-      storageProvider: 'local_dev',
-      storageKey: `local-dev/${isVehiclePhoto ? 'vehicle-photos' : 'vehicle-documents'}/${actor.id}/${fileId}-${originalFileName}`,
+      storageProvider: 'gridfs',
+      storageKey: `gridfs://${this.fileStorage?.bucketName ?? 'vehicle_documents'}/${fileId}`,
+      gridFsBucket: this.fileStorage?.bucketName ?? 'vehicle_documents',
+      gridFsFileId: fileId,
+      status: 'pending_upload',
       originalFileName,
       mimeType: input.mimeType,
       sizeBytes: input.sizeBytes,
@@ -369,11 +377,72 @@ export class VehicleRegistryService {
     return {
       file,
       upload: {
-        method: 'PUT',
-        url: `local-dev://uploads/${file.storageKey}`,
+        method: 'POST',
+        url: `/api/v1/files/${file.id}/upload`,
         expiresInSeconds: 900
       }
     };
+  }
+
+  async uploadFileContent({ actor, fileId, stream, contentType, contentLength }) {
+    const file = await this.fileRepository.findById(fileId);
+
+    if (!file) {
+      throw new AppError(404, 'FILE_NOT_FOUND', 'File metadata was not found.');
+    }
+
+    if (actor.role !== roles.admin && file.ownerId !== actor.id) {
+      throw new AppError(404, 'FILE_NOT_FOUND', 'File metadata was not found.');
+    }
+
+    if (![roles.truckOwner, roles.admin].includes(actor.role)) {
+      throw new AppError(403, 'FILE_ACCESS_FORBIDDEN', 'You do not have access to this file.');
+    }
+
+    if (file.storageProvider !== 'gridfs') {
+      throw new AppError(422, 'FILE_STORAGE_UNSUPPORTED', 'This upload target is not configured for MongoDB GridFS.');
+    }
+
+    if (!this.fileStorage) {
+      throw new AppError(500, 'GRIDFS_STORAGE_UNAVAILABLE', 'MongoDB GridFS storage is not available.');
+    }
+
+    const normalizedContentType = String(contentType ?? '').split(';')[0].trim().toLowerCase();
+
+    if (normalizedContentType && normalizedContentType !== String(file.mimeType ?? '').toLowerCase()) {
+      throw new AppError(422, 'FILE_MIME_TYPE_MISMATCH', 'Uploaded file type does not match the upload intent.', {
+        expected: file.mimeType,
+        received: normalizedContentType
+      });
+    }
+
+    const stored = await this.fileStorage.upload({
+      file,
+      stream,
+      contentType: file.mimeType,
+      contentLength,
+      maxSizeBytes: maxVehicleDocumentSizeBytes,
+      metadata: {
+        ownerId: file.ownerId,
+        vehicleId: file.linkedEntityId,
+        documentType: file.documentType ?? file.uploadType,
+        originalFileName: file.originalFileName,
+        mimeType: file.mimeType,
+        sizeBytes: file.sizeBytes,
+        uploadedBy: actor.id
+      }
+    });
+
+    return this.fileRepository.complete({
+      fileId,
+      update: {
+        storageProvider: 'gridfs',
+        storageKey: `gridfs://${stored.bucketName}/${stored.gridFsFileId}`,
+        gridFsBucket: stored.bucketName,
+        gridFsFileId: stored.gridFsFileId,
+        uploadedSizeBytes: stored.uploadedSizeBytes
+      }
+    });
   }
 
   async createSignedFileUrl({ actor, fileId }) {
@@ -408,7 +477,7 @@ export class VehicleRegistryService {
 
     return {
       fileId: file.id,
-      url: `local-dev://signed-read/${file.storageKey}`,
+      url: file.storageProvider === 'gridfs' ? `/api/v1/files/${file.id}/download` : `local-dev://signed-read/${file.storageKey}`,
       expiresInSeconds: 300
     };
   }
@@ -463,9 +532,71 @@ export class VehicleRegistryService {
       vehicleId: vehicle.id,
       documentId: document.id,
       fileId: file.id,
-      url: `local-dev://signed-read/${file.storageKey}`,
+      url: file.storageProvider === 'gridfs' ? `/api/v1/admin/vehicles/${vehicle.id}/documents/${document.id}/preview` : `local-dev://signed-read/${file.storageKey}`,
       expiresInSeconds: 300,
       file: toAdminFileMetadata(file)
+    };
+  }
+
+  async openAdminVehicleDocumentPreview({ actor, vehicleId, documentId }) {
+    assertAdmin(actor);
+
+    const vehicle = await this.vehicleRepository.findById(vehicleId);
+
+    if (!vehicle) {
+      throw new AppError(404, 'VEHICLE_NOT_FOUND', 'Vehicle was not found.');
+    }
+
+    const document = await this.vehicleDocumentRepository.findById(documentId);
+
+    if (!document || document.vehicleId !== vehicle.id || document.ownerId !== vehicle.ownerId) {
+      throw new AppError(404, 'VEHICLE_DOCUMENT_NOT_FOUND', 'Vehicle document was not found.');
+    }
+
+    const file = await this.fileRepository.findById(document.fileId);
+
+    if (
+      !file ||
+      file.linkedEntityType !== fileLinkedEntityTypes.vehicle ||
+      file.linkedEntityId !== vehicle.id ||
+      file.ownerId !== vehicle.ownerId ||
+      file.visibility !== 'staff_only'
+    ) {
+      throw new AppError(404, 'VEHICLE_DOCUMENT_FILE_NOT_FOUND', 'Vehicle document file metadata was not found.');
+    }
+
+    if (file.storageProvider !== 'gridfs') {
+      throw new AppError(422, 'VEHICLE_DOCUMENT_REUPLOAD_REQUIRED', 'This file was uploaded before GridFS storage was enabled. Ask the owner to re-upload it.');
+    }
+
+    if (file.status !== 'uploaded') {
+      throw new AppError(422, 'VEHICLE_DOCUMENT_FILE_NOT_READY', 'Vehicle document upload has not been completed yet.');
+    }
+
+    if (!this.fileStorage) {
+      throw new AppError(500, 'GRIDFS_STORAGE_UNAVAILABLE', 'MongoDB GridFS storage is not available.');
+    }
+
+    await this.auditLogRepository.write({
+      id: createId('audit'),
+      actorUserId: actor.id,
+      actorRole: actor.role,
+      action: 'vehicle.document.preview.streamed',
+      targetType: 'vehicle_document',
+      targetId: document.id,
+      metadata: {
+        vehicleId: vehicle.id,
+        fileId: file.id,
+        documentType: document.type,
+        storageProvider: file.storageProvider
+      }
+    });
+
+    return {
+      vehicle,
+      document,
+      file,
+      ...(await this.fileStorage.openDownloadStream(file))
     };
   }
 
