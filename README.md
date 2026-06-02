@@ -1,176 +1,190 @@
 # KULI Logistics Platform
 
-KULI is a peer-to-peer trucking and logistics marketplace designed for Addis Ababa operations. This repository is the implementation workspace for the platform and the persistent handoff surface for multiple AI coding agents.
+[![Node.js](https://img.shields.io/badge/Node.js-v20+-green.svg?style=flat-square&logo=node.js)](https://nodejs.org/)
+[![Expo](https://img.shields.io/badge/Expo-React_Native-black.svg?style=flat-square&logo=expo)](https://expo.dev/)
+[![React](https://img.shields.io/badge/React-Vite-blue.svg?style=flat-square&logo=react)](https://react.dev/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Persistance-green.svg?style=flat-square&logo=mongodb)](https://www.mongodb.com/)
+[![Supabase](https://img.shields.io/badge/Supabase-Auth-emerald.svg?style=flat-square&logo=supabase)](https://supabase.com/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
 
-## Repository Status
+KULI is a high-performance, peer-to-peer trucking and logistics marketplace engineered specifically for operations in **Addis Ababa, Ethiopia**. The platform bridges the gap in the informal logistics sector by connecting clients who need transport for household moves, merchandise, or equipment with verified, independent truck owners and drivers. 
 
-The repository now contains:
+This repository houses the entire monorepo—containing the API, mobile application, admin panel, and shared domain packages—configured for streamlined development and production-grade deployment.
 
-- A full project documentation package in [`docs/`](docs).
-- A monorepo for API, mobile, admin, and shared domain contracts.
-- A MongoDB-backed API covering the MVP backend workflows.
-- A real Expo React Native mobile foundation for client and truck-owner workflows.
-- A real React/Vite admin foundation for admin and call-center assistant workflows.
+---
 
-## Monorepo Layout
+## 📱 Mobile App Previews
+
+Here is a preview of the KULI mobile app running on React Native/Expo:
+
+<p align="center">
+  <img src="docs/assets/mobile_home_screen.png" width="30%" alt="Client Home Screen" style="margin-right: 15px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
+  <img src="docs/assets/mobile_request_screen.png" width="30%" alt="Request & Matching Screen" style="margin-right: 15px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
+  <img src="docs/assets/mobile_activity_screen.png" width="30%" alt="Trip History & Activity" style="border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
+</p>
+
+---
+
+## 🏛️ System Architecture
+
+KULI is structured as a **Modular Monolith** to maintain low deployment complexity while preserving strict boundary lines for potential future service extraction.
+
+```mermaid
+graph TD
+    subgraph Client Tier
+        Mobile[Expo React Native App<br><i>Clients & Owners</i>]
+        Admin[Vite React Web App<br><i>Admins & Call Assistants</i>]
+    end
+
+    subgraph Application Tier
+        API[Node.js HTTP Modular Monolith<br><i>@kuli/api</i>]
+    end
+
+    subgraph Storage & External Tier
+        DB[(MongoDB Database)]
+        Redis[(Redis Queue/Cache)]
+        Supa[Supabase Auth & JWKS]
+        Maps[OSM / Mapbox Adapter]
+    end
+
+    Mobile -->|HTTP REST| API
+    Admin -->|HTTP REST| API
+    API -->|Persists Data| DB
+    API -->|Manages Jobs| Redis
+    API -->|Asymmetric Verification| Supa
+    API -->|Calculates Route / ETA| Maps
+```
+
+### Monorepo Structure
 
 ```text
-apps/
-  api/
-  admin/
-  mobile/
-packages/
-  shared/
-tools/
-docs/
+├── apps/
+│   ├── api/            # Pure Node.js HTTP server utilizing modular domain controllers
+│   ├── admin/          # React/Vite admin dashboard and call assistant console
+│   └── mobile/         # React Native/Expo application targeting iOS, Android & Mobile Web
+├── packages/
+│   └── shared/         # Common TypeScript DTOs, validation schemas, and constants
+├── tools/              # Verification, seeding, linting, and smoke testing utilities
+└── docs/               # Detailed subsystem designs and roadmaps
 ```
 
-## Quick Start
+---
 
-### 1. Review the source-of-truth docs
+## 👥 Platform Roles & Capabilities
 
-Start with:
+The platform defines four first-class, server-enforced roles:
 
-- [`docs/project_overview.md`](docs/project_overview.md)
-- [`docs/system_architecture.md`](docs/system_architecture.md)
-- [`docs/development_phases.md`](docs/development_phases.md)
-- [`docs/progress_tracking.md`](docs/progress_tracking.md)
-- [`docs/frontend_progress.md`](docs/frontend_progress.md)
+### 1. 👤 Client
+*   **Discovery**: Create detailed logistics requests specifying pickup, destination, weight, load description, and scheduling.
+*   **Quotes**: Request instant price calculations broken down by base fare, distance rate, and time estimates.
+*   **Matching**: Discover nearby available, verified trucks with transparent pricing, reviews, and star ratings.
+*   **Execution**: Track active trip statuses, chat with the matched driver, cancel trips inside the policy window, and submit star ratings and payment disputes.
 
-### 2. Run repository validation
+### 2. 🚛 Truck Owner
+*   **Onboarding**: Register trucks and upload required documents (Driver License, Ownership Proof, Registration, Insurance) into the verification queue.
+*   **Availability**: Set status to `online` (only after admin verification) to become discoverable by geospatial queries.
+*   **Matching**: Receive matching requests with live snapshots, accept or decline offers via a fast "first-accept-wins" queue, and navigate to pickups.
+*   **Lifecycle**: Advance active trips manually (`en route`, `arrived`, `loading`, `in transit`, `completed`) and confirm cash payments.
 
-```bash
-npm run lint
-npm run typecheck
-npm test
-npm run smoke:critical
-npm run verify:startup
+### 3. ☎️ Call-Center Assistant
+*   **Hotline Tickets**: Claim incoming missed calls or client support tickets from a unified helpdesk queue.
+*   **Assisted Booking**: Look up clients by phone number, calculate quotes, choose suited truck owners, and book trips on behalf of clients.
+*   **Lifecycle**: Monitor ticket workflows through `open`, `assigned`, `in_progress`, `pending_client`, and `closed` states.
+
+### 4. 🔑 Administrator
+*   **Approvals**: Manage user statuses and review pending vehicle/document verification queues with auditable reason logs.
+*   **Operations**: Inspect live platform metrics, track active requests, audit system logs, and mediate payment disputes.
+*   **Configuration**: Seed and manage global pricing rules (base fare, distance multiplier, vehicle class premiums).
+
+---
+
+## ⚡ Concurrency-Safe Booking Flow
+
+To prevent multiple truck owners from accepting the same booking, the matching engine relies on atomic conditional updates during acceptance:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    Client->>API: POST /quotes (calculates estimate + matching vehicles)
+    Client->>API: POST /kuli-requests (dispatches offers to selected owners)
+    Note over API: Competing offers created with status "sent"
+    Owner 1->>API: POST /offers/:id/accept (Atomic check-and-update)
+    Note over API: Updates request to "accepted" conditionally<br>only if request is "pending" and vehicle is online/free
+    API-->>Owner 1: Status 200 (Success)
+    Owner 2->>API: POST /offers/:id/accept
+    Note over API: Conditional check fails (Request already accepted)
+    API-->>Owner 2: Status 409 (Conflict)
+    API->>Client: Notify Client of Matched Truck
+    API->>Owner 2: Expire competing offer
 ```
 
-These scripts validate the current scaffold and execute foundational policy tests.
+---
 
-### 3. Start local services
+## 🚀 Quick Start Guide
 
+### Prerequisites
+*   **Node.js**: v20 or higher
+*   **Docker**: For running MongoDB and Redis services locally
+*   **Package Manager**: `npm` (configured with workspaces)
+
+### 1. Start Local Infrastructure
+Run MongoDB and Redis in the background using Docker Compose:
 ```bash
 docker compose up -d
 ```
+*MongoDB listens on `localhost:27018` and Redis listens on `localhost:6380`.*
 
-MongoDB listens on `localhost:27018` and Redis listens on `localhost:6380` by default.
-
-### 4. Verify local startup
-
+### 2. Environment Variables Configuration
+Copy example env files and update them with your credentials:
 ```bash
+cp apps/api/.env.example apps/api/.env
+cp apps/mobile/.env.example apps/mobile/.env
+cp apps/admin/.env.example apps/admin/.env
+```
+
+### 3. Install Dependencies
+```bash
+npm install
+```
+
+### 4. Validate Monorepo Health
+Run the static analysis check and verification scripts to confirm the setup:
+```bash
+# Lints the entire codebase
+npm run lint
+
+# Runs typechecking across all workspaces
+npm run typecheck
+
+# Runs unit and integration test suites
+npm test
+
+# Checks startup readiness of the API, mobile web export, and admin compilation
 npm run verify:startup
 ```
 
-This checks the admin React/Vite foundation, mobile Expo foundation, admin production build, and API startup against MongoDB.
-
-### 5. Run the API server
-
-```bash
-npm run dev --workspace @kuli/api
-```
-
-The server exposes:
-
-- `GET /api/v1/health`
-- `POST /api/v1/auth/sync-profile`
-- `GET /api/v1/me`
-- `PATCH /api/v1/me`
-- `GET /api/v1/admin/users`
-- `GET /api/v1/admin/users/:id`
-- `POST /api/v1/admin/users`
-- `POST /api/v1/admin/staff-users`
-- `PATCH /api/v1/admin/users/:userId/status`
-- `GET /api/v1/vehicle-classes`
-- `POST /api/v1/vehicles`
-- `GET /api/v1/vehicles/mine`
-- `GET /api/v1/vehicles/:id`
-- `PATCH /api/v1/vehicles/:id`
-- `POST /api/v1/files/upload-intent`
-- `GET /api/v1/files/:id/signed-url`
-- `POST /api/v1/vehicles/:id/documents`
-- `PATCH /api/v1/vehicles/:id/availability`
-- `GET /api/v1/admin/vehicles/pending`
-- `GET /api/v1/admin/vehicles/:id`
-- `PATCH /api/v1/admin/vehicles/:id/verification`
-- `POST /api/v1/quotes`
-- `GET /api/v1/admin/pricing-rules`
-- `POST /api/v1/admin/pricing-rules`
-- `PATCH /api/v1/admin/pricing-rules/:id/activate`
-- `POST /api/v1/kuli-requests`
-- `GET /api/v1/kuli-requests/mine`
-- `GET /api/v1/kuli-requests/:id`
-- `POST /api/v1/kuli-requests/:id/cancel`
-- `PATCH /api/v1/kuli-requests/:id/status`
-- `GET /api/v1/kuli-requests/:id/events`
-- `GET /api/v1/kuli-requests/:id/messages`
-- `POST /api/v1/kuli-requests/:id/messages`
-- `POST /api/v1/kuli-requests/:id/rating`
-- `POST /api/v1/kuli-requests/:id/payment/confirm`
-- `POST /api/v1/kuli-requests/:id/payment/dispute`
-- `GET /api/v1/owner/offers`
-- `GET /api/v1/owners/:id/ratings`
-- `POST /api/v1/offers/:id/viewed`
-- `POST /api/v1/offers/:id/accept`
-- `POST /api/v1/offers/:id/decline`
-- `POST /api/v1/reports`
-- `POST /api/v1/reports/:id/evidence/upload-intent`
-- `POST /api/v1/reports/:id/evidence`
-- `GET /api/v1/notifications`
-- `PATCH /api/v1/notifications/:id/read`
-- `PATCH /api/v1/me/notification-preferences`
-- `POST /api/v1/admin/jobs/expire-offers`
-- `GET /api/v1/assistant/tickets`
-- `POST /api/v1/assistant/tickets`
-- `GET /api/v1/assistant/tickets/:id`
-- `PATCH /api/v1/assistant/tickets/:id/status`
-- `POST /api/v1/assistant/bookings`
-- `GET /api/v1/assistant/clients/search`
-- `POST /api/v1/admin/jobs/expire-pending-client-tickets`
-- `GET /api/v1/admin/reports`
-- `PATCH /api/v1/admin/reports/:id`
-- `GET /api/v1/admin/payments`
-- `PATCH /api/v1/admin/payments/:id`
-- `GET /api/v1/admin/dashboard`
-- `GET /api/v1/admin/audit-logs`
-- `GET /api/v1/admin/release-readiness`
-
-### 6. Run the admin web app
+### 5. Running Services Locally
+Start the API, Admin console, and Mobile applications in development mode:
 
 ```bash
+# Start API backend (runs on http://localhost:4000)
+npm run dev:api
+
+# Start Admin & Assistant dashboard (runs on http://localhost:5174)
 npm run dev:admin
-```
 
-The admin app runs on Vite's local server, usually `http://localhost:5174`.
-
-### 7. Run the mobile app
-
-```bash
+# Start Mobile app Metro packager (runs Expo Go)
 npm run dev:mobile
 ```
 
-The preferred command above runs Expo from `apps/mobile`. If Expo is accidentally started from the repository root, the root Expo entrypoint delegates to the same mobile app so Metro does not fall back to looking for a missing root `App` file.
+---
 
-For Android emulator testing, use this API base URL in `apps/mobile/.env`:
+## 🧪 Local Demo Mode & Seeding
 
-```env
-MOBILE_APP_API_BASE_URL=http://10.0.2.2:4000/api/v1
-```
+KULI provides an offline development mode to let you explore all user journeys without configuring Supabase authentication or SMS/email providers.
 
-`10.0.2.2` is the Android emulator bridge back to the host machine. Keep `apps/admin/.env` on `http://localhost:4000/api/v1` for browser testing on the same machine.
-
-The first `npm run android --workspace @kuli/mobile` run may download Expo Go into the emulator. If that download is slow, the Android bundle can still be checked with:
-
-```bash
-cd apps/mobile
-npx expo export --platform android --output-dir /tmp/kuli-mobile-export
-```
-
-## Local Demo Auth and Fake Users
-
-For local UI exploration, enable demo auth in your ignored `.env` files:
-
+### 1. Enable Demo Auth
+Add the following flags to your local `.env` files:
 ```env
 # apps/api/.env
 DEMO_AUTH_ENABLED=true
@@ -182,84 +196,42 @@ MOBILE_APP_DEMO_AUTH_ENABLED=true
 ADMIN_APP_DEMO_AUTH_ENABLED=true
 ```
 
-When demo auth is enabled outside production, the mobile login/register form and demo client/owner buttons create or refresh MongoDB profiles with local development tokens instead of calling Supabase. The admin login form and demo admin/assistant buttons do the same for staff. This lets you explore the UI without creating Supabase users or sending email OTPs.
-
-You can also seed many fake local users and vehicles:
-
-```bash
-npm run seed:fake-users
-```
-
-The seed is idempotent by record id and creates demo clients, truck owners, vehicles, staff users, and hotline tickets. Override counts with `FAKE_CLIENTS` and `FAKE_OWNERS` if needed.
-
-Demo mobile web flow:
-
-1. Start Docker services with `docker compose up -d`.
-2. Start the API with `npm run dev:api`.
-3. Start mobile web from `apps/mobile` with `npx expo start --web --clear`.
-4. Confirm the login screen shows `Local demo auth` as set.
-5. Register as `Client` or `Truck owner` with any email and any short password. Blank phone is allowed in demo mode.
-6. Sign out and log in again with the same email to return to the same local demo profile.
-
-If you open admin or mobile web through your machine's LAN address, for example `http://192.168.x.x:5174`, keep `CORS_ALLOW_PRIVATE_NETWORK=true` in `apps/api/.env` during development. Production should leave private-network CORS disabled and use explicit hosted origins.
-
-Local development tokens use:
-
-Use:
-
+In this mode, login and registration screens bypass Supabase JWT issuance. You can log in as **Client**, **Truck Owner**, **Assistant**, or **Admin** with any email. The backend creates development bearer tokens formatted as:
 ```text
 Authorization: Bearer dev:<supabaseUserId>
 ```
 
-Example:
-
-```text
-Authorization: Bearer dev:client-demo-001
-```
-
-Examples created by `npm run seed:fake-users` include `dev:demo-client-001`, `dev:demo-owner-001`, `dev:demo-admin-001`, and `dev:demo-assistant-001`.
-
-Keep all demo auth flags disabled in production. Production must use `SUPABASE_JWT_MODE=supabase` with real Supabase project values in `apps/api/.env`.
-
-## Admin Bootstrap
-
-The API can bootstrap a first admin profile at startup using environment variables:
-
-```env
-BOOTSTRAP_ADMIN_SUPABASE_USER_ID=admin-seed-001
-BOOTSTRAP_ADMIN_EMAIL=admin@kuli.local
-BOOTSTRAP_ADMIN_FULL_NAME=Seed Admin
-```
-
-That bootstrap path is included because staff accounts are not allowed to self-register publicly.
-
-## Local Infrastructure
-
-Use Docker Compose for local MongoDB and Redis:
-
+### 2. Seed Mock Database Data
+Populate your local MongoDB with representative operational data, including pre-registered vehicles, active assistants, ticketing queues, and pricing configurations:
 ```bash
-docker compose up -d
+npm run seed:fake-users
 ```
+*Note: Use `npm run reset:auth-data` to purge temporary demo accounts and re-initialize a clean, lightweight environment.*
 
-See [`docker-compose.yml`](docker-compose.yml).
+---
 
-## Supabase Project Values
+## 🔒 Production Hardening & Security Policy
 
-For local Supabase verification, create `apps/api/.env`, `apps/mobile/.env`, and `apps/admin/.env` from the example files. The API can derive issuer and JWKS URLs from `SUPABASE_URL`, but the examples show the explicit values too.
+When moving from development to a staging or production target, verify the following policies are strictly enforced:
 
-The backend follows Supabase's current JWT guidance:
+*   **Supabase JWT Verification**: Set `SUPABASE_JWT_MODE=supabase` in `apps/api/.env`. This enables asymmetric signature verification of client authorization headers against the remote Supabase JWKS endpoint (`SUPABASE_JWKS_URL`).
+*   **Role Validation**: Roles are synced from MongoDB collections during token validation. The API **never** trusts role claims supplied inside client payloads.
+*   **File Storage Validation**: Document uploads verify MIME types, file sizes, and binary headers before creating temporary pre-signed S3/Supabase storage links.
+*   **CORS Configuration**: Restrict private-network routing controls (`CORS_ALLOW_PRIVATE_NETWORK`) and lock allowed origins to hosted endpoints.
+*   **Audit Logging**: Every administrative action, verification decision, and pricing modification creates an immutable entry in the `auditlogs` collection.
 
-- Asymmetric user access tokens are verified against `SUPABASE_JWKS_URL`.
-- Legacy/shared-secret `HS256` user access tokens are verified through `GET /auth/v1/user` with `SUPABASE_ANON_KEY`.
+---
 
-Do not put the Supabase service-role key in frontend env files or commit it anywhere. Phase 1 does not need the service-role key or JWT secret for normal user-token verification.
+## 🛠️ Verification & Pipeline Commands
 
-## Current Limitations
+Maintain project stability by running verification passes before pushing updates:
 
-- The API currently covers identity/profile/RBAC, vehicle verification, quote/pricing/search, request/offer acceptance, manual trip execution, request-scoped messages, in-app notification records, assisted booking tickets, ratings, reports, and cash/manual payment records.
-- Frontend phases are implemented for mobile web/Expo and admin web, including role-aware auth, marketplace workflows, trust/payment screens, and admin/assistant operations.
-- Supabase JWKS verification is wired in the API, and the mobile/admin apps have Supabase clients configured through local env files.
-- No file storage, telephony integration, digital payment gateway, automated commission collection, or production notification delivery flows yet.
-- Production deployment still requires real provider credentials, backups, monitoring, and a hosted environment even though release-readiness checks and smoke scripts are now scaffolded.
+| Command | Workspace Target | Description |
+|---|---|---|
+| `npm run lint` | Root | Checks formatting, code style, and imports across all apps |
+| `npm run typecheck` | Root | Compiles TypeScript configurations in strict mode |
+| `npm test` | Root | Executes native Node.js tests (`node --test`) for API and contracts |
+| `npm run smoke:critical` | Root | Verifies critical workflows: auth sync, booking creation, first-accept wins, and trip completion |
+| `npm run verify:startup` | Root | Confirms local compilation and starts API connection test against MongoDB |
 
-Those remaining items are tracked in [`docs/progress_tracking.md`](docs/progress_tracking.md).
+For detailed development roadmaps, system specifications, and implementation phases, refer to the documentation package in [`docs/`](docs).
