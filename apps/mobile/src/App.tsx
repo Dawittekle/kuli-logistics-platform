@@ -24,7 +24,7 @@ import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tan
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import type { Session } from '@supabase/supabase-js';
 
-import { clearDemoAccessToken, kuliApi, setDemoAccessToken } from './lib/api';
+import { clearDemoAccessToken, kuliApi, setDemoAccessToken, setSessionAccessToken } from './lib/api';
 import { supabase } from './lib/supabase';
 import { runtimeConfig, runtimeReadiness } from './config/runtime';
 import { colors, radii, spacing } from './theme';
@@ -371,6 +371,94 @@ const isBlockedStatus = (status: AccountStatus) => ['suspended', 'banned', 'dele
 const AUTH_ONBOARDING_COMPLETED_KEY = 'kuli.authOnboardingCompleted';
 const VERIFICATION_RESEND_COOLDOWN_SECONDS = 60;
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+const publicRoles: PublicRole[] = ['client', 'truck_owner'];
+const isPublicRole = (value: unknown): value is PublicRole => typeof value === 'string' && publicRoles.includes(value as PublicRole);
+
+const passwordRules = [
+  { id: 'length', label: 'At least 8 characters', test: (value: string) => value.length >= 8 },
+  { id: 'uppercase', label: 'One uppercase letter', test: (value: string) => /[A-Z]/.test(value) },
+  { id: 'lowercase', label: 'One lowercase letter', test: (value: string) => /[a-z]/.test(value) },
+  { id: 'number', label: 'One number', test: (value: string) => /\d/.test(value) }
+];
+
+const getPasswordChecks = (value: string) => passwordRules.map((rule) => ({ ...rule, met: rule.test(value) }));
+const isStrongPassword = (value: string) => getPasswordChecks(value).every((check) => check.met);
+
+const validateEthiopianPhone = (value: string) => {
+  const raw = value.trim();
+  const compact = raw.replace(/[\s().-]/g, '');
+  let normalized = '';
+
+  if (!compact) {
+    return {
+      valid: false,
+      normalized,
+      message: 'Use an Ethiopian mobile number, for example +251911000000.'
+    };
+  }
+
+  if (/^0[79]\d{8}$/.test(compact)) {
+    normalized = `+251${compact.slice(1)}`;
+  } else if (/^251[79]\d{8}$/.test(compact)) {
+    normalized = `+${compact}`;
+  } else if (/^\+251[79]\d{8}$/.test(compact)) {
+    normalized = compact;
+  }
+
+  if (!normalized) {
+    return {
+      valid: false,
+      normalized: raw,
+      message: 'Enter a valid Ethiopian mobile number, such as +251911000000 or 0911000000.'
+    };
+  }
+
+  return {
+    valid: true,
+    normalized,
+    message: `Looks good: ${normalized}`
+  };
+};
+
+const readStringMetadata = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+const isStaffSession = (session: Session) => ['admin', 'assistant'].includes(readStringMetadata(session.user.user_metadata?.role));
+
+const draftFromSessionMetadata = (session: Session): VerificationDraft | null => {
+  const metadata = session.user.user_metadata ?? {};
+  const role = metadata.role;
+  const email = session.user.email?.trim().toLowerCase() ?? '';
+  const fullName = readStringMetadata(metadata.full_name) || readStringMetadata(metadata.fullName);
+  const phone = readStringMetadata(metadata.phone);
+  const phoneValidation = validateEthiopianPhone(phone);
+
+  if (!email || !fullName || !isPublicRole(role)) {
+    return null;
+  }
+
+  return {
+    email,
+    role,
+    fullName,
+    phone: phoneValidation.valid ? phoneValidation.normalized : phone
+  };
+};
+
+const syncPublicProfileFromSession = async (session: Session) => {
+  const draft = draftFromSessionMetadata(session);
+
+  if (!draft) {
+    return null;
+  }
+
+  const result = (await kuliApi.syncProfile({
+    role: draft.role,
+    fullName: draft.fullName,
+    phone: draft.phone || undefined,
+    email: draft.email
+  })) as ApiEnvelope<ProfileSyncResult>;
+
+  return result.data.user;
+};
 
 const documentTypes: Array<{ type: VehicleDocumentType; label: string; detail: string; required: boolean; tips: string[] }> = [
   {
@@ -569,7 +657,7 @@ function AuthBrandPanel({ mode }: { mode: AuthMode }) {
     mode === 'register'
       ? 'Create a client or truck-owner account for verified logistics in Addis Ababa.'
       : mode === 'forgot'
-        ? 'Enter your email and we will send a secure password reset link.'
+        ? 'Enter your email and we will send a secure password reset code.'
         : 'Sign in to request trucks, manage offers, and follow every move with your KULI account.';
 
   return (
@@ -607,6 +695,62 @@ function AuthMessage({ tone, message }: { tone: 'notice' | 'error'; message: str
   return (
     <View style={[styles.authMessage, tone === 'error' ? styles.authMessageError : styles.authMessageNotice]}>
       <Text style={[styles.authMessageText, tone === 'error' ? styles.authMessageTextError : styles.authMessageTextNotice]}>{message}</Text>
+    </View>
+  );
+}
+
+function PasswordChecklist({
+  password,
+  confirmPassword = '',
+  includeMatch = false
+}: {
+  password: string;
+  confirmPassword?: string;
+  includeMatch?: boolean;
+}) {
+  const checks = [
+    ...getPasswordChecks(password),
+    ...(includeMatch
+      ? [
+          {
+            id: 'match',
+            label: 'Passwords match',
+            met: Boolean(password && confirmPassword && password === confirmPassword)
+          }
+        ]
+      : [])
+  ];
+
+  return (
+    <View style={styles.validationCard}>
+      {checks.map((check) => (
+        <View key={check.id} style={styles.validationRow}>
+          <MaterialCommunityIcons
+            color={check.met ? colors.success : colors.textSecondary}
+            name={check.met ? 'check-circle' : 'circle-outline'}
+            size={18}
+          />
+          <Text style={[styles.validationText, check.met && styles.validationTextMet]}>{check.label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function PhoneValidationHint({ value }: { value: string }) {
+  const validation = validateEthiopianPhone(value);
+  const touched = Boolean(value.trim());
+
+  return (
+    <View style={[styles.validationHint, touched && (validation.valid ? styles.validationHintSuccess : styles.validationHintError)]}>
+      <MaterialCommunityIcons
+        color={!touched ? colors.textSecondary : validation.valid ? colors.success : colors.error}
+        name={!touched ? 'cellphone' : validation.valid ? 'check-circle' : 'alert-circle'}
+        size={17}
+      />
+      <Text style={[styles.validationHintText, touched && (validation.valid ? styles.validationHintTextSuccess : styles.validationHintTextError)]}>
+        {validation.message}
+      </Text>
     </View>
   );
 }
@@ -794,6 +938,7 @@ function AuthScreen({
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [pending, setPending] = useState(false);
   const [verificationDraft, setVerificationDraft] = useState<VerificationDraft | null>(null);
   const [verificationCode, setVerificationCode] = useState('');
@@ -810,7 +955,14 @@ function AuthScreen({
   const isLogin = mode === 'login';
   const isRegister = mode === 'register';
   const normalizedEmail = email.trim().toLowerCase();
-  const canSubmit = Boolean(normalizedEmail) && password.length >= 6 && (isLogin || (isRegister && Boolean(fullName.trim())));
+  const phoneValidation = validateEthiopianPhone(phone);
+  const normalizedPhone = phoneValidation.valid ? phoneValidation.normalized : phone.trim();
+  const passwordsMatch = Boolean(password && confirmPassword && password === confirmPassword);
+  const canSubmit =
+    Boolean(normalizedEmail) &&
+    (isLogin
+      ? password.length >= 1
+      : Boolean(fullName.trim()) && phoneValidation.valid && isStrongPassword(password) && passwordsMatch);
   const canResetPassword = !resetPending;
 
   const changeMode = (nextMode: AuthMode) => {
@@ -824,6 +976,10 @@ function AuthScreen({
       setResetEmail('');
       setResetCooldown(0);
       setResetPending(false);
+    }
+
+    if (nextMode !== 'register') {
+      setConfirmPassword('');
     }
   };
 
@@ -852,11 +1008,28 @@ function AuthScreen({
   }, [resetCooldown]);
 
   const loadProfile = async (session: Session) => {
-    const profile = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
-    onAuthenticated(profile.data, session);
+    setSessionAccessToken(session.access_token);
+
+    try {
+      const profile = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
+      onAuthenticated(profile.data, session);
+    } catch (profileError) {
+      if ((profileError as { code?: string }).code === 'PROFILE_NOT_FOUND') {
+        const syncedProfile = await syncPublicProfileFromSession(session);
+
+        if (syncedProfile) {
+          onAuthenticated(syncedProfile, session);
+          return;
+        }
+      }
+
+      throw profileError;
+    }
   };
 
   const syncDraftProfile = async (session: Session, draft: VerificationDraft) => {
+    setSessionAccessToken(session.access_token);
+
     const result = (await kuliApi.syncProfile({
       role: draft.role,
       fullName: draft.fullName,
@@ -954,6 +1127,7 @@ function AuthScreen({
         return;
       }
 
+      setSessionAccessToken(recoverySession.access_token);
       onPasswordRecoveryVerified(recoverySession);
     } catch (verifyError) {
       setError(getErrorMessage(verifyError));
@@ -1167,6 +1341,21 @@ function AuthScreen({
         return;
       }
 
+      if (!phoneValidation.valid) {
+        setError(phoneValidation.message);
+        return;
+      }
+
+      if (!isStrongPassword(password)) {
+        setError('Use a stronger password before creating the account.');
+        return;
+      }
+
+      if (!passwordsMatch) {
+        setError('Confirm password must match your password.');
+        return;
+      }
+
       const { data, error: authError } = await supabase.auth.signUp({
         email: normalizedEmail,
         password,
@@ -1174,7 +1363,7 @@ function AuthScreen({
           emailRedirectTo: runtimeConfig.authRedirectUrl,
           data: {
             full_name: fullName.trim(),
-            phone,
+            phone: normalizedPhone,
             role
           }
         }
@@ -1189,7 +1378,7 @@ function AuthScreen({
           email: normalizedEmail,
           role,
           fullName: fullName.trim(),
-          phone: phone.trim()
+          phone: normalizedPhone
         });
         setVerificationCode('');
         setResendCooldown(VERIFICATION_RESEND_COOLDOWN_SECONDS);
@@ -1198,10 +1387,12 @@ function AuthScreen({
         return;
       }
 
+      setSessionAccessToken(data.session.access_token);
+
       const result = (await kuliApi.syncProfile({
         role,
         fullName: fullName.trim(),
-        phone: phone.trim() || undefined,
+        phone: normalizedPhone || undefined,
         email: normalizedEmail
       })) as ApiEnvelope<ProfileSyncResult>;
 
@@ -1213,7 +1404,7 @@ function AuthScreen({
           email: normalizedEmail,
           role,
           fullName: fullName.trim(),
-          phone: phone.trim()
+          phone: phoneValidation.valid ? phoneValidation.normalized : phone.trim()
         });
         setVerificationCode('');
         setError('');
@@ -1323,8 +1514,19 @@ function AuthScreen({
                 />
                 {mode === 'register' ? <Field label="Full name" value={fullName} onChangeText={setFullName} placeholder="Abebe Bekele" /> : null}
                 <Field label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" />
-                {mode === 'register' ? <Field label="Phone" value={phone} onChangeText={setPhone} placeholder="+251911000000" keyboardType="phone-pad" /> : null}
-                <Field label="Password" value={password} onChangeText={setPassword} placeholder="Minimum 6 characters" secureTextEntry />
+                {mode === 'register' ? (
+                  <>
+                    <Field label="Phone" value={phone} onChangeText={setPhone} placeholder="+251911000000" keyboardType="phone-pad" />
+                    <PhoneValidationHint value={phone} />
+                  </>
+                ) : null}
+                <Field label="Password" value={password} onChangeText={setPassword} placeholder={mode === 'register' ? 'At least 8 characters' : 'Your password'} secureTextEntry />
+                {mode === 'register' ? (
+                  <>
+                    <Field label="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Repeat your password" secureTextEntry />
+                    <PasswordChecklist password={password} confirmPassword={confirmPassword} includeMatch />
+                  </>
+                ) : null}
                 {mode === 'login' ? (
                   <Pressable accessibilityRole="button" onPress={() => changeMode('forgot')} style={styles.authInlineLink}>
                     <Text style={styles.authInlineLinkText}>Forgot password?</Text>
@@ -1383,6 +1585,23 @@ function ForbiddenScreen({ profile, onSignOut }: { profile: UserProfile; onSignO
   );
 }
 
+function StaffMobileBlockedScreen({ onSignOut }: { onSignOut: () => void }) {
+  return (
+    <SafeAreaView style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.eyebrow}>Staff workspace</Text>
+        <Text style={styles.title}>Use the web dashboard.</Text>
+        <ShellCard title="Mobile access blocked">
+          <Text style={styles.copy}>Admin and assistant accounts are provisioned for the KULI web dashboard, not the customer mobile app.</Text>
+          <Pressable accessibilityRole="button" onPress={onSignOut} style={styles.secondaryButton}>
+            <Text style={styles.secondaryButtonText}>Sign out</Text>
+          </Pressable>
+        </ShellCard>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
 function AccountBlockedScreen({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
   return (
     <SafeAreaView style={styles.screen}>
@@ -1410,6 +1629,8 @@ function ResetPasswordScreen({ onComplete, onSignOut }: { onComplete: () => Prom
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const passwordsMatch = Boolean(newPassword && confirmPassword && newPassword === confirmPassword);
+  const canSubmit = isStrongPassword(newPassword) && passwordsMatch;
 
   const submit = async () => {
     if (pending) {
@@ -1419,8 +1640,8 @@ function ResetPasswordScreen({ onComplete, onSignOut }: { onComplete: () => Prom
     setError('');
     setNotice('');
 
-    if (newPassword.length < 6) {
-      setError('Use at least 6 characters for your new password.');
+    if (!isStrongPassword(newPassword)) {
+      setError('Use a stronger password before saving it.');
       return;
     }
 
@@ -1458,11 +1679,12 @@ function ResetPasswordScreen({ onComplete, onSignOut }: { onComplete: () => Prom
               title="Choose a new password."
               subtitle="Enter a new password for your KULI account. After it is saved, you will sign in again."
             />
-            <Field label="New password" value={newPassword} onChangeText={setNewPassword} placeholder="Minimum 6 characters" secureTextEntry />
+            <Field label="New password" value={newPassword} onChangeText={setNewPassword} placeholder="At least 8 characters" secureTextEntry />
             <Field label="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Repeat new password" secureTextEntry />
+            <PasswordChecklist password={newPassword} confirmPassword={confirmPassword} includeMatch />
             {error ? <AuthMessage tone="error" message={error} /> : null}
             {notice ? <AuthMessage tone="notice" message={notice} /> : null}
-            <PrimaryButton disabled={pending || newPassword.length < 6 || confirmPassword.length < 6} label={pending ? 'Saving...' : 'Update password'} loading={pending} onPress={submit} />
+            <PrimaryButton disabled={pending || !canSubmit} label={pending ? 'Saving...' : 'Update password'} loading={pending} onPress={submit} />
             <SecondaryButton disabled={pending} label="Back to login" onPress={onSignOut} />
           </UiCard>
         </ScrollView>
@@ -1500,9 +1722,12 @@ function ProfileRequiredScreen({ session, onAuthenticated, onSignOut }: { sessio
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const email = session.user.email ?? '';
+  const phoneValidation = validateEthiopianPhone(phone);
+  const normalizedPhone = phoneValidation.valid ? phoneValidation.normalized : phone.trim();
+  const canSubmit = Boolean(fullName.trim()) && phoneValidation.valid && !pending;
 
   const submit = async () => {
-    if (!fullName.trim() || pending) {
+    if (!canSubmit) {
       return;
     }
 
@@ -1510,11 +1735,13 @@ function ProfileRequiredScreen({ session, onAuthenticated, onSignOut }: { sessio
     setError('');
 
     try {
+      setSessionAccessToken(session.access_token);
+
       const result = (await kuliApi.syncProfile({
         role,
         fullName: fullName.trim(),
         email,
-        phone: phone.trim() || undefined
+        phone: normalizedPhone || undefined
       })) as ApiEnvelope<ProfileSyncResult>;
 
       onAuthenticated(result.data.user, session);
@@ -1538,8 +1765,9 @@ function ProfileRequiredScreen({ session, onAuthenticated, onSignOut }: { sessio
         <ShellCard title="Profile details">
           <Field label="Full name" value={fullName} onChangeText={setFullName} placeholder="Abebe Bekele" />
           <Field label="Phone" value={phone} onChangeText={setPhone} placeholder="+251911000000" keyboardType="phone-pad" />
+          <PhoneValidationHint value={phone} />
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          <Pressable accessibilityRole="button" disabled={!fullName.trim() || pending} onPress={submit} style={[styles.primaryButton, (!fullName.trim() || pending) && styles.buttonDisabled]}>
+          <Pressable accessibilityRole="button" disabled={!canSubmit} onPress={submit} style={[styles.primaryButton, !canSubmit && styles.buttonDisabled]}>
             <Text style={styles.primaryButtonText}>{pending ? 'Saving...' : 'Create profile'}</Text>
           </Pressable>
           <Pressable accessibilityRole="button" onPress={onSignOut} style={styles.secondaryButton}>
@@ -6001,11 +6229,14 @@ function AppContent() {
     setProfileError('');
 
     if (!nextSession) {
+      setSessionAccessToken(null);
       activeSessionUserIdRef.current = null;
       setProfile(null);
       setLoading(false);
       return;
     }
+
+    setSessionAccessToken(nextSession.access_token);
 
     if (!sameUser) {
       setProfile(null);
@@ -6013,11 +6244,22 @@ function AppContent() {
     }
 
     try {
+      authDebug('loading profile', {
+        hasSession: true,
+        email: nextSession.user.email,
+        userId: nextSession.user.id
+      });
+
       const result = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
       activeSessionUserIdRef.current = nextUserId;
       setProfile(result.data);
       setProfileMissing(false);
       setProfileError('');
+      authDebug('profile loaded', {
+        role: result.data.role,
+        accountStatus: result.data.accountStatus,
+        route: result.data.role === 'client' ? 'mobile-client' : result.data.role === 'truck_owner' ? 'mobile-owner' : 'mobile-forbidden'
+      });
     } catch (error) {
       authDebug('profile load failed', {
         code: (error as { code?: string }).code,
@@ -6026,6 +6268,28 @@ function AppContent() {
       });
 
       if ((error as { code?: string }).code === 'PROFILE_NOT_FOUND') {
+        try {
+          const syncedProfile = await syncPublicProfileFromSession(nextSession);
+
+          if (syncedProfile) {
+            activeSessionUserIdRef.current = nextUserId;
+            setProfile(syncedProfile);
+            setProfileMissing(false);
+            setProfileError('');
+            authDebug('missing public profile synced', {
+              role: syncedProfile.role,
+              route: syncedProfile.role === 'client' ? 'mobile-client' : 'mobile-owner'
+            });
+            return;
+          }
+        } catch (syncError) {
+          authDebug('missing profile sync failed', {
+            code: (syncError as { code?: string }).code,
+            message: getErrorMessage(syncError)
+          });
+          setProfileError(getErrorMessage(syncError));
+        }
+
         activeSessionUserIdRef.current = nextUserId;
         if (!sameUser) {
           setProfile(null);
@@ -6088,6 +6352,7 @@ function AppContent() {
       }
 
       if (isRecovery) {
+        setSessionAccessToken(nextSession.access_token);
         recoveryInProgressRef.current = true;
         setPasswordRecoverySession(nextSession);
         setSession(nextSession);
@@ -6156,6 +6421,7 @@ function AppContent() {
       authDebug('auth state changed', { event, hasSession: Boolean(nextSession), userId: nextSession?.user.id });
 
       if (event === 'PASSWORD_RECOVERY' && nextSession) {
+        setSessionAccessToken(nextSession.access_token);
         recoveryInProgressRef.current = true;
         setPasswordRecoverySession(nextSession);
         setSession(nextSession);
@@ -6164,6 +6430,7 @@ function AppContent() {
       }
 
       if (recoveryInProgressRef.current) {
+        setSessionAccessToken(nextSession?.access_token);
         setSession(nextSession);
         setLoading(false);
         return;
@@ -6181,6 +6448,7 @@ function AppContent() {
 
   const handleAuthenticated = (nextProfile: UserProfile, nextSession: Session) => {
     AsyncStorage.setItem(AUTH_ONBOARDING_COMPLETED_KEY, 'true').catch(() => undefined);
+    setSessionAccessToken(nextSession.access_token);
     activeSessionUserIdRef.current = nextSession.user.id ?? null;
     setSession(nextSession);
     setProfile(nextProfile);
@@ -6193,6 +6461,7 @@ function AppContent() {
   const handlePasswordRecoveryVerified = (nextSession: Session) => {
     recoveryInProgressRef.current = true;
     activeSessionUserIdRef.current = null;
+    setSessionAccessToken(nextSession.access_token);
     setPasswordRecoverySession(nextSession);
     setSession(nextSession);
     setProfile(null);
@@ -6219,6 +6488,7 @@ function AppContent() {
     recoveryInProgressRef.current = false;
     setPasswordRecoverySession(null);
     setAuthNotice('Password updated. Sign in with your new password.');
+    setSessionAccessToken(null);
     await supabase.auth.signOut();
     query.clear();
     activeSessionUserIdRef.current = null;
@@ -6246,6 +6516,10 @@ function AppContent() {
   }
 
   if (profileMissing) {
+    if (session && isStaffSession(session)) {
+      return <StaffMobileBlockedScreen onSignOut={handleSignOut} />;
+    }
+
     return <ProfileRequiredScreen session={session} onAuthenticated={handleAuthenticated} onSignOut={handleSignOut} />;
   }
 
@@ -7470,6 +7744,54 @@ const styles = StyleSheet.create({
     color: colors.success
   },
   authMessageTextError: {
+    color: colors.error
+  },
+  validationCard: {
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  validationRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  validationText: {
+    color: colors.textSecondary,
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700'
+  },
+  validationTextMet: {
+    color: colors.success
+  },
+  validationHint: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: -spacing.sm,
+    paddingHorizontal: spacing.xs
+  },
+  validationHintSuccess: {
+    borderColor: colors.success
+  },
+  validationHintError: {
+    borderColor: colors.error
+  },
+  validationHintText: {
+    color: colors.textSecondary,
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18
+  },
+  validationHintTextSuccess: {
+    color: colors.success
+  },
+  validationHintTextError: {
     color: colors.error
   },
   eyebrow: {

@@ -30,7 +30,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { runtimeConfig, runtimeReadiness } from './config/runtime';
-import { clearDemoAccessToken, kuliApi, setDemoAccessToken } from './lib/api';
+import { clearDemoAccessToken, kuliApi, setDemoAccessToken, setSessionAccessToken } from './lib/api';
 import { supabase } from './lib/supabase';
 
 type Role = 'client' | 'truck_owner' | 'assistant' | 'admin';
@@ -843,6 +843,7 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
         throw new Error('No staff session was returned. Check Supabase email confirmation settings.');
       }
 
+      setSessionAccessToken(data.session.access_token);
       const profile = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
       onAuthenticated(profile.data, data.session);
     } catch (loginError) {
@@ -4629,9 +4630,12 @@ export default function App() {
     setProfileMissing(false);
 
     if (!nextSession) {
+      setSessionAccessToken(null);
       setLoading(false);
       return;
     }
+
+    setSessionAccessToken(nextSession.access_token);
 
     try {
       const result = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
@@ -4665,6 +4669,7 @@ export default function App() {
   }, [loadCurrentProfile]);
 
   const handleAuthenticated = (nextProfile: UserProfile, nextSession: Session) => {
+    setSessionAccessToken(nextSession.access_token);
     setSession(nextSession);
     setProfile(nextProfile);
     setProfileMissing(false);
@@ -4673,6 +4678,7 @@ export default function App() {
 
   const handleSignOut = async () => {
     clearDemoAccessToken();
+    setSessionAccessToken(null);
     await supabase.auth.signOut();
     queryClient.clear();
     setSession(null);
