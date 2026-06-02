@@ -41,14 +41,16 @@ export class AccountService {
 
   async syncProfile({ authUser, role, fullName, email, phone }) {
     const existingUser = await this.resolveUserForAuthIdentity(authUser);
+    const normalizedEmail = cleanEmail(email ?? authUser.email);
+    const normalizedPhone = cleanOptional(phone ?? authUser.phone);
 
     if (existingUser) {
-      const updatedUser = await this.userRepository.save({
+      const updatedUser = await saveUserOrConflict(this.userRepository, {
         ...existingUser,
         supabaseUserId: authUser.sub,
         fullName: pickDefined(fullName, existingUser.fullName),
-        email: pickDefined(email ?? authUser.email, existingUser.email),
-        phone: pickDefined(phone ?? authUser.phone, existingUser.phone)
+        email: pickDefined(normalizedEmail, existingUser.email),
+        phone: pickDefined(normalizedPhone, existingUser.phone)
       });
 
       return {
@@ -62,12 +64,12 @@ export class AccountService {
       supabaseUserId: authUser.sub,
       role,
       fullName,
-      email: email ?? authUser.email,
-      phone: phone ?? authUser.phone
+      email: normalizedEmail,
+      phone: normalizedPhone
     });
 
     return {
-      user: await this.userRepository.save(user),
+      user: await saveUserOrConflict(this.userRepository, user),
       created: true
     };
   }
@@ -101,7 +103,7 @@ export class AccountService {
       return null;
     }
 
-    return this.userRepository.save({
+    return saveUserOrConflict(this.userRepository, {
       ...emailUser,
       supabaseUserId: authUser.sub,
       email: normalizedEmail,

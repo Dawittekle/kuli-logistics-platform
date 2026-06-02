@@ -9,6 +9,7 @@
   --color-text: #1c1b1b;
   --color-text-secondary: #42474b;
   --color-muted: #73787b;
+  --color-muted-surface: #f0edec;
   --color-border: #e1ddda;
   --color-border-strong: #c2c7cb;
   --color-success: #16833a;
@@ -158,6 +159,42 @@ button:disabled {
 
 .login-panel input {
   min-height: 52px;
+}
+
+.password-field {
+  display: grid;
+  position: relative;
+}
+
+.password-field input {
+  padding-right: 52px;
+  width: 100%;
+}
+
+.password-field__toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: var(--color-muted);
+  cursor: pointer;
+  display: inline-flex;
+  height: 42px;
+  justify-content: center;
+  padding: 0;
+  position: absolute;
+  right: 5px;
+  top: 5px;
+  width: 42px;
+}
+
+.password-field__toggle:hover {
+  background: var(--color-muted-surface);
+  color: var(--color-text);
+}
+
+.password-field__toggle:focus-visible {
+  outline: 3px solid rgb(0 2 4 / 14%);
 }
 
 .support-card input,

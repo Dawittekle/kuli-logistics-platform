@@ -7,6 +7,8 @@ import {
   CircleDollarSign,
   ClipboardList,
   CreditCard,
+  Eye,
+  EyeOff,
   ExternalLink,
   FileCheck2,
   FileClock,
@@ -780,6 +782,7 @@ function Panel({ title, eyebrow, children }: { title: string; eyebrow?: string; 
 function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfile, session: Session) => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const normalizedEmail = email.trim().toLowerCase();
@@ -837,7 +840,23 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
         </label>
         <label>
           Password
-          <input autoComplete="current-password" onChange={(event) => setPassword(event.target.value)} placeholder="Minimum 6 characters" type="password" value={password} />
+          <span className="password-field">
+            <input
+              autoComplete="current-password"
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Minimum 6 characters"
+              type={passwordVisible ? 'text' : 'password'}
+              value={password}
+            />
+            <button
+              aria-label={passwordVisible ? 'Hide password' : 'Show password'}
+              className="password-field__toggle"
+              onClick={() => setPasswordVisible((visible) => !visible)}
+              type="button"
+            >
+              {passwordVisible ? <EyeOff aria-hidden="true" size={18} /> : <Eye aria-hidden="true" size={18} />}
+            </button>
+          </span>
         </label>
         {error ? <p className="field-error" role="alert">{error}</p> : null}
         <button className="icon-button" disabled={!canSubmit || pending} type="submit">

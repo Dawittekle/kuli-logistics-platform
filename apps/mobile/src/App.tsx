@@ -371,6 +371,7 @@ const offerStatusLabels: Record<TripOffer['status'], string> = {
 
 const isBlockedStatus = (status: AccountStatus) => ['suspended', 'banned', 'deleted'].includes(status);
 const AUTH_ONBOARDING_COMPLETED_KEY = 'kuli.authOnboardingCompleted';
+const AUTH_PROFILE_DRAFT_PREFIX = 'kuli.profileDraft.';
 const VERIFICATION_RESEND_COOLDOWN_SECONDS = 60;
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 const publicRoles: PublicRole[] = ['client', 'truck_owner'];
@@ -445,6 +446,100 @@ const draftFromSessionMetadata = (session: Session): VerificationDraft | null =>
   };
 };
 
+const normalizeProfileDraft = (value: unknown): VerificationDraft | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const source = value as Record<string, unknown>;
+  const email = readStringMetadata(source.email).toLowerCase();
+  const role = source.role;
+  const fullName = readStringMetadata(source.fullName);
+  const phone = readStringMetadata(source.phone);
+  const phoneValidation = validateEthiopianPhone(phone);
+
+  if (!email || !isValidEmail(email) || !fullName || !isPublicRole(role)) {
+    return null;
+  }
+
+  return {
+    email,
+    role,
+    fullName,
+    phone: phoneValidation.valid ? phoneValidation.normalized : phone
+  };
+};
+
+const profileDraftStorageKey = (email: string) => `${AUTH_PROFILE_DRAFT_PREFIX}${email.trim().toLowerCase()}`;
+
+const saveStoredProfileDraft = async (draft: VerificationDraft) => {
+  const normalizedDraft = normalizeProfileDraft(draft);
+
+  if (!normalizedDraft) {
+    return;
+  }
+
+  await AsyncStorage.setItem(profileDraftStorageKey(normalizedDraft.email), JSON.stringify(normalizedDraft)).catch(() => undefined);
+};
+
+const loadStoredProfileDraft = async (email?: string | null) => {
+  const normalizedEmail = email?.trim().toLowerCase();
+
+  if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
+    return null;
+  }
+
+  const draftJson = await AsyncStorage.getItem(profileDraftStorageKey(normalizedEmail)).catch(() => null);
+
+  if (!draftJson) {
+    return null;
+  }
+
+  try {
+    const draft = normalizeProfileDraft(JSON.parse(draftJson));
+
+    if (!draft) {
+      await AsyncStorage.removeItem(profileDraftStorageKey(normalizedEmail)).catch(() => undefined);
+    }
+
+    return draft;
+  } catch {
+    await AsyncStorage.removeItem(profileDraftStorageKey(normalizedEmail)).catch(() => undefined);
+    return null;
+  }
+};
+
+const clearStoredProfileDraft = async (email?: string | null) => {
+  const normalizedEmail = email?.trim().toLowerCase();
+
+  if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
+    return;
+  }
+
+  await AsyncStorage.removeItem(profileDraftStorageKey(normalizedEmail)).catch(() => undefined);
+};
+
+const syncProfileFromDraft = async (session: Session, draft: VerificationDraft) => {
+  const normalizedDraft = normalizeProfileDraft(draft);
+
+  if (!normalizedDraft) {
+    return null;
+  }
+
+  setSessionAccessToken(session.access_token);
+
+  const result = (await kuliApi.syncProfile({
+    role: normalizedDraft.role,
+    fullName: normalizedDraft.fullName,
+    phone: normalizedDraft.phone || undefined,
+    email: normalizedDraft.email
+  })) as ApiEnvelope<ProfileSyncResult>;
+
+  await clearStoredProfileDraft(normalizedDraft.email);
+
+  return result.data.user;
+};
+
 const syncPublicProfileFromSession = async (session: Session) => {
   const draft = draftFromSessionMetadata(session);
 
@@ -452,14 +547,17 @@ const syncPublicProfileFromSession = async (session: Session) => {
     return null;
   }
 
-  const result = (await kuliApi.syncProfile({
-    role: draft.role,
-    fullName: draft.fullName,
-    phone: draft.phone || undefined,
-    email: draft.email
-  })) as ApiEnvelope<ProfileSyncResult>;
+  return syncProfileFromDraft(session, draft);
+};
 
-  return result.data.user;
+const syncStoredProfileFromSession = async (session: Session) => {
+  const draft = await loadStoredProfileDraft(session.user.email);
+
+  if (!draft) {
+    return null;
+  }
+
+  return syncProfileFromDraft(session, draft);
 };
 
 const fetchProfileForSession = async (session: Session) => {
@@ -613,20 +711,35 @@ function Field({
   keyboardType?: 'default' | 'email-address' | 'phone-pad' | 'numeric' | 'decimal-pad';
   containerStyle?: StyleProp<ViewStyle>;
 }) {
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const isPassword = Boolean(secureTextEntry);
+
   return (
     <View style={[styles.field, containerStyle]}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput
-        accessibilityLabel={label}
-        autoCapitalize="none"
-        keyboardType={keyboardType}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor="#829197"
-        secureTextEntry={secureTextEntry}
-        style={styles.input}
-        value={value}
-      />
+      <View style={styles.inputShell}>
+        <TextInput
+          accessibilityLabel={label}
+          autoCapitalize="none"
+          keyboardType={keyboardType}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor="#829197"
+          secureTextEntry={isPassword && !passwordVisible}
+          style={[styles.input, isPassword && styles.inputWithIcon]}
+          value={value}
+        />
+        {isPassword ? (
+          <Pressable
+            accessibilityLabel={passwordVisible ? 'Hide password' : 'Show password'}
+            accessibilityRole="button"
+            onPress={() => setPasswordVisible((visible) => !visible)}
+            style={styles.inputEyeButton}
+          >
+            <MaterialCommunityIcons color={colors.textSecondary} name={passwordVisible ? 'eye-off-outline' : 'eye-outline'} size={22} />
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -1021,7 +1134,7 @@ function AuthScreen({
       onAuthenticated(profile, session);
     } catch (profileError) {
       if ((profileError as { code?: string }).code === 'PROFILE_NOT_FOUND') {
-        const syncedProfile = await syncPublicProfileFromSession(session);
+        const syncedProfile = (await syncPublicProfileFromSession(session)) ?? (await syncStoredProfileFromSession(session));
 
         if (syncedProfile) {
           onAuthenticated(syncedProfile, session);
@@ -1034,16 +1147,13 @@ function AuthScreen({
   };
 
   const syncDraftProfile = async (session: Session, draft: VerificationDraft) => {
-    setSessionAccessToken(session.access_token);
+    const syncedProfile = (await syncProfileFromDraft(session, draft)) ?? (await syncPublicProfileFromSession(session)) ?? (await syncStoredProfileFromSession(session));
 
-    const result = (await kuliApi.syncProfile({
-      role: draft.role,
-      fullName: draft.fullName,
-      phone: draft.phone || undefined,
-      email: draft.email
-    })) as ApiEnvelope<ProfileSyncResult>;
+    if (!syncedProfile) {
+      throw new Error('Your email is confirmed, but KULI could not find the registration details for this account. Sign out and register again with the same email.');
+    }
 
-    onAuthenticated(result.data.user, session);
+    onAuthenticated(syncedProfile, session);
   };
 
   const sendPasswordReset = async () => {
@@ -1325,6 +1435,13 @@ function AuthScreen({
         return;
       }
 
+      const registrationDraft: VerificationDraft = {
+        email: normalizedEmail,
+        role,
+        fullName: fullName.trim(),
+        phone: normalizedPhone
+      };
+
       const { data, error: authError } = await supabase.auth.signUp({
         email: normalizedEmail,
         password,
@@ -1342,13 +1459,10 @@ function AuthScreen({
         throw authError;
       }
 
+      await saveStoredProfileDraft(registrationDraft);
+
       if (!data.session) {
-        setVerificationDraft({
-          email: normalizedEmail,
-          role,
-          fullName: fullName.trim(),
-          phone: normalizedPhone
-        });
+        setVerificationDraft(registrationDraft);
         setVerificationCode('');
         setResendCooldown(VERIFICATION_RESEND_COOLDOWN_SECONDS);
         setNotice('Account created. Check your email for a confirmation code or link. We will not resend unless you press Resend.');
@@ -1356,25 +1470,25 @@ function AuthScreen({
         return;
       }
 
-      setSessionAccessToken(data.session.access_token);
+      const syncedProfile = await syncProfileFromDraft(data.session, registrationDraft);
 
-      const result = (await kuliApi.syncProfile({
-        role,
-        fullName: fullName.trim(),
-        phone: normalizedPhone || undefined,
-        email: normalizedEmail
-      })) as ApiEnvelope<ProfileSyncResult>;
+      if (!syncedProfile) {
+        throw new Error('KULI could not finish creating your mobile profile. Try signing in again.');
+      }
 
-      onAuthenticated(result.data.user, data.session);
+      onAuthenticated(syncedProfile, data.session);
     } catch (submitError) {
       if (mode === 'login' && isEmailNotConfirmedError(submitError)) {
-        const normalizedEmail = email.trim().toLowerCase();
-        setVerificationDraft({
-          email: normalizedEmail,
-          role,
-          fullName: fullName.trim(),
-          phone: phoneValidation.valid ? phoneValidation.normalized : phone.trim()
-        });
+        const loginEmail = email.trim().toLowerCase();
+        const storedDraft = await loadStoredProfileDraft(loginEmail);
+        setVerificationDraft(
+          storedDraft ?? {
+            email: loginEmail,
+            role,
+            fullName: fullName.trim(),
+            phone: phoneValidation.valid ? phoneValidation.normalized : phone.trim()
+          }
+        );
         setVerificationCode('');
         setError('');
         setNotice('Email not confirmed. Use the code or link already sent to your email, or press Resend after the rate-limit window clears.');
@@ -1665,70 +1779,6 @@ function ProfileLoadErrorScreen({ message, onRetry, onSignOut }: { message: stri
               <Text style={styles.secondaryButtonText}>Sign out</Text>
             </Pressable>
           </View>
-        </ShellCard>
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-function ProfileRequiredScreen({ session, onAuthenticated, onSignOut }: { session: Session; onAuthenticated: (profile: UserProfile, session: Session) => void; onSignOut: () => void }) {
-  const [role, setRole] = useState<PublicRole>('client');
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState('');
-  const email = session.user.email ?? '';
-  const phoneValidation = validateEthiopianPhone(phone);
-  const normalizedPhone = phoneValidation.valid ? phoneValidation.normalized : phone.trim();
-  const canSubmit = Boolean(fullName.trim()) && phoneValidation.valid && !pending;
-
-  const submit = async () => {
-    if (!canSubmit) {
-      return;
-    }
-
-    setPending(true);
-    setError('');
-
-    try {
-      setSessionAccessToken(session.access_token);
-
-      const result = (await kuliApi.syncProfile({
-        role,
-        fullName: fullName.trim(),
-        email,
-        phone: normalizedPhone || undefined
-      })) as ApiEnvelope<ProfileSyncResult>;
-
-      onAuthenticated(result.data.user, session);
-    } catch (syncError) {
-      setError(getErrorMessage(syncError));
-    } finally {
-      setPending(false);
-    }
-  };
-
-  return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>Profile required</Text>
-        <Text style={styles.title}>Finish your profile.</Text>
-        <Text style={styles.copy}>Add the details KULI needs to set up your mobile account.</Text>
-        <View style={styles.roleGrid}>
-          <RoleOption role="client" selected={role === 'client'} onPress={() => setRole('client')} />
-          <RoleOption role="truck_owner" selected={role === 'truck_owner'} onPress={() => setRole('truck_owner')} />
-        </View>
-        <ShellCard title="Profile details">
-          <Field label="Full name" value={fullName} onChangeText={setFullName} placeholder="Abebe Bekele" />
-          <Field label="Phone" value={phone} onChangeText={setPhone} placeholder="+251911000000" keyboardType="phone-pad" />
-          <PhoneValidationHint value={phone} />
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          <Pressable accessibilityRole="button" disabled={!canSubmit} onPress={submit} style={[styles.primaryButton, !canSubmit && styles.buttonDisabled]}>
-            <Text style={styles.primaryButtonText}>{pending ? 'Saving...' : 'Create profile'}</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" onPress={onSignOut} style={styles.secondaryButton}>
-            <Text style={styles.secondaryButtonText}>Sign out</Text>
-          </Pressable>
         </ShellCard>
       </ScrollView>
     </SafeAreaView>
@@ -6225,7 +6275,7 @@ function AppContent() {
 
       if ((error as { code?: string }).code === 'PROFILE_NOT_FOUND') {
         try {
-          const syncedProfile = await syncPublicProfileFromSession(nextSession);
+          const syncedProfile = (await syncPublicProfileFromSession(nextSession)) ?? (await syncStoredProfileFromSession(nextSession));
 
           if (syncedProfile) {
             activeSessionUserIdRef.current = nextUserId;
@@ -6251,6 +6301,7 @@ function AppContent() {
           setProfile(null);
         }
         setProfileMissing(true);
+        setProfileError('This signed-in Supabase account does not have a KULI mobile profile. Register with KULI using the same email, or contact support to link the account.');
       } else if (!sameUser) {
         setProfile(null);
         setProfileError(getErrorMessage(error));
@@ -6404,6 +6455,7 @@ function AppContent() {
 
   const handleAuthenticated = (nextProfile: UserProfile, nextSession: Session) => {
     AsyncStorage.setItem(AUTH_ONBOARDING_COMPLETED_KEY, 'true').catch(() => undefined);
+    clearStoredProfileDraft(nextProfile.email ?? nextSession.user.email).catch(() => undefined);
     setSessionAccessToken(nextSession.access_token);
     activeSessionUserIdRef.current = nextSession.user.id ?? null;
     setSession(nextSession);
@@ -6476,7 +6528,13 @@ function AppContent() {
       return <StaffMobileBlockedScreen onSignOut={handleSignOut} />;
     }
 
-    return <ProfileRequiredScreen session={session} onAuthenticated={handleAuthenticated} onSignOut={handleSignOut} />;
+    return (
+      <ProfileLoadErrorScreen
+        message={profileError || 'This signed-in account does not have a KULI mobile profile. Register with KULI using the same email, or contact support to link the account.'}
+        onRetry={retryProfileLoad}
+        onSignOut={handleSignOut}
+      />
+    );
   }
 
   if (!profile) {
@@ -9350,6 +9408,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     minHeight: 52,
     paddingHorizontal: spacing.lg
+  },
+  inputShell: {
+    position: 'relative'
+  },
+  inputWithIcon: {
+    paddingRight: 56
+  },
+  inputEyeButton: {
+    alignItems: 'center',
+    borderRadius: radii.md,
+    height: 44,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 6,
+    top: 4,
+    width: 44
   },
   inlineFields: {
     flexDirection: 'row',

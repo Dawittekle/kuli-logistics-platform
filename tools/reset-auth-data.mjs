@@ -157,7 +157,7 @@ const users = [
     role: 'client',
     fullName: 'Temp Client',
     email: 'temp31549@gmail.com',
-    phone: '+251902468877'
+    phone: '+251911000005'
   }),
   createUser({
     id: 'usr_seed_owner_one',
