@@ -6587,7 +6587,7 @@ const clientTabIcons: TabIconConfig = {
 };
 
 const ownerTabIcons: TabIconConfig = {
-  Home: { name: 'speedometer-outline', label: 'Home', iconSet: 'material' },
+  Home: { name: 'home-outline', label: 'Home' },
   Vehicles: { name: 'truck-outline', label: 'Vehicles', iconSet: 'material' },
   Offers: { name: 'clipboard-list-outline', label: 'Offers', iconSet: 'material' },
   Notifications: { name: 'notifications-outline', label: 'Notifications' },
