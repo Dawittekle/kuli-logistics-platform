@@ -25,7 +25,7 @@ import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tan
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import type { Session } from '@supabase/supabase-js';
 
-import { clearSessionAccessToken, kuliApi, setSessionAccessToken } from './lib/api';
+import { clearSessionAccessToken, getKuliAccessToken, kuliApi, setSessionAccessToken } from './lib/api';
 import { supabase } from './lib/supabase';
 import { runtimeConfig, runtimeReadiness } from './config/runtime';
 import { colors, radii, spacing } from './theme';
@@ -2857,32 +2857,46 @@ async function uploadVehicleFile(vehicleId: string, type: string, file: PickedFi
     }
   })) as ApiEnvelope<{ file: { id: string; originalFileName?: string; mimeType?: string; sizeBytes?: number }; upload: { url: string; method?: string } }>;
 
-  if (intent.data.upload.url.startsWith('http')) {
-    if (!file.uri) {
-      throw new Error(`Could not read ${file.name} for upload. Choose the file again.`);
-    }
-
-    const fileResponse = await fetch(file.uri);
-    const fileBlob = await fileResponse.blob();
-    const uploadResponse = await fetch(intent.data.upload.url, {
-      method: intent.data.upload.method ?? 'PUT',
-      headers: {
-        'content-type': file.mimeType
-      },
-      body: fileBlob
-    });
-
-    if (!uploadResponse.ok) {
-      throw new Error(`Storage upload failed for ${file.name}.`);
-    }
+  if (!file.uri) {
+    throw new Error(`Could not read ${file.name} for upload. Choose the file again.`);
   }
 
-  await kuliApi.request(`/files/${intent.data.file.id}/complete`, {
-    method: 'POST',
-    body: {
-      uploadedSizeBytes: file.sizeBytes
-    }
+  const uploadUrl = intent.data.upload.url.startsWith('http')
+    ? intent.data.upload.url
+    : `${kuliApi.baseUrl}${intent.data.upload.url.startsWith('/') ? intent.data.upload.url : `/${intent.data.upload.url}`}`;
+  const accessToken = await getKuliAccessToken();
+  const fileResponse = await fetch(file.uri);
+  const fileBlob = await fileResponse.blob();
+  const uploadResponse = await fetch(uploadUrl, {
+    method: intent.data.upload.method ?? 'POST',
+    headers: {
+      'content-type': file.mimeType,
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
+    },
+    body: fileBlob
   });
+
+  if (!uploadResponse.ok) {
+    let message = `Storage upload failed for ${file.name}.`;
+
+    try {
+      const payload = await uploadResponse.json();
+      message = payload?.error?.message ?? message;
+    } catch {
+      // Keep the generic message when the upload endpoint returns a non-JSON body.
+    }
+
+    throw new Error(message);
+  }
+
+  if (!intent.data.upload.url.includes('/upload')) {
+    await kuliApi.request(`/files/${intent.data.file.id}/complete`, {
+      method: 'POST',
+      body: {
+        uploadedSizeBytes: file.sizeBytes
+      }
+    });
+  }
 
   return intent.data.file;
 }

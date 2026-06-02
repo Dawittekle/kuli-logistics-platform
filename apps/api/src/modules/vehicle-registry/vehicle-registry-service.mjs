@@ -367,6 +367,8 @@ export class VehicleRegistryService {
       storageKey: `gridfs://${this.fileStorage?.bucketName ?? 'vehicle_documents'}/${fileId}`,
       gridFsBucket: this.fileStorage?.bucketName ?? 'vehicle_documents',
       gridFsFileId: fileId,
+      uploadType: input.type,
+      documentType: isVehiclePhoto ? undefined : input.type,
       status: 'pending_upload',
       originalFileName,
       mimeType: input.mimeType,
@@ -479,6 +481,55 @@ export class VehicleRegistryService {
       fileId: file.id,
       url: file.storageProvider === 'gridfs' ? `/api/v1/files/${file.id}/download` : `local-dev://signed-read/${file.storageKey}`,
       expiresInSeconds: 300
+    };
+  }
+
+  async openFileDownload({ actor, fileId }) {
+    const file = await this.fileRepository.findById(fileId);
+
+    if (!file) {
+      throw new AppError(404, 'FILE_NOT_FOUND', 'File metadata was not found.');
+    }
+
+    if (actor.role === roles.truckOwner && file.ownerId !== actor.id) {
+      throw new AppError(404, 'FILE_NOT_FOUND', 'File metadata was not found.');
+    }
+
+    if (![roles.admin, roles.truckOwner].includes(actor.role)) {
+      throw new AppError(403, 'FILE_ACCESS_FORBIDDEN', 'You do not have access to this file.');
+    }
+
+    if (file.storageProvider !== 'gridfs') {
+      throw new AppError(422, 'FILE_REUPLOAD_REQUIRED', 'This file was uploaded before GridFS storage was enabled. Please re-upload it.');
+    }
+
+    if (file.status !== 'uploaded') {
+      throw new AppError(422, 'FILE_NOT_READY', 'File upload has not been completed yet.');
+    }
+
+    if (!this.fileStorage) {
+      throw new AppError(500, 'GRIDFS_STORAGE_UNAVAILABLE', 'MongoDB GridFS storage is not available.');
+    }
+
+    if (actor.role === roles.admin) {
+      await this.auditLogRepository.write({
+        id: createId('audit'),
+        actorUserId: actor.id,
+        actorRole: actor.role,
+        action: 'file.download.streamed',
+        targetType: 'file',
+        targetId: file.id,
+        metadata: {
+          linkedEntityType: file.linkedEntityType,
+          linkedEntityId: file.linkedEntityId,
+          storageProvider: file.storageProvider
+        }
+      });
+    }
+
+    return {
+      file,
+      ...(await this.fileStorage.openDownloadStream(file))
     };
   }
 

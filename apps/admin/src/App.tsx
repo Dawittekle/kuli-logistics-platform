@@ -32,7 +32,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { runtimeConfig, runtimeReadiness } from './config/runtime';
-import { clearSessionAccessToken, kuliApi, setSessionAccessToken } from './lib/api';
+import { clearSessionAccessToken, getKuliAccessToken, kuliApi, setSessionAccessToken } from './lib/api';
 import { supabase } from './lib/supabase';
 
 type Role = 'client' | 'truck_owner' | 'assistant' | 'admin';
@@ -56,6 +56,9 @@ type FileMetadata = {
   uploadedSizeBytes?: number;
   status?: string;
   storageProvider?: string;
+  storageKey?: string;
+  gridFsBucket?: string;
+  gridFsFileId?: string;
   visibility?: string;
   completedAt?: string;
 };
@@ -72,7 +75,8 @@ type DocumentPreview = {
   vehicleId: string;
   documentId: string;
   fileId: string;
-  url: string;
+  objectUrl: string;
+  downloadUrl: string;
   expiresInSeconds: number;
   file: FileMetadata;
 };
@@ -781,8 +785,6 @@ const formatFileSize = (bytes?: number) => {
 
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
-const canRenderSignedUrl = (url?: string) => Boolean(url && /^(https?:|blob:|data:|file:)/.test(url));
-
 const getErrorMessage = (error: unknown) => {
   if (error instanceof Error) {
     return error.message;
@@ -917,7 +919,6 @@ function DocumentPreviewModal({ preview, onClose }: { preview: DocumentPreview; 
   const fileName = preview.file.originalFileName ?? preview.fileId;
   const isImage = mimeType.startsWith('image/');
   const isPdf = mimeType === 'application/pdf';
-  const renderableUrl = canRenderSignedUrl(preview.url);
 
   return (
     <div className="preview-modal" role="dialog" aria-modal="true" aria-label="Document preview">
@@ -926,24 +927,20 @@ function DocumentPreviewModal({ preview, onClose }: { preview: DocumentPreview; 
           <div>
             <p className="eyebrow">Secure preview</p>
             <h3>{fileName}</h3>
-            <p className="muted">{mimeType || 'Unknown file type'} / expires in {preview.expiresInSeconds}s</p>
+            <p className="muted">{mimeType || 'Unknown file type'} / protected admin stream</p>
           </div>
           <button className="preview-modal__close" onClick={onClose} type="button" aria-label="Close preview">
             <X aria-hidden="true" size={18} />
           </button>
         </div>
         <div className="preview-modal__body">
-          {isImage && renderableUrl ? <img alt={fileName} src={preview.url} /> : null}
-          {isPdf && renderableUrl ? <iframe src={preview.url} title={fileName} /> : null}
-          {!((isImage || isPdf) && renderableUrl) ? (
+          {isImage ? <img alt={fileName} src={preview.objectUrl} /> : null}
+          {isPdf ? <iframe src={preview.objectUrl} title={fileName} /> : null}
+          {!(isImage || isPdf) ? (
             <div className="preview-modal__fallback">
               <FileText aria-hidden="true" size={32} />
-              <strong>{preview.file.storageProvider === 'local_dev' ? 'Local development preview' : 'Open document'}</strong>
-              <p>
-                {preview.file.storageProvider === 'local_dev'
-                  ? 'The backend returned protected local-dev metadata. Configure Supabase Storage or S3-compatible object storage to render binary previews in the browser.'
-                  : 'This file type cannot be rendered inline. Open it with the signed URL.'}
-              </p>
+              <strong>Open document</strong>
+              <p>This file type cannot be rendered inline. Open it in a browser tab or download it for review.</p>
             </div>
           ) : null}
         </div>
@@ -951,11 +948,11 @@ function DocumentPreviewModal({ preview, onClose }: { preview: DocumentPreview; 
           <span>{preview.file.storageProvider || 'storage'} / {formatFileSize(preview.file.uploadedSizeBytes ?? preview.file.sizeBytes)}</span>
           <button
             className="icon-button"
-            onClick={() => window.open(preview.url, '_blank', 'noopener,noreferrer')}
+            onClick={() => window.open(preview.objectUrl, '_blank', 'noopener,noreferrer')}
             type="button"
           >
             <ExternalLink aria-hidden="true" size={16} />
-            Open signed URL
+            Open preview
           </button>
         </div>
       </div>
@@ -1559,6 +1556,14 @@ function AdminVerificationPanel({ enabled }: { enabled: boolean }) {
     queryFn: async () => ((await kuliApi.request('/admin/vehicles')) as ApiEnvelope<Vehicle[]>).data
   });
 
+  useEffect(() => {
+    return () => {
+      if (preview?.objectUrl) {
+        URL.revokeObjectURL(preview.objectUrl);
+      }
+    };
+  }, [preview?.objectUrl]);
+
   const visibleVehicles = vehiclesQuery.data ?? [];
   const selectedVehicle = selectedVehicleId || visibleVehicles[0]?.id || '';
 
@@ -1620,8 +1625,44 @@ function AdminVerificationPanel({ enabled }: { enabled: boolean }) {
     setPreviewError('');
 
     try {
-      const result = (await kuliApi.request(`/admin/vehicles/${detail.id}/documents/${document.id}/preview-url`)) as ApiEnvelope<DocumentPreview>;
-      setPreview(result.data);
+      const accessToken = await getKuliAccessToken();
+      const previewResponse = await fetch(`${kuliApi.baseUrl}/admin/vehicles/${detail.id}/documents/${document.id}/preview`, {
+        headers: {
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
+        }
+      });
+
+      if (!previewResponse.ok) {
+        let message = 'Document preview could not be opened.';
+
+        try {
+          const payload = await previewResponse.json();
+          message = payload?.error?.message ?? message;
+        } catch {
+          // Keep the generic message when the API returns a non-JSON response.
+        }
+
+        throw new Error(message);
+      }
+
+      const blob = await previewResponse.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const mimeType = previewResponse.headers.get('content-type') || document.file?.mimeType || blob.type;
+      setPreview({
+        vehicleId: detail.id,
+        documentId: document.id,
+        fileId: document.fileId,
+        objectUrl,
+        downloadUrl: `${kuliApi.baseUrl}/admin/vehicles/${detail.id}/documents/${document.id}/download`,
+        expiresInSeconds: 0,
+        file: {
+          id: document.fileId,
+          ...(document.file ?? {}),
+          mimeType,
+          uploadedSizeBytes: blob.size || document.file?.uploadedSizeBytes,
+          storageProvider: document.file?.storageProvider ?? 'gridfs'
+        }
+      });
     } catch (error) {
       setPreviewError(getErrorMessage(error));
     } finally {
