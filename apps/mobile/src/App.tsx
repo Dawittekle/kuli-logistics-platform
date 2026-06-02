@@ -6042,7 +6042,6 @@ function ClientHistoryScreen({ profile }: { profile: UserProfile }) {
 function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
   const queryClient = useQueryClient();
   const [pendingRequestId, setPendingRequestId] = useState('');
-  const [amountConfirmed, setAmountConfirmed] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -6073,7 +6072,7 @@ function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
     setMessage('');
 
     try {
-      const amount = Number(amountConfirmed || request.quoteSnapshot?.totalEstimate || 0);
+      const amount = Number(request.quoteSnapshot?.totalEstimate || 0);
       const result = (await kuliApi.request(`/kuli-requests/${request.id}/payment/confirm`, {
         method: 'POST',
         body: {
@@ -6120,7 +6119,6 @@ function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
           </View>
           <StatusBadge tone={pendingConfirmations ? 'warning' : 'success'}>{`${pendingConfirmations} pending`}</StatusBadge>
         </View>
-        <Field label="Override amount ETB" value={amountConfirmed} onChangeText={setAmountConfirmed} placeholder="Leave blank for estimate" keyboardType="numeric" />
         {allCompletedRequests.length === 0 ? (
           <View style={styles.ownerEmptyCard}>
             <MaterialCommunityIcons name="cash-clock" color={colors.black} size={44} />
@@ -7972,7 +7970,7 @@ const styles = StyleSheet.create({
   },
   ownerHomeContent: {
     gap: spacing.lg,
-    paddingBottom: spacing.xxl
+    paddingBottom: 128
   },
   ownerHomeHeader: {
     alignItems: 'center',
@@ -8210,7 +8208,7 @@ const styles = StyleSheet.create({
   },
   ownerVehiclesContent: {
     gap: spacing.lg,
-    paddingBottom: spacing.xxl
+    paddingBottom: 128
   },
   ownerVehiclesHero: {
     alignItems: 'center',
@@ -8494,7 +8492,7 @@ const styles = StyleSheet.create({
   },
   ownerOffersContent: {
     gap: spacing.lg,
-    paddingBottom: spacing.xxl
+    paddingBottom: 128
   },
   ownerOffersHero: {
     alignItems: 'flex-start',
@@ -8843,7 +8841,7 @@ const styles = StyleSheet.create({
   },
   activityContent: {
     gap: spacing.lg,
-    paddingBottom: spacing.xxl
+    paddingBottom: 128
   },
   activityHero: {
     backgroundColor: colors.black,
@@ -9183,7 +9181,7 @@ const styles = StyleSheet.create({
   },
   earningsContent: {
     gap: spacing.lg,
-    paddingBottom: spacing.xxl
+    paddingBottom: 128
   },
   earningsHero: {
     backgroundColor: colors.black,
@@ -9999,7 +9997,7 @@ const styles = StyleSheet.create({
   },
   notificationsContent: {
     gap: spacing.lg,
-    paddingBottom: spacing.xxl
+    paddingBottom: 128
   },
   notificationsHeader: {
     backgroundColor: colors.black,
