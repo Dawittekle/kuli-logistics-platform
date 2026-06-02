@@ -25,6 +25,10 @@ const assertEditableTicket = (ticket) => {
   }
 };
 
+/**
+ * Service managing customer support hotline tickets and dispatcher-assisted bookings.
+ * Designed to support phone-based booking queries for clients without smartphones/internet access.
+ */
 export class SupportService {
   constructor({
     hotlineTicketRepository,
@@ -54,6 +58,10 @@ export class SupportService {
     return ticket;
   }
 
+  /**
+   * Logs a new hotline call, generating a unique ticket code.
+   * Enables capturing booking specs directly from phone conversation scripts.
+   */
   async createTicket({ actor, input }) {
     assertAssistantOrAdmin(actor);
 
@@ -74,6 +82,10 @@ export class SupportService {
     });
   }
 
+  /**
+   * Transitions a ticket's status through its finite lifecycle.
+   * Enforces claiming restrictions so assistants do not accidentally modify another assistant's claimed ticket.
+   */
   async transitionTicket({ actor, ticketId, input }) {
     assertAssistantOrAdmin(actor);
     const ticket = await this.getTicket({ actor, ticketId });
@@ -146,6 +158,10 @@ export class SupportService {
     return this.userRepository.findClientsByPhone(search);
   }
 
+  /**
+   * Delegates and spawns a confirmed logistics booking from an active support ticket.
+   * Sends confirmation SMS notification intents to the customer's phone.
+   */
   async createAssistedBooking({ actor, input, idempotencyKey }) {
     assertAssistantOrAdmin(actor);
     const ticket = await this.getTicket({

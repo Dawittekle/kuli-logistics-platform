@@ -4595,6 +4595,11 @@ function ProfileMissingScreen({ onSignOut }: { onSignOut: () => void }) {
   );
 }
 
+/**
+ * Root Controller and Orchestrator for the KULI Admin & Assistant Console.
+ * Validates staff authentication, synchronizes access tokens, checks roles,
+ * and renders either the administrative portal, the assistant console, or login view.
+ */
 export default function App() {
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(true);

@@ -32,28 +32,34 @@ const statusTransitions = {
   [kuliStatuses.timedOut]: []
 };
 
+// Generates a human-friendly unique booking code (e.g. KULI-L48XJA-98F1) for customer queries and dispatching
 const requestCode = () => `KULI-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
+// Guard: Enforce that the acting user holds the Client role
 const assertClient = (user) => {
   if (user.role !== roles.client) {
     throw new AppError(403, 'CLIENT_REQUIRED', 'Only clients can create KULI requests in this flow.');
   }
 };
 
+// Guard: Enforce that the acting user holds the Truck Owner/Driver role
 const assertTruckOwner = (user) => {
   if (user.role !== roles.truckOwner) {
     throw new AppError(403, 'TRUCK_OWNER_REQUIRED', 'Only truck owners can respond to offers.');
   }
 };
 
+// Guard: Enforce that the acting user is either an assisted-hotline assistant or a system admin
 const assertAssistantOrAdmin = (user) => {
   if (![roles.assistant, roles.admin].includes(user.role)) {
     throw new AppError(403, 'ASSISTANT_REQUIRED', 'Only assistants or admins can create assisted requests.');
   }
 };
 
+// Returns true if the user belongs to the platform staff (admin or assistant)
 const isStaff = (user) => [roles.admin, roles.assistant].includes(user.role);
 
+// Security Check: Verifies if a user is legally authorized to view or edit a specific trip request
 const isRequestParticipant = (user, request) =>
   request.clientId === user.id || request.selectedOwnerId === user.id || isStaff(user);
 
@@ -163,9 +169,14 @@ export class MarketplaceService {
     return payment ? paymentClosedMessageStatuses.includes(payment.status) : false;
   }
 
+  /**
+   * Creates a new logistics/delivery request initiated directly by a client.
+   * Leverages idempotency keys to prevent duplicate requests from network glitches.
+   */
   async createRequest({ actor, input, idempotencyKey }) {
     assertClient(actor);
 
+    // Retrieve previous result if idempotency key is matched
     const effectiveIdempotencyKey = idempotencyKey ?? input.idempotencyKey;
     const existing = await this.kuliRequestRepository.findByClientIdAndIdempotencyKey({
       clientId: actor.id,
@@ -180,6 +191,7 @@ export class MarketplaceService {
       };
     }
 
+    // Calculate routing, estimates, and match matching vehicle candidates
     const quote = await this.quoteService.createQuote({
       actor,
       input
@@ -192,6 +204,7 @@ export class MarketplaceService {
       throw new AppError(422, 'NO_SELECTED_VEHICLES', 'Select at least one candidate vehicle before sending a request.');
     }
 
+    // Only route to approved and online/available trucks
     const vehicles = await this.vehicleRepository.findByIds(selectedVehicleIds);
     const eligibleVehicles = vehicles.filter(
       (vehicle) =>
@@ -733,6 +746,10 @@ export class MarketplaceService {
     });
   }
 
+  /**
+   * Concurrency-safe acceptance of an offer by a truck owner.
+   * Uses database-level atomic updates to ensure only one driver can accept a request.
+   */
   async acceptOffer({ actor, offerId, idempotencyKey }) {
     assertTruckOwner(actor);
 
@@ -743,6 +760,7 @@ export class MarketplaceService {
       throw new AppError(404, 'OFFER_NOT_FOUND', 'Offer was not found.');
     }
 
+    // Return the request details if the driver had already successfully accepted it
     if (offer.status === offerStatuses.accepted) {
       const request = await this.kuliRequestRepository.findById(offer.requestId);
 
@@ -759,6 +777,7 @@ export class MarketplaceService {
       throw new AppError(409, 'OFFER_NOT_AVAILABLE', 'This offer is no longer available.');
     }
 
+    // Step 1: Lock the vehicle status to busy so no other offers can be routed to it
     const busyVehicle = await this.vehicleRepository.markBusyIfAvailable({
       vehicleId: offer.vehicleId,
       activeTripId: offer.requestId
@@ -768,6 +787,7 @@ export class MarketplaceService {
       throw new AppError(409, 'VEHICLE_NOT_AVAILABLE', 'Vehicle is no longer available for this request.');
     }
 
+    // Step 2: Atomically transition request from PENDING to ACCEPTED. First accept wins.
     const acceptedRequest = await this.kuliRequestRepository.acceptPending({
       requestId: offer.requestId,
       offerId: offer.id,

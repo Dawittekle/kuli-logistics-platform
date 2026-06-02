@@ -6212,6 +6212,10 @@ function OwnerTabs({ profile, onSignOut }: { profile: UserProfile; onSignOut: ()
   );
 }
 
+/**
+ * Core Application Controller that orchestrates authentication session status (via Supabase),
+ * remote user profile sync status, loading screens, and conditional screen/navigator routing.
+ */
 function AppContent() {
   const query = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
@@ -6556,6 +6560,12 @@ function AppContent() {
   );
 }
 
+/**
+ * Root Entrypoint of the KULI Mobile Client App.
+ * Wraps the app in global context providers:
+ * - SafeAreaProvider: Cross-platform iOS/Android safe area layout bounds.
+ * - QueryClientProvider: React Query context for data-fetching, caching, and cache invalidation.
+ */
 export default function App() {
   return (
     <SafeAreaProvider>

@@ -78,6 +78,10 @@ const assertOwnerVehicle = (vehicle, user) => {
   }
 };
 
+/**
+ * Service orchestrating the onboarding, document verification, and availability state management
+ * of carrier vehicles on the KULI Logistics Platform.
+ */
 export class VehicleRegistryService {
   constructor({
     vehicleClassRepository,
@@ -211,6 +215,10 @@ export class VehicleRegistryService {
     });
   }
 
+  /**
+   * Registers a new vehicle under the ownership of the acting truck owner.
+   * New vehicles default to a offline status and PENDING verification until reviewed by an admin.
+   */
   async createVehicle({ actor, input }) {
     assertTruckOwner(actor);
 
@@ -510,6 +518,10 @@ export class VehicleRegistryService {
     });
   }
 
+  /**
+   * Updates the truck availability status (offline/onlineAvailable/busy) and real-time coordinates.
+   * Enforces status transition integrity rules to prevent unsafe offline state changes during active trips.
+   */
   async updateAvailability({ actor, vehicleId, input }) {
     assertTruckOwner(actor);
     const vehicle = await this.vehicleRepository.findById(vehicleId);
@@ -571,6 +583,10 @@ export class VehicleRegistryService {
     );
   }
 
+  /**
+   * Approves or Rejects a carrier vehicle's verification request.
+   * Safe-logs decisions to the platform audit trace and notifies the owner of the outcome.
+   */
   async decideVerification({ actor, vehicleId, input }) {
     assertAdmin(actor);
 
