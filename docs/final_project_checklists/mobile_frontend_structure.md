@@ -93,8 +93,8 @@ Session states:
 
 - Login with Supabase email/password.
 - Public registration for `client` and `truck_owner`.
-- Forgot-password/account recovery through Supabase reset email.
-- Password-reset completion from a Supabase recovery deep link, then the user signs in again with the new password.
+- Forgot-password/account recovery through Supabase reset OTP. The user requests a code, enters it inside KULI, then chooses a new password in the app.
+- Password-reset completion from a Supabase recovery deep link remains available as a fallback, then the user signs in again with the new password.
 - Email confirmation code entry and resend.
 - Local development demo profiles when demo auth is enabled.
 
@@ -103,7 +103,8 @@ Important behavior:
 - Public registration does not expose `admin` or `assistant`.
 - Normal routing after auth depends on backend `/me`.
 - Demo login can preserve an existing backend role by email so an owner account does not silently become a client.
-- Password reset uses Supabase email recovery and keeps existing login/register/verification behavior intact.
+- Password reset uses Supabase recovery OTP (`verifyOtp` with `type: recovery`) and keeps signup confirmation behavior separate from password recovery.
+- Supabase password-recovery email templates should include the OTP token for the in-app reset flow. The deep-link URL is still configured as a fallback.
 
 ## Navigation Structure
 
