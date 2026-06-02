@@ -95,6 +95,11 @@ export class VehicleRegistryService {
     return this.vehicleClassRepository.listActive();
   }
 
+  async listAdminVehicleClasses({ actor }) {
+    assertAdmin(actor);
+    return this.vehicleClassRepository.listForAdmin();
+  }
+
   async createVehicleClass({ actor, input }) {
     assertAdmin(actor);
 
@@ -433,6 +438,19 @@ export class VehicleRegistryService {
   async listPendingVerification({ actor }) {
     assertAdmin(actor);
     return this.vehicleRepository.listPendingVerification();
+  }
+
+  async listAdminVehicles({ actor, filters = {} }) {
+    assertAdmin(actor);
+
+    const vehicles = await this.vehicleRepository.listForAdmin(filters);
+
+    return Promise.all(
+      vehicles.map(async (vehicle) => ({
+        ...vehicle,
+        documents: await this.vehicleDocumentRepository.listByVehicleId(vehicle.id)
+      }))
+    );
   }
 
   async decideVerification({ actor, vehicleId, input }) {

@@ -654,6 +654,18 @@ const createRouteRequest = (context) => async (request) => {
     );
   }
 
+  if (method === 'GET' && path === '/api/v1/admin/vehicle-classes') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    return success(
+      await context.vehicleRegistryService.listAdminVehicleClasses({
+        actor: currentUser
+      })
+    );
+  }
+
   if (method === 'POST' && path === '/api/v1/admin/vehicle-classes') {
     const { currentUser } = await resolveAuth();
     assertActiveAccount(currentUser);
@@ -1007,6 +1019,23 @@ const createRouteRequest = (context) => async (request) => {
         input: await parseJsonBody(request)
       }),
       201
+    );
+  }
+
+  if (method === 'GET' && path === '/api/v1/admin/vehicles') {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    return success(
+      await context.vehicleRegistryService.listAdminVehicles({
+        actor: currentUser,
+        filters: {
+          verificationStatus: url.query.verificationStatus,
+          availabilityStatus: url.query.availabilityStatus,
+          search: url.query.search
+        }
+      })
     );
   }
 

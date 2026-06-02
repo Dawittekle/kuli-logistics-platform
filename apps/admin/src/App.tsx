@@ -7,12 +7,18 @@ import {
   CircleDollarSign,
   ClipboardList,
   CreditCard,
+  FileCheck2,
+  FileClock,
   FileText,
   FileWarning,
+  FileX2,
   Gauge,
+  History,
+  Layers,
   LockKeyhole,
   LogOut,
   MapPin,
+  Search,
   RefreshCw,
   ShieldCheck,
   Truck,
@@ -77,6 +83,7 @@ type VehicleClass = {
     includedMinutes?: number;
     perExtraMinuteRate?: number;
   };
+  deletedAt?: string;
 };
 
 type PricingRule = {
@@ -322,6 +329,73 @@ const roleLabels: Record<Role, string> = {
 
 const accountStatusOptions: AccountStatus[] = ['active', 'pending_verification', 'suspended', 'banned', 'deleted'];
 const requestStatusOptions: KuliRequest['status'][] = ['pending', 'accepted', 'en_route_to_pickup', 'arrived_at_pickup', 'loading', 'in_transit', 'unloading', 'completed', 'cancelled', 'timed_out'];
+const verificationStatusOptions: Vehicle['verificationStatus'][] = ['draft', 'pending', 'approved', 'rejected'];
+
+const accountStatusLabels: Record<AccountStatus, string> = {
+  active: 'Active',
+  pending_verification: 'Pending verification',
+  suspended: 'Suspended',
+  banned: 'Banned',
+  deleted: 'Deleted'
+};
+
+const verificationStatusLabels: Record<Vehicle['verificationStatus'], string> = {
+  draft: 'Draft',
+  pending: 'Pending review',
+  approved: 'Approved',
+  rejected: 'Rejected'
+};
+
+const availabilityStatusLabels: Record<string, string> = {
+  offline: 'Offline',
+  online_available: 'Online',
+  busy_on_job: 'Busy on job',
+  maintenance: 'Maintenance',
+  suspended: 'Suspended'
+};
+
+const requestStatusLabels: Record<KuliRequest['status'], string> = {
+  pending: 'Waiting for owner',
+  accepted: 'Accepted',
+  en_route_to_pickup: 'Heading to pickup',
+  arrived_at_pickup: 'Arrived at pickup',
+  loading: 'Loading',
+  in_transit: 'In transit',
+  unloading: 'Unloading',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+  timed_out: 'Timed out'
+};
+
+const paymentStatusLabels: Record<PaymentRecord['status'], string> = {
+  pending: 'Payment pending',
+  confirmed_by_owner: 'Confirmed by owner',
+  disputed: 'Disputed',
+  resolved: 'Resolved',
+  cancelled: 'Cancelled',
+  not_required: 'Not required'
+};
+
+const reportStatusLabels: Record<ReportRecord['status'], string> = {
+  open: 'Open',
+  under_review: 'Under review',
+  awaiting_response: 'Awaiting response',
+  resolved: 'Resolved',
+  rejected: 'Rejected'
+};
+
+const auditActionLabels: Record<string, string> = {
+  'vehicle.approved': 'Vehicle approved',
+  'vehicle.rejected': 'Vehicle rejected',
+  'vehicle.status_updated': 'Vehicle status updated',
+  'vehicle.document_attached': 'Vehicle document attached',
+  'file_signed_url_created': 'File preview created',
+  'pricing_rule.created': 'Pricing rule created',
+  'pricing_rule.activated': 'Pricing rule activated',
+  'report.resolved': 'Report resolved',
+  'payment.resolved': 'Payment resolved',
+  'user.status_updated': 'User status updated'
+};
 
 const adminRoutes: AdminRouteItem[] = [
   { path: '/admin/dashboard', page: 'dashboard', label: 'Dashboard', icon: Gauge, detail: 'Operational metrics and release readiness.' },
@@ -370,6 +444,18 @@ const humanize = (value?: string) => {
     .replaceAll('_', ' ')
     .replace(/\b\w/g, (match) => match.toUpperCase());
 };
+
+const humanRole = (role?: Role | 'system') => (role ? roleLabels[role as Role] ?? humanize(role) : 'System');
+const humanAccountStatus = (status?: AccountStatus) => (status ? accountStatusLabels[status] : 'Unknown');
+const humanVerificationStatus = (status?: Vehicle['verificationStatus']) => (status ? verificationStatusLabels[status] : 'Unknown');
+const humanAvailabilityStatus = (status?: string) => (status ? availabilityStatusLabels[status] ?? humanize(status) : 'Unknown');
+const humanRequestStatus = (status?: KuliRequest['status']) => (status ? requestStatusLabels[status] : 'Unknown');
+const humanPaymentStatus = (status?: PaymentRecord['status']) => (status ? paymentStatusLabels[status] : 'Unknown');
+const humanReportStatus = (status?: ReportRecord['status']) => (status ? reportStatusLabels[status] : 'Unknown');
+const humanAuditAction = (action?: string) => (action ? auditActionLabels[action] ?? humanize(action) : 'Unknown action');
+
+const formatDateTime = (value?: string) => (value ? new Date(value).toLocaleString() : 'Not recorded');
+const formatDate = (value?: string) => (value ? new Date(value).toLocaleDateString() : 'Not recorded');
 
 const getErrorMessage = (error: unknown) => {
   if (error instanceof Error) {
@@ -422,6 +508,42 @@ function InfoPill({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
+function PageIntro({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) {
+  return (
+    <div className="page-intro">
+      <div>
+        <p className="eyebrow">{eyebrow}</p>
+        <h2>{title}</h2>
+        <p className="muted">{description}</p>
+      </div>
+      {action ? <div className="page-intro__action">{action}</div> : null}
+    </div>
+  );
+}
+
+function SummaryCard({ icon: Icon, label, value, tone, helper }: { icon: typeof Gauge; label: string; value: ReactNode; tone: 'ready' | 'warn' | 'blocked' | 'muted'; helper?: string }) {
+  return (
+    <div className="summary-card">
+      <span className={`summary-card__icon summary-card__icon--${tone}`}>
+        <Icon aria-hidden="true" size={18} />
+      </span>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      {helper ? <p>{helper}</p> : null}
+    </div>
+  );
+}
+
+function EmptyState({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="empty-state">
+      <ClipboardList aria-hidden="true" size={24} />
+      <strong>{title}</strong>
+      <p>{description}</p>
+    </div>
+  );
+}
+
 function DocumentReviewCard({ document, onPreview }: { document: VehicleDocument; onPreview: (fileId: string) => void }) {
   const tone = document.status === 'approved' ? 'ready' : document.status === 'rejected' ? 'blocked' : 'warn';
 
@@ -444,10 +566,10 @@ function TimelineEventRow({ event }: { event: StatusEvent }) {
     <div className="timeline-row">
       <span className="timeline-row__dot" aria-hidden="true" />
       <div>
-        <strong>{event.fromStatus ? `${humanize(event.fromStatus)} to ${humanize(event.toStatus)}` : humanize(event.toStatus)}</strong>
-        <small>{humanize(event.actorRole)}{event.actorUserId ? ` / ${event.actorUserId}` : ''}{event.reason ? ` / ${event.reason}` : ''}</small>
+        <strong>{event.fromStatus ? `${humanRequestStatus(event.fromStatus)} to ${humanRequestStatus(event.toStatus)}` : humanRequestStatus(event.toStatus)}</strong>
+        <small>{humanRole(event.actorRole)}{event.actorUserId ? ` / ${event.actorUserId}` : ''}{event.reason ? ` / ${event.reason}` : ''}</small>
       </div>
-      <time>{event.createdAt ? new Date(event.createdAt).toLocaleString() : 'Pending time'}</time>
+      <time>{formatDateTime(event.createdAt)}</time>
     </div>
   );
 }
@@ -692,76 +814,114 @@ function AdminDashboardPanel({ enabled }: { enabled: boolean }) {
   ];
   const readiness = readinessQuery.data;
   const hardeningChecks = readiness ? Object.entries(readiness.checks) : [];
+  const pendingWork = [
+    { label: 'Vehicle approvals', value: metrics?.pendingVehicles ?? 0, helper: 'Documents waiting for review', tone: (metrics?.pendingVehicles ?? 0) > 0 ? 'warn' as const : 'ready' as const },
+    { label: 'Open trust reports', value: metrics?.openReports ?? 0, helper: 'Reports needing mediation', tone: (metrics?.openReports ?? 0) > 0 ? 'blocked' as const : 'ready' as const },
+    { label: 'Payment disputes', value: metrics?.disputedPayments ?? 0, helper: 'Manual cash cases', tone: (metrics?.disputedPayments ?? 0) > 0 ? 'blocked' as const : 'ready' as const },
+    { label: 'Hotline tickets', value: metrics?.openTickets ?? 0, helper: 'Assistant follow-up queue', tone: (metrics?.openTickets ?? 0) > 0 ? 'warn' as const : 'ready' as const }
+  ];
 
   return (
-    <section className="panel panel--wide">
-      <div className="panel__header">
-        <div>
-          <p className="eyebrow">Operations dashboard</p>
-          <h2>Release signals and live queues</h2>
-        </div>
-        <button className="icon-button" type="button" onClick={() => {
-          metricsQuery.refetch();
-          readinessQuery.refetch();
-        }}>
-          <RefreshCw aria-hidden="true" size={18} />
-          Refresh
-        </button>
-      </div>
+    <>
+      <PageIntro
+        eyebrow="Operations overview"
+        title="Admin dashboard"
+        description="Monitor platform health, active marketplace queues, and release readiness from one focused overview."
+        action={(
+          <button className="icon-button" type="button" onClick={() => {
+            metricsQuery.refetch();
+            readinessQuery.refetch();
+          }}>
+            <RefreshCw aria-hidden="true" size={18} />
+            Refresh
+          </button>
+        )}
+      />
       {metricsQuery.isError ? <p className="field-error">{getErrorMessage(metricsQuery.error)}</p> : null}
       {readinessQuery.isError ? <p className="field-error">{getErrorMessage(readinessQuery.error)}</p> : null}
-      <div className="dashboard-hero">
-        <div>
-          <p className="eyebrow">Today at a glance</p>
-          <h3>Operational queues that need attention</h3>
-          <p className="muted">Metrics are pulled from the admin dashboard API and reflect live system state.</p>
-        </div>
-        <div className="hero-status-stack">
-          <StatusBadge tone={readiness?.runtime.ok ? 'ready' : 'blocked'}>{readiness?.runtime.ok ? 'Runtime ready' : 'Runtime review'}</StatusBadge>
-          <StatusBadge tone={metricsQuery.isFetching || readinessQuery.isFetching ? 'warn' : 'ready'}>{metricsQuery.isFetching || readinessQuery.isFetching ? 'Refreshing' : 'Current'}</StatusBadge>
-        </div>
-      </div>
-      <div className="metric-board" aria-label="Admin dashboard metrics">
-        {metricRows.map((metric) => (
-          <MetricCard icon={metric.icon} key={metric.label} label={metric.label} value={metric.value} tone={metric.tone} helper={metric.helper} />
-        ))}
-      </div>
-      <div className="readiness-grid">
-        <div className="support-card">
-          <div className="detail-heading">
-            <div>
-              <h3>Runtime config</h3>
-              <p className="muted">Production-blocking checks stay visible beside warning-only setup gaps.</p>
-            </div>
-            <StatusBadge tone={readiness?.runtime.ok ? 'ready' : 'blocked'}>{readiness?.runtime.ok ? 'Ready' : 'Review'}</StatusBadge>
+      <section className="panel panel--wide">
+        <div className="dashboard-hero">
+          <div>
+            <p className="eyebrow">Live control room</p>
+            <h3>Queues, readiness, and operational risk</h3>
+            <p className="muted">Metrics come from backend admin endpoints. Nothing on this dashboard is hard-coded.</p>
           </div>
-          <div className="runtime-list">
-            {(readiness?.runtime.checks ?? []).map((check) => (
-              <div className="runtime-row" key={check.id}>
-                <span>{check.message}</span>
-                <StatusBadge tone={check.ok ? 'ready' : check.severity === 'error' ? 'blocked' : 'warn'}>{check.ok ? 'Pass' : check.severity}</StatusBadge>
+          <div className="hero-status-stack">
+            <StatusBadge tone={readiness?.runtime.ok ? 'ready' : 'blocked'}>{readiness?.runtime.ok ? 'Runtime ready' : 'Runtime review'}</StatusBadge>
+            <StatusBadge tone={metricsQuery.isFetching || readinessQuery.isFetching ? 'warn' : 'ready'}>{metricsQuery.isFetching || readinessQuery.isFetching ? 'Refreshing' : 'Current'}</StatusBadge>
+          </div>
+        </div>
+        <div className="metric-board" aria-label="Admin dashboard metrics">
+          {metricRows.map((metric) => (
+            <MetricCard icon={metric.icon} key={metric.label} label={metric.label} value={metric.value} tone={metric.tone} helper={metric.helper} />
+          ))}
+        </div>
+      </section>
+      <section className="dashboard-structure panel--wide">
+        <div className="dashboard-structure__main">
+          <div className="panel">
+            <div className="panel__header">
+              <div>
+                <p className="eyebrow">Live queues</p>
+                <h2>Pending work preview</h2>
               </div>
-            ))}
-          </div>
-        </div>
-        <div className="support-card">
-          <div className="detail-heading">
-            <div>
-              <h3>Hardening</h3>
-              <p className="muted">These map to the backend release-readiness contract and smoke checklist.</p>
+              <StatusBadge tone={pendingWork.some((item) => item.value > 0) ? 'warn' : 'ready'}>
+                {pendingWork.reduce((total, item) => total + Number(item.value), 0)} items
+              </StatusBadge>
+            </div>
+            <div className="work-preview-list">
+              {pendingWork.map((item) => (
+                <div className="work-preview-row" key={item.label}>
+                  <span>
+                    <strong>{item.label}</strong>
+                    <small>{item.helper}</small>
+                  </span>
+                  <StatusBadge tone={item.tone}>{item.value}</StatusBadge>
+                </div>
+              ))}
             </div>
           </div>
-          <div className="runtime-list">
-            {hardeningChecks.map(([key, ok]) => (
-              <div className="runtime-row" key={key}>
-                <span>{key.replaceAll(/([A-Z])/g, ' $1').toLowerCase()}</span>
-                <StatusBadge tone={ok ? 'ready' : 'blocked'}>{ok ? 'Pass' : 'Fail'}</StatusBadge>
+          <div className="panel">
+            <div className="panel__header">
+              <div>
+                <p className="eyebrow">Runtime hardening</p>
+                <h2>Release checklist</h2>
               </div>
-            ))}
+              <StatusBadge tone={hardeningChecks.every(([, ok]) => ok) ? 'ready' : 'blocked'}>{hardeningChecks.every(([, ok]) => ok) ? 'Passing' : 'Review'}</StatusBadge>
+            </div>
+            <div className="runtime-list">
+              {hardeningChecks.map(([key, ok]) => (
+                <div className="runtime-row" key={key}>
+                  <span>{humanize(key.replaceAll(/([A-Z])/g, ' $1').trim())}</span>
+                  <StatusBadge tone={ok ? 'ready' : 'blocked'}>{ok ? 'Pass' : 'Fail'}</StatusBadge>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
-    </section>
+        <aside className="dashboard-structure__side">
+          <ApiHealthPanel />
+          <RuntimePanel />
+          <div className="panel">
+            <div className="panel__header">
+              <div>
+                <p className="eyebrow">Environment</p>
+                <h2>Runtime checks</h2>
+              </div>
+              <StatusBadge tone={readiness?.runtime.ok ? 'ready' : 'blocked'}>{readiness?.runtime.ok ? 'Ready' : 'Review'}</StatusBadge>
+            </div>
+            <div className="runtime-list">
+              {(readiness?.runtime.checks ?? []).map((check) => (
+                <div className="runtime-row" key={check.id}>
+                  <span>{check.message}</span>
+                  <StatusBadge tone={check.ok ? 'ready' : check.severity === 'error' ? 'blocked' : 'warn'}>{check.ok ? 'Pass' : humanize(check.severity)}</StatusBadge>
+                </div>
+              ))}
+            </div>
+          </div>
+        </aside>
+      </section>
+    </>
   );
 }
 
@@ -796,6 +956,9 @@ function AdminUsersPanel({ enabled }: { enabled: boolean }) {
     const haystack = `${user.fullName ?? ''} ${user.email ?? ''} ${user.phone ?? ''} ${user.id}`.toLowerCase();
     return (!roleFilter || user.role === roleFilter) && (!statusFilter || user.accountStatus === statusFilter) && (!search.trim() || haystack.includes(search.trim().toLowerCase()));
   });
+  const activeUsers = users.filter((user) => user.accountStatus === 'active').length;
+  const staffUsers = users.filter((user) => user.role === 'admin' || user.role === 'assistant').length;
+  const ownerUsers = users.filter((user) => user.role === 'truck_owner').length;
 
   useEffect(() => {
     if (!selectedUserId && users[0]) {
@@ -837,7 +1000,7 @@ function AdminUsersPanel({ enabled }: { enabled: boolean }) {
         }
       })) as ApiEnvelope<UserProfile>;
 
-      setMessage(`${result.data.fullName || result.data.email || result.data.id} moved to ${result.data.accountStatus}.`);
+      setMessage(`${result.data.fullName || result.data.email || result.data.id} moved to ${humanAccountStatus(result.data.accountStatus)}.`);
       await queryClient.invalidateQueries({ queryKey: ['admin-users'] });
     } catch (statusError) {
       setError(getErrorMessage(statusError));
@@ -847,129 +1010,176 @@ function AdminUsersPanel({ enabled }: { enabled: boolean }) {
   };
 
   return (
-    <section className="panel panel--wide">
-      <div className="panel__header">
-        <div>
-          <p className="eyebrow">Admin users</p>
-          <h2>User table</h2>
-        </div>
-        <StatusBadge tone={usersQuery.isSuccess ? 'ready' : usersQuery.isError ? 'blocked' : 'warn'}>
-          {usersQuery.isSuccess ? `${usersQuery.data.length} records` : usersQuery.isError ? 'Needs token' : 'Loading'}
-        </StatusBadge>
-      </div>
+    <>
+      <PageIntro
+        eyebrow="Identity and access"
+        title="User management"
+        description="Search profiles, inspect account details, and update account status with backend authorization."
+        action={<StatusBadge tone={usersQuery.isSuccess ? 'ready' : usersQuery.isError ? 'blocked' : 'warn'}>{usersQuery.isSuccess ? `${usersQuery.data.length} records` : usersQuery.isError ? 'Needs token' : 'Loading'}</StatusBadge>}
+      />
       {usersQuery.isError ? <p className="field-error">{getErrorMessage(usersQuery.error)}</p> : null}
       {error ? <p className="field-error" role="alert">{error}</p> : null}
       {message ? <p className="muted">{message}</p> : null}
-      <div className="support-toolbar support-toolbar--triple">
-        <label>
-          Role
-          <select onChange={(event) => setRoleFilter(event.target.value as Role | '')} value={roleFilter}>
-            <option value="">All</option>
-            {Object.entries(roleLabels).map(([role, label]) => (
-              <option key={role} value={role}>{label}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Status
-          <select onChange={(event) => setStatusFilter(event.target.value as AccountStatus | '')} value={statusFilter}>
-            <option value="">All</option>
-            {accountStatusOptions.map((status) => (
-              <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Search
-          <input onChange={(event) => setSearch(event.target.value)} placeholder="Name, email, phone, id" value={search} />
-        </label>
-      </div>
-      <div className="management-layout">
-        <div className="data-table" role="table" aria-label="Admin users">
-          <div className="data-row data-row--head" role="row">
-            <span>Name</span>
-            <span>Role</span>
-            <span>Status</span>
-            <span>Contact</span>
+      <section className="summary-grid panel--wide" aria-label="User summary">
+        <SummaryCard icon={UsersRound} label="Total users" value={users.length} tone="ready" helper="All marketplace profiles" />
+        <SummaryCard icon={CheckCircle2} label="Active users" value={activeUsers} tone="ready" helper="Allowed to operate" />
+        <SummaryCard icon={ShieldCheck} label="Staff" value={staffUsers} tone={staffUsers ? 'warn' : 'muted'} helper="Admin and assistant profiles" />
+        <SummaryCard icon={Truck} label="Truck owners" value={ownerUsers} tone="ready" helper="Supply-side accounts" />
+      </section>
+      <section className="panel panel--wide">
+        <div className="panel__header">
+          <div>
+            <p className="eyebrow">Directory</p>
+            <h2>Profiles and access state</h2>
           </div>
-          {filteredUsers.map((user) => (
-            <button
-              className={`data-row data-row--button ${selectedUser?.id === user.id ? 'is-selected' : ''}`}
-              key={user.id}
-              onClick={() => {
-                setSelectedUserId(user.id);
-                setNextStatus(user.accountStatus);
-                setError('');
-                setMessage('');
-              }}
-              role="row"
-              type="button"
-            >
-              <strong>{user.fullName || 'Unnamed profile'}</strong>
-              <span>{roleLabels[user.role]}</span>
-              <StatusBadge tone={user.accountStatus === 'active' ? 'ready' : isBlockedStatus(user.accountStatus) ? 'blocked' : 'warn'}>{humanize(user.accountStatus)}</StatusBadge>
-              <span>{user.email || user.phone || 'No contact'}</span>
-            </button>
-          ))}
+          <button className="secondary-action" type="button" onClick={() => usersQuery.refetch()}>
+            <RefreshCw aria-hidden="true" size={16} />
+            Refresh
+          </button>
         </div>
-
-        <aside className="inspector-panel" aria-label="Selected user details">
-          <div className="detail-heading">
-            <div>
-              <p className="eyebrow">Account inspector</p>
-              <h3>{detailQuery.data?.fullName || selectedUser?.fullName || 'Select a user'}</h3>
-              <p className="muted">{detailQuery.data?.email || detailQuery.data?.phone || selectedUser?.id || 'Open a row to inspect account state.'}</p>
+        <div className="support-toolbar support-toolbar--triple">
+          <label>
+            Role
+            <select onChange={(event) => setRoleFilter(event.target.value as Role | '')} value={roleFilter}>
+              <option value="">All roles</option>
+              {Object.entries(roleLabels).map(([role, label]) => (
+                <option key={role} value={role}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Status
+            <select onChange={(event) => setStatusFilter(event.target.value as AccountStatus | '')} value={statusFilter}>
+              <option value="">All statuses</option>
+              {accountStatusOptions.map((status) => (
+                <option key={status} value={status}>{humanAccountStatus(status)}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Search
+            <span className="input-with-icon">
+              <Search aria-hidden="true" size={16} />
+              <input onChange={(event) => setSearch(event.target.value)} placeholder="Name, email, phone, id" value={search} />
+            </span>
+          </label>
+        </div>
+        <div className="management-layout">
+          <div className="data-table" role="table" aria-label="Admin users">
+            <div className="data-row data-row--head" role="row">
+              <span>Name</span>
+              <span>Role</span>
+              <span>Status</span>
+              <span>Contact</span>
             </div>
-            {selectedUser ? <StatusBadge tone={selectedUser.accountStatus === 'active' ? 'ready' : isBlockedStatus(selectedUser.accountStatus) ? 'blocked' : 'warn'}>{humanize(selectedUser.accountStatus)}</StatusBadge> : null}
+            {filteredUsers.length === 0 ? <EmptyState title="No users found" description="Try a different role, status, or search term." /> : null}
+            {filteredUsers.map((user) => (
+              <button
+                className={`data-row data-row--button ${selectedUser?.id === user.id ? 'is-selected' : ''}`}
+                key={user.id}
+                onClick={() => {
+                  setSelectedUserId(user.id);
+                  setNextStatus(user.accountStatus);
+                  setError('');
+                  setMessage('');
+                }}
+                role="row"
+                type="button"
+              >
+                <strong>{user.fullName || 'Unnamed profile'}</strong>
+                <span>{roleLabels[user.role]}</span>
+                <StatusBadge tone={user.accountStatus === 'active' ? 'ready' : isBlockedStatus(user.accountStatus) ? 'blocked' : 'warn'}>{humanAccountStatus(user.accountStatus)}</StatusBadge>
+                <span>{user.email || user.phone || 'No contact'}</span>
+              </button>
+            ))}
           </div>
-          {detailQuery.isError ? <p className="field-error">{getErrorMessage(detailQuery.error)}</p> : null}
-          {selectedUser ? (
-            <>
-              <div className="info-strip">
-                <InfoPill label="Role" value={roleLabels[selectedUser.role]} />
-                <InfoPill label="Created" value={selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : 'Unknown'} />
+
+          <aside className="inspector-panel" aria-label="Selected user details">
+            <div className="detail-heading">
+              <div>
+                <p className="eyebrow">Account inspector</p>
+                <h3>{detailQuery.data?.fullName || selectedUser?.fullName || 'Select a user'}</h3>
+                <p className="muted">{detailQuery.data?.email || detailQuery.data?.phone || selectedUser?.id || 'Open a row to inspect account state.'}</p>
               </div>
-              <div className="support-toolbar">
-                <label>
-                  Account status
-                  <select onChange={(event) => setNextStatus(event.target.value as AccountStatus)} value={nextStatus}>
-                    {accountStatusOptions.map((status) => (
-                      <option key={status} value={status}>{humanize(status)}</option>
-                    ))}
-                  </select>
-                </label>
-                <button className="icon-button" disabled={pendingStatus || selectedUser.accountStatus === nextStatus} onClick={updateStatus} type="button">
-                  {pendingStatus ? 'Updating...' : 'Update status'}
-                </button>
-              </div>
-            </>
-          ) : null}
-        </aside>
-      </div>
-    </section>
+              {selectedUser ? <StatusBadge tone={selectedUser.accountStatus === 'active' ? 'ready' : isBlockedStatus(selectedUser.accountStatus) ? 'blocked' : 'warn'}>{humanAccountStatus(selectedUser.accountStatus)}</StatusBadge> : null}
+            </div>
+            {detailQuery.isError ? <p className="field-error">{getErrorMessage(detailQuery.error)}</p> : null}
+            {selectedUser ? (
+              <>
+                <div className="info-strip">
+                  <InfoPill label="Role" value={roleLabels[selectedUser.role]} />
+                  <InfoPill label="Created" value={formatDate(selectedUser.createdAt)} />
+                </div>
+                <div className="support-toolbar">
+                  <label>
+                    Account status
+                    <select onChange={(event) => setNextStatus(event.target.value as AccountStatus)} value={nextStatus}>
+                      {accountStatusOptions.map((status) => (
+                        <option key={status} value={status}>{humanAccountStatus(status)}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button className="icon-button" disabled={pendingStatus || selectedUser.accountStatus === nextStatus} onClick={updateStatus} type="button">
+                    {pendingStatus ? 'Updating...' : 'Update status'}
+                  </button>
+                </div>
+              </>
+            ) : null}
+          </aside>
+        </div>
+      </section>
+    </>
   );
 }
 
 function AdminVerificationPanel({ enabled }: { enabled: boolean }) {
   const queryClient = useQueryClient();
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
+  const [verificationFilter, setVerificationFilter] = useState<Vehicle['verificationStatus'] | ''>('pending');
+  const [vehicleSearch, setVehicleSearch] = useState('');
   const [decisionReason, setDecisionReason] = useState('');
   const [signedUrlMessage, setSignedUrlMessage] = useState('');
   const [decisionError, setDecisionError] = useState('');
   const [pendingDecision, setPendingDecision] = useState(false);
 
-  const pendingVehiclesQuery = useQuery({
+  const vehiclesQuery = useQuery({
     enabled,
-    queryKey: ['admin-vehicles', 'pending'],
-    queryFn: async () => ((await kuliApi.request('/admin/vehicles/pending')) as ApiEnvelope<Vehicle[]>).data
+    queryKey: ['admin-vehicles', verificationFilter, vehicleSearch],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+
+      if (verificationFilter) {
+        params.set('verificationStatus', verificationFilter);
+      }
+
+      if (vehicleSearch.trim()) {
+        params.set('search', vehicleSearch.trim());
+      }
+
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      return ((await kuliApi.request(`/admin/vehicles${suffix}`)) as ApiEnvelope<Vehicle[]>).data;
+    }
   });
 
-  const selectedVehicle = selectedVehicleId || pendingVehiclesQuery.data?.[0]?.id || '';
+  const allVehiclesQuery = useQuery({
+    enabled,
+    queryKey: ['admin-vehicles', 'summary'],
+    queryFn: async () => ((await kuliApi.request('/admin/vehicles')) as ApiEnvelope<Vehicle[]>).data
+  });
+
+  const visibleVehicles = vehiclesQuery.data ?? [];
+  const selectedVehicle = selectedVehicleId || visibleVehicles[0]?.id || '';
 
   const vehicleDetailQuery = useQuery({
     enabled: enabled && Boolean(selectedVehicle),
     queryKey: ['admin-vehicles', selectedVehicle],
     queryFn: async () => ((await kuliApi.request(`/admin/vehicles/${selectedVehicle}`)) as ApiEnvelope<Vehicle>).data
+  });
+
+  const ownerDetailQuery = useQuery({
+    enabled: enabled && Boolean(vehicleDetailQuery.data?.ownerId),
+    queryKey: ['admin-users', vehicleDetailQuery.data?.ownerId],
+    queryFn: async () => ((await kuliApi.request(`/admin/users/${vehicleDetailQuery.data?.ownerId}`)) as ApiEnvelope<UserProfile>).data
   });
 
   if (!enabled) {
@@ -1000,6 +1210,7 @@ function AdminVerificationPanel({ enabled }: { enabled: boolean }) {
       });
       setDecisionReason('');
       await queryClient.invalidateQueries({ queryKey: ['admin-vehicles'] });
+      await queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
     } catch (error) {
       setDecisionError(getErrorMessage(error));
     } finally {
@@ -1019,104 +1230,180 @@ function AdminVerificationPanel({ enabled }: { enabled: boolean }) {
   };
 
   const detail = vehicleDetailQuery.data;
-  const pendingVehicles = pendingVehiclesQuery.data ?? [];
+  const allVehicles = allVehiclesQuery.data ?? [];
+  const summary = verificationStatusOptions.reduce<Record<Vehicle['verificationStatus'], number>>((counts, status) => {
+    counts[status] = allVehicles.filter((vehicle) => vehicle.verificationStatus === status).length;
+    return counts;
+  }, { draft: 0, pending: 0, approved: 0, rejected: 0 });
+  const requiredDocumentTypes = ['identity', 'driver_license', 'registration_certificate', 'ownership_proof', 'insurance'];
+  const owner = ownerDetailQuery.data;
 
   return (
-    <section className="panel panel--wide">
-      <div className="panel__header">
-        <div>
-          <p className="eyebrow">Verification queue</p>
-          <h2>Pending vehicles</h2>
+    <>
+      <PageIntro
+        eyebrow="Vehicle verification"
+        title="Review submitted trucks"
+        description="Work through owner applications with document evidence, owner context, and audit-backed decisions."
+        action={<StatusBadge tone={vehiclesQuery.isError ? 'blocked' : summary.pending ? 'warn' : 'ready'}>{vehiclesQuery.isError ? 'Needs token' : `${summary.pending} pending`}</StatusBadge>}
+      />
+      {vehiclesQuery.isError ? <p className="field-error">{getErrorMessage(vehiclesQuery.error)}</p> : null}
+      {allVehiclesQuery.isError ? <p className="field-error">{getErrorMessage(allVehiclesQuery.error)}</p> : null}
+      <section className="summary-grid panel--wide" aria-label="Vehicle verification summary">
+        <SummaryCard icon={FileClock} label="Pending review" value={summary.pending} tone={summary.pending ? 'warn' : 'ready'} helper="Awaiting admin decision" />
+        <SummaryCard icon={FileCheck2} label="Approved" value={summary.approved} tone="ready" helper="Allowed to go online" />
+        <SummaryCard icon={FileX2} label="Rejected" value={summary.rejected} tone={summary.rejected ? 'blocked' : 'muted'} helper="Returned with reason" />
+        <SummaryCard icon={FileText} label="Drafts" value={summary.draft} tone={summary.draft ? 'warn' : 'muted'} helper="Not submitted yet" />
+      </section>
+      <section className="panel panel--wide">
+        <div className="panel__header">
+          <div>
+            <p className="eyebrow">Review workbench</p>
+            <h2>Queue and decision detail</h2>
+          </div>
+          <button className="secondary-action" type="button" onClick={() => {
+            vehiclesQuery.refetch();
+            allVehiclesQuery.refetch();
+          }}>
+            <RefreshCw aria-hidden="true" size={16} />
+            Refresh
+          </button>
         </div>
-        <StatusBadge tone={pendingVehiclesQuery.isError ? 'blocked' : pendingVehicles.length ? 'warn' : 'ready'}>
-          {pendingVehiclesQuery.isError ? 'Needs token' : `${pendingVehicles.length} pending`}
-        </StatusBadge>
-      </div>
-      {pendingVehiclesQuery.isError ? <p className="field-error">{getErrorMessage(pendingVehiclesQuery.error)}</p> : null}
-      <div className="review-workbench">
-        <div className="queue-list queue-list--sticky" aria-label="Pending vehicle queue">
-          <p className="eyebrow">Review queue</p>
-          {pendingVehicles.length === 0 ? <p className="muted">No pending vehicles.</p> : null}
-          {pendingVehicles.map((vehicle) => (
-            <button
-              className={`queue-item ${selectedVehicle === vehicle.id ? 'is-selected' : ''}`}
-              key={vehicle.id}
-              onClick={() => {
-                setSelectedVehicleId(vehicle.id);
-                setDecisionError('');
-                setSignedUrlMessage('');
-              }}
-              type="button"
-            >
-              <strong>{vehicle.licensePlate}</strong>
-              <span>{vehicle.vehicleClassSnapshot?.name || 'Vehicle class'} / {vehicle.capacityKg ?? 0}kg</span>
-              <StatusBadge tone="warn">{humanize(vehicle.verificationStatus)}</StatusBadge>
-            </button>
-          ))}
+        <div className="support-toolbar support-toolbar--triple">
+          <label>
+            Verification status
+            <select onChange={(event) => {
+              setVerificationFilter(event.target.value as Vehicle['verificationStatus'] | '');
+              setSelectedVehicleId('');
+            }} value={verificationFilter}>
+              <option value="">All statuses</option>
+              {verificationStatusOptions.map((status) => (
+                <option key={status} value={status}>{humanVerificationStatus(status)}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Search
+            <span className="input-with-icon">
+              <Search aria-hidden="true" size={16} />
+              <input onChange={(event) => setVehicleSearch(event.target.value)} placeholder="Plate, owner, description" value={vehicleSearch} />
+            </span>
+          </label>
+          <label>
+            Queue state
+            <span className="input-static">{vehiclesQuery.isFetching ? 'Refreshing queue' : `${visibleVehicles.length} visible vehicles`}</span>
+          </label>
         </div>
+        <div className="review-workbench">
+          <div className="queue-list queue-list--sticky" aria-label="Vehicle verification queue">
+            <p className="eyebrow">Vehicle list</p>
+            {visibleVehicles.length === 0 ? <EmptyState title="No vehicles found" description="Try another status or search term." /> : null}
+            {visibleVehicles.map((vehicle) => (
+              <button
+                className={`queue-item ${selectedVehicle === vehicle.id ? 'is-selected' : ''}`}
+                key={vehicle.id}
+                onClick={() => {
+                  setSelectedVehicleId(vehicle.id);
+                  setDecisionError('');
+                  setSignedUrlMessage('');
+                }}
+                type="button"
+              >
+                <strong>{vehicle.licensePlate}</strong>
+                <span>{vehicle.vehicleClassSnapshot?.name || 'Vehicle class'} / {vehicle.capacityKg ?? 0}kg / {humanAvailabilityStatus(vehicle.availabilityStatus)}</span>
+                <StatusBadge tone={vehicle.verificationStatus === 'approved' ? 'ready' : vehicle.verificationStatus === 'rejected' ? 'blocked' : 'warn'}>{humanVerificationStatus(vehicle.verificationStatus)}</StatusBadge>
+              </button>
+            ))}
+          </div>
 
-        <div className="verification-detail">
-          {detail ? (
-            <>
-              <div className="vehicle-summary-card">
-                <div>
-                  <p className="eyebrow">Vehicle detail</p>
-                  <h3>{detail.licensePlate}</h3>
-                  <p className="muted">{detail.description || 'No owner notes submitted.'}</p>
-                </div>
-                <StatusBadge tone={detail.verificationStatus === 'pending' ? 'warn' : detail.verificationStatus === 'approved' ? 'ready' : 'blocked'}>
-                  {humanize(detail.verificationStatus)}
-                </StatusBadge>
-                <div className="info-strip info-strip--three">
-                  <InfoPill label="Class" value={detail.vehicleClassSnapshot?.name || 'Vehicle'} />
-                  <InfoPill label="Capacity" value={`${detail.capacityKg ?? 0}kg`} />
-                  <InfoPill label="Volume" value={`${detail.capacityCubicMeters ?? 0}m3`} />
-                </div>
-              </div>
-              <div className="document-review-grid">
-                <div className="document-review-grid__header">
+          <div className="verification-detail">
+            {detail ? (
+              <>
+                <div className="vehicle-summary-card">
                   <div>
-                    <p className="eyebrow">Documents</p>
-                    <h3>Verification evidence</h3>
+                    <p className="eyebrow">Vehicle detail</p>
+                    <h3>{detail.licensePlate}</h3>
+                    <p className="muted">{detail.description || 'No owner notes submitted.'}</p>
                   </div>
-                  <StatusBadge tone={(detail.documents ?? []).length ? 'warn' : 'blocked'}>{(detail.documents ?? []).length} files</StatusBadge>
+                  <StatusBadge tone={detail.verificationStatus === 'pending' ? 'warn' : detail.verificationStatus === 'approved' ? 'ready' : 'blocked'}>
+                    {humanVerificationStatus(detail.verificationStatus)}
+                  </StatusBadge>
+                  <div className="info-strip info-strip--four">
+                    <InfoPill label="Class" value={detail.vehicleClassSnapshot?.name || 'Vehicle'} />
+                    <InfoPill label="Capacity" value={`${detail.capacityKg ?? 0}kg`} />
+                    <InfoPill label="Volume" value={`${detail.capacityCubicMeters ?? 0}m3`} />
+                    <InfoPill label="Availability" value={humanAvailabilityStatus(detail.availabilityStatus)} />
+                  </div>
                 </div>
-                {(detail.documents ?? []).length === 0 ? <p className="muted">No documents attached yet. Ask the owner to upload identity, license, registration, ownership proof, and insurance when available.</p> : null}
-                {(detail.documents ?? []).map((doc) => (
-                  <DocumentReviewCard document={doc} key={doc.id} onPreview={previewDocument} />
-                ))}
-              </div>
-              {signedUrlMessage ? <p className="muted">{signedUrlMessage}</p> : null}
-              <div className="decision-card">
-                <div>
-                  <p className="eyebrow">Decision</p>
-                  <h3>Record admin outcome</h3>
+                <div className="owner-card">
+                  <div>
+                    <p className="eyebrow">Owner</p>
+                    <h3>{owner?.fullName || owner?.email || detail.ownerId}</h3>
+                    <p className="muted">{owner?.phone || owner?.email || 'Owner profile is loading or unavailable.'}</p>
+                  </div>
+                  <StatusBadge tone={owner?.accountStatus === 'active' ? 'ready' : owner?.accountStatus && isBlockedStatus(owner.accountStatus) ? 'blocked' : 'warn'}>
+                    {owner?.accountStatus ? humanAccountStatus(owner.accountStatus) : 'Profile'}
+                  </StatusBadge>
                 </div>
-                <label className="decision-label">
-                  Decision note
-                  <textarea
-                    onChange={(event) => setDecisionReason(event.target.value)}
-                    placeholder="Required for rejection; useful for approval notes."
-                    value={decisionReason}
-                  />
-                </label>
-                {decisionError ? <p className="field-error" role="alert">{decisionError}</p> : null}
-                <div className="decision-actions">
-                  <button className="icon-button" disabled={pendingDecision} onClick={() => decide('approved')} type="button">
-                    Approve vehicle
-                  </button>
-                  <button className="danger-button" disabled={pendingDecision} onClick={() => decide('rejected')} type="button">
-                    Reject vehicle
-                  </button>
+                <div className="document-review-grid">
+                  <div className="document-review-grid__header">
+                    <div>
+                      <p className="eyebrow">Documents</p>
+                      <h3>Verification checklist</h3>
+                    </div>
+                    <StatusBadge tone={(detail.documents ?? []).length ? 'warn' : 'blocked'}>{(detail.documents ?? []).length} files</StatusBadge>
+                  </div>
+                  {requiredDocumentTypes.map((type) => {
+                    const document = (detail.documents ?? []).find((doc) => doc.type === type);
+
+                    return document ? (
+                      <DocumentReviewCard document={document} key={type} onPreview={previewDocument} />
+                    ) : (
+                      <div className="document-review-card document-review-card--missing" key={type}>
+                        <span className="document-review-card__icon">
+                          <FileText aria-hidden="true" size={20} />
+                        </span>
+                        <span>
+                          <strong>{humanize(type)}</strong>
+                          <small>Required document is not attached yet.</small>
+                        </span>
+                        <StatusBadge tone={type === 'insurance' ? 'muted' : 'blocked'}>{type === 'insurance' ? 'Optional' : 'Missing'}</StatusBadge>
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
-            </>
-          ) : (
-            <p className="muted">Select a pending vehicle to inspect documents and record a decision.</p>
-          )}
+                {signedUrlMessage ? <p className="muted">{signedUrlMessage}</p> : null}
+                <div className="decision-card">
+                  <div>
+                    <p className="eyebrow">Decision</p>
+                    <h3>Record admin outcome</h3>
+                    <p className="muted">Approval unlocks normal availability rules. Rejection requires a clear owner-facing reason.</p>
+                  </div>
+                  <label className="decision-label">
+                    Decision note
+                    <textarea
+                      onChange={(event) => setDecisionReason(event.target.value)}
+                      placeholder="Required for rejection; useful for approval notes."
+                      value={decisionReason}
+                    />
+                  </label>
+                  {decisionError ? <p className="field-error" role="alert">{decisionError}</p> : null}
+                  <div className="decision-actions">
+                    <button className="icon-button" disabled={pendingDecision || detail.verificationStatus === 'approved'} onClick={() => decide('approved')} type="button">
+                      Approve vehicle
+                    </button>
+                    <button className="danger-button" disabled={pendingDecision || detail.verificationStatus === 'rejected'} onClick={() => decide('rejected')} type="button">
+                      Reject vehicle
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <EmptyState title="Select a vehicle" description="Choose a queue item to inspect owner details, documents, and decision controls." />
+            )}
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </>
   );
 }
 
@@ -1150,12 +1437,14 @@ function AdminVehicleClassesPanel({ enabled }: { enabled: boolean }) {
 
   const vehicleClassesQuery = useQuery({
     enabled,
-    queryKey: ['vehicle-classes'],
-    queryFn: async () => ((await kuliApi.vehicleClasses()) as ApiEnvelope<VehicleClass[]>).data
+    queryKey: ['admin-vehicle-classes'],
+    queryFn: async () => ((await kuliApi.request('/admin/vehicle-classes')) as ApiEnvelope<VehicleClass[]>).data
   });
 
   const vehicleClasses = vehicleClassesQuery.data ?? [];
   const selectedClass = selectedClassId ? vehicleClasses.find((vehicleClass) => vehicleClass.id === selectedClassId) : undefined;
+  const activeClasses = vehicleClasses.filter((vehicleClass) => vehicleClass.active !== false && !('deletedAt' in vehicleClass)).length;
+  const inactiveClasses = vehicleClasses.length - activeClasses;
 
   useEffect(() => {
     if (!selectedClass) {
@@ -1214,6 +1503,7 @@ function AdminVehicleClassesPanel({ enabled }: { enabled: boolean }) {
       setSelectedClassId(result.data.id);
       setMessage(selectedClass ? 'Vehicle class updated.' : 'Vehicle class created.');
       await queryClient.invalidateQueries({ queryKey: ['vehicle-classes'] });
+      await queryClient.invalidateQueries({ queryKey: ['admin-vehicle-classes'] });
     } catch (saveError) {
       setError(getErrorMessage(saveError));
     } finally {
@@ -1241,6 +1531,7 @@ function AdminVehicleClassesPanel({ enabled }: { enabled: boolean }) {
       setDescription('');
       setMessage('Vehicle class deactivated.');
       await queryClient.invalidateQueries({ queryKey: ['vehicle-classes'] });
+      await queryClient.invalidateQueries({ queryKey: ['admin-vehicle-classes'] });
     } catch (deleteError) {
       setError(getErrorMessage(deleteError));
     } finally {
@@ -1249,20 +1540,33 @@ function AdminVehicleClassesPanel({ enabled }: { enabled: boolean }) {
   };
 
   return (
-    <section className="panel panel--wide">
-      <div className="panel__header">
-        <div>
-          <p className="eyebrow">Vehicle classes</p>
-          <h2>Capacity bands</h2>
-        </div>
-        <StatusBadge tone={vehicleClassesQuery.isError ? 'blocked' : vehicleClasses.length ? 'ready' : 'warn'}>
-          {vehicleClassesQuery.isError ? 'Needs token' : `${vehicleClasses.length} active`}
-        </StatusBadge>
-      </div>
+    <>
+      <PageIntro
+        eyebrow="Fleet configuration"
+        title="Vehicle classes"
+        description="Manage the truck categories used by onboarding, matching, and quote pricing."
+        action={<StatusBadge tone={vehicleClassesQuery.isError ? 'blocked' : activeClasses ? 'ready' : 'warn'}>{vehicleClassesQuery.isError ? 'Needs token' : `${activeClasses} active`}</StatusBadge>}
+      />
       {vehicleClassesQuery.isError ? <p className="field-error">{getErrorMessage(vehicleClassesQuery.error)}</p> : null}
       {error ? <p className="field-error" role="alert">{error}</p> : null}
       {message ? <p className="muted">{message}</p> : null}
-      <div className="class-workbench">
+      <section className="summary-grid panel--wide" aria-label="Vehicle class summary">
+        <SummaryCard icon={Truck} label="Active classes" value={activeClasses} tone="ready" helper="Available in owner/client flows" />
+        <SummaryCard icon={Layers} label="Inactive classes" value={inactiveClasses} tone={inactiveClasses ? 'warn' : 'muted'} helper="Hidden from public selectors" />
+        <SummaryCard icon={CircleDollarSign} label="Pricing defaults" value={vehicleClasses.filter((item) => item.defaultPricing).length} tone="ready" helper="Seed values for rule drafts" />
+      </section>
+      <section className="panel panel--wide">
+        <div className="panel__header">
+          <div>
+            <p className="eyebrow">Class workbench</p>
+            <h2>Library and editor</h2>
+          </div>
+          <button className="secondary-action" type="button" onClick={() => vehicleClassesQuery.refetch()}>
+            <RefreshCw aria-hidden="true" size={16} />
+            Refresh
+          </button>
+        </div>
+        <div className="class-workbench">
         <div className="queue-list">
           <p className="eyebrow">Class library</p>
           <button
@@ -1294,7 +1598,7 @@ function AdminVehicleClassesPanel({ enabled }: { enabled: boolean }) {
             >
               <strong>{vehicleClass.name}</strong>
               <span>{vehicleClass.capacityKg ?? 0}kg / {vehicleClass.capacityCubicMeters ?? 0}m3 / {vehicleClass.slug}</span>
-              <StatusBadge tone={vehicleClass.active === false ? 'muted' : 'ready'}>{vehicleClass.active === false ? 'Inactive' : 'Active'}</StatusBadge>
+              <StatusBadge tone={vehicleClass.active === false || 'deletedAt' in vehicleClass ? 'muted' : 'ready'}>{vehicleClass.active === false || 'deletedAt' in vehicleClass ? 'Inactive' : 'Active'}</StatusBadge>
             </button>
           ))}
         </div>
@@ -1305,7 +1609,7 @@ function AdminVehicleClassesPanel({ enabled }: { enabled: boolean }) {
               <h3>{selectedClass ? selectedClass.name : 'New class'}</h3>
               <p className="muted">Vehicle classes feed owner onboarding, load validation, matching, and pricing rules.</p>
             </div>
-            {selectedClass ? <StatusBadge tone="ready">Active</StatusBadge> : <StatusBadge tone="muted">Draft</StatusBadge>}
+            {selectedClass ? <StatusBadge tone={selectedClass.active === false || 'deletedAt' in selectedClass ? 'muted' : 'ready'}>{selectedClass.active === false || 'deletedAt' in selectedClass ? 'Inactive' : 'Active'}</StatusBadge> : <StatusBadge tone="muted">Draft</StatusBadge>}
           </div>
           <div className="class-editor__sections">
             <div className="form-section">
@@ -1365,7 +1669,7 @@ function AdminVehicleClassesPanel({ enabled }: { enabled: boolean }) {
             <button className="icon-button" disabled={Boolean(pendingAction)} onClick={saveClass} type="button">
               {pendingAction === 'save' ? 'Saving...' : selectedClass ? 'Update class' : 'Create class'}
             </button>
-            {selectedClass ? (
+            {selectedClass && selectedClass.active !== false && !('deletedAt' in selectedClass) ? (
               <button className="danger-button" disabled={Boolean(pendingAction)} onClick={deactivateClass} type="button">
                 {pendingAction === 'delete' ? 'Deactivating...' : 'Deactivate'}
               </button>
@@ -1373,7 +1677,8 @@ function AdminVehicleClassesPanel({ enabled }: { enabled: boolean }) {
           </div>
         </div>
       </div>
-    </section>
+      </section>
+    </>
   );
 }
 
@@ -1498,19 +1803,32 @@ function AdminPricingPanel({ enabled }: { enabled: boolean }) {
   };
 
   return (
-    <section className="panel panel--wide">
-      <div className="panel__header">
-        <div>
-          <p className="eyebrow">Pricing rules</p>
-          <h2>Quote configuration</h2>
-        </div>
-        <StatusBadge tone={pricingRulesQuery.isError ? 'blocked' : activeRule ? 'ready' : 'warn'}>
-          {pricingRulesQuery.isError ? 'Needs token' : activeRule ? `Active v${activeRule.version}` : 'No active rule'}
-        </StatusBadge>
-      </div>
+    <>
+      <PageIntro
+        eyebrow="Pricing control"
+        title="Pricing rules"
+        description="Create draft quote rules, compare them with the active version, and activate server-confirmed pricing."
+        action={<StatusBadge tone={pricingRulesQuery.isError ? 'blocked' : activeRule ? 'ready' : 'warn'}>{pricingRulesQuery.isError ? 'Needs token' : activeRule ? `Active v${activeRule.version}` : 'No active rule'}</StatusBadge>}
+      />
       {pricingRulesQuery.isError ? <p className="field-error">{getErrorMessage(pricingRulesQuery.error)}</p> : null}
       {vehicleClassesQuery.isError ? <p className="field-error">{getErrorMessage(vehicleClassesQuery.error)}</p> : null}
-      <div className="pricing-workbench">
+      <section className="summary-grid panel--wide" aria-label="Pricing summary">
+        <SummaryCard icon={CircleDollarSign} label="Active version" value={activeRule ? `v${activeRule.version}` : 'None'} tone={activeRule ? 'ready' : 'warn'} helper="Used by new quotes" />
+        <SummaryCard icon={Truck} label="Vehicle rows" value={vehicleClasses.length} tone="ready" helper="Class-specific rates" />
+        <SummaryCard icon={History} label="Rule history" value={pricingRules.length} tone={pricingRules.length ? 'ready' : 'warn'} helper="Versioned records" />
+      </section>
+      <section className="panel panel--wide">
+        <div className="panel__header">
+          <div>
+            <p className="eyebrow">Pricing workbench</p>
+            <h2>Draft editor and version history</h2>
+          </div>
+          <button className="secondary-action" type="button" onClick={() => pricingRulesQuery.refetch()}>
+            <RefreshCw aria-hidden="true" size={16} />
+            Refresh
+          </button>
+        </div>
+        <div className="pricing-workbench">
         <div className="pricing-editor pricing-editor--primary">
           <div className="detail-heading">
             <div>
@@ -1590,9 +1908,9 @@ function AdminPricingPanel({ enabled }: { enabled: boolean }) {
                   <h3>Version {rule.version}</h3>
                   <p className="muted">{rule.currency} / fuel {rule.fuelSurchargePercent}% / {rule.vehicleClassRules.length} classes</p>
                 </div>
-                <StatusBadge tone={rule.status === 'active' ? 'ready' : rule.status === 'draft' ? 'warn' : 'muted'}>{rule.status}</StatusBadge>
+                <StatusBadge tone={rule.status === 'active' ? 'ready' : rule.status === 'draft' ? 'warn' : 'muted'}>{humanize(rule.status)}</StatusBadge>
               </div>
-              <p className="muted">Effective {new Date(rule.effectiveFrom).toLocaleString()}</p>
+              <p className="muted">Effective {formatDateTime(rule.effectiveFrom)}</p>
               <div className="info-strip">
                 <InfoPill label="Currency" value={rule.currency} />
                 <InfoPill label="Fuel" value={`${rule.fuelSurchargePercent}%`} />
@@ -1605,8 +1923,9 @@ function AdminPricingPanel({ enabled }: { enabled: boolean }) {
             </div>
           ))}
         </aside>
-      </div>
-    </section>
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -1824,100 +2143,183 @@ function AdminTrustFinancePanel({ enabled, view }: { enabled: boolean; view: 're
     }
   };
 
-  return (
-    <section className="panel panel--wide">
-      <div className="panel__header">
-        <div>
-          <p className="eyebrow">{view === 'reports' ? 'Trust queue' : 'Manual cash'}</p>
-          <h2>{view === 'reports' ? 'Reports and disputes' : 'Payment management'}</h2>
-        </div>
-        <StatusBadge tone={reportsQuery.isError || paymentsQuery.isError ? 'blocked' : reports.length || payments.length ? 'warn' : 'ready'}>
-          {reportsQuery.isError || paymentsQuery.isError ? 'Needs token' : view === 'reports' ? `${reports.length} reports` : `${payments.length} payments`}
-        </StatusBadge>
-      </div>
-      {error ? <p className="field-error" role="alert">{error}</p> : null}
-      {message ? <p className="muted">{message}</p> : null}
-      {reportsQuery.isError ? <p className="field-error">{getErrorMessage(reportsQuery.error)}</p> : null}
-      {paymentsQuery.isError ? <p className="field-error">{getErrorMessage(paymentsQuery.error)}</p> : null}
+  if (view === 'reports') {
+    const openReports = reports.filter((report) => ['open', 'under_review', 'awaiting_response'].includes(report.status)).length;
+    const evidenceCount = reports.reduce((total, report) => total + (report.evidenceFileIds?.length ?? 0), 0);
 
-      <div className="support-layout">
-        {view === 'reports' ? <div className="support-column support-column--wide">
-          <div className="support-toolbar">
+    return (
+      <>
+        <PageIntro
+          eyebrow="Trust operations"
+          title="Reports and disputes"
+          description="Review reported issues, inspect evidence, and record audit-backed resolution outcomes."
+          action={<StatusBadge tone={reportsQuery.isError ? 'blocked' : openReports ? 'warn' : 'ready'}>{reportsQuery.isError ? 'Needs token' : `${openReports} open`}</StatusBadge>}
+        />
+        {error ? <p className="field-error" role="alert">{error}</p> : null}
+        {message ? <p className="muted">{message}</p> : null}
+        {reportsQuery.isError ? <p className="field-error">{getErrorMessage(reportsQuery.error)}</p> : null}
+        <section className="summary-grid panel--wide" aria-label="Reports summary">
+          <SummaryCard icon={FileWarning} label="Visible reports" value={reports.length} tone={reports.length ? 'warn' : 'ready'} helper="Current filter results" />
+          <SummaryCard icon={AlertTriangle} label="Open work" value={openReports} tone={openReports ? 'blocked' : 'ready'} helper="Needs staff resolution" />
+          <SummaryCard icon={FileText} label="Evidence files" value={evidenceCount} tone={evidenceCount ? 'warn' : 'muted'} helper="Linked uploads" />
+        </section>
+        <section className="panel panel--wide">
+          <div className="panel__header">
+            <div>
+              <p className="eyebrow">Resolution workbench</p>
+              <h2>Report list and detail</h2>
+            </div>
+            <button className="secondary-action" type="button" onClick={() => reportsQuery.refetch()}>
+              <RefreshCw aria-hidden="true" size={16} />
+              Refresh
+            </button>
+          </div>
+          <div className="support-toolbar support-toolbar--triple">
             <label>
               Report status
               <select onChange={(event) => setReportStatusFilter(event.target.value as ReportRecord['status'] | '')} value={reportStatusFilter}>
-                <option value="">All</option>
+                <option value="">All statuses</option>
                 {reportStatuses.map((status) => (
-                  <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>
+                  <option key={status} value={status}>{humanReportStatus(status)}</option>
                 ))}
               </select>
             </label>
             <label>
               Category
               <select onChange={(event) => setReportCategoryFilter(event.target.value)} value={reportCategoryFilter}>
-                <option value="">All</option>
+                <option value="">All categories</option>
                 {adminReportCategories.map((category) => (
-                  <option key={category} value={category}>{category.replaceAll('_', ' ')}</option>
+                  <option key={category} value={category}>{humanize(category)}</option>
                 ))}
               </select>
             </label>
+            <label>
+              Queue
+              <span className="input-static">{reportsQuery.isFetching ? 'Refreshing reports' : `${reports.length} matching reports`}</span>
+            </label>
           </div>
-          <div className="queue-list">
-            {reportsQuery.isLoading ? <p className="muted">Loading reports...</p> : null}
-            {reports.length === 0 && !reportsQuery.isLoading ? <p className="muted">No reports match this filter.</p> : null}
-            {reports.map((report) => (
-              <button
-                className={`queue-item ${selectedReport?.id === report.id ? 'is-selected' : ''}`}
-                key={report.id}
-                onClick={() => {
-                  setSelectedReportId(report.id);
-                  setError('');
-                  setMessage('');
-                }}
-                type="button"
-              >
-                <strong>{report.reportCode}</strong>
-                <span>{report.category.replaceAll('_', ' ')} / {report.requestId || 'platform issue'}</span>
-                <StatusBadge tone={reportTone(report.status)}>{report.status.replaceAll('_', ' ')}</StatusBadge>
-              </button>
-            ))}
-          </div>
-
-          <div className="support-card">
-            <div className="detail-heading">
-              <div>
-                <h3>{selectedReport?.reportCode ?? 'Select a report'}</h3>
-                <p className="muted">{selectedReport?.description ?? 'Evidence and outcomes appear after selecting a report.'}</p>
-              </div>
-              {selectedReport ? <StatusBadge tone={reportTone(selectedReport.status)}>{selectedReport.status.replaceAll('_', ' ')}</StatusBadge> : null}
-            </div>
-            {selectedReport ? (
-              <>
-                <p className="muted">Reporter {selectedReport.reporterId} / reported owner {selectedReport.reportedUserId || 'n/a'} / evidence {(selectedReport.evidenceFileIds ?? []).length}</p>
-                <label>
-                  Outcome
-                  <select onChange={(event) => setReportOutcome(event.target.value)} value={reportOutcome}>
-                    {reportResolutionOutcomes.map((outcome) => (
-                      <option key={outcome} value={outcome}>{outcome.replaceAll('_', ' ')}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="decision-label">
-                  Resolution note
-                  <textarea onChange={(event) => setReportNote(event.target.value)} placeholder="Required audit note for the report outcome." value={reportNote} />
-                </label>
-                <button className="icon-button" disabled={pendingAction === 'report'} onClick={resolveReport} type="button">
-                  {pendingAction === 'report' ? 'Resolving...' : 'Resolve report'}
+          <div className="admin-split admin-split--detail-heavy">
+            <div className="queue-list queue-list--sticky">
+              {reportsQuery.isLoading ? <p className="muted">Loading reports...</p> : null}
+              {reports.length === 0 && !reportsQuery.isLoading ? <EmptyState title="No reports found" description="Try another status or category filter." /> : null}
+              {reports.map((report) => (
+                <button
+                  className={`queue-item ${selectedReport?.id === report.id ? 'is-selected' : ''}`}
+                  key={report.id}
+                  onClick={() => {
+                    setSelectedReportId(report.id);
+                    setError('');
+                    setMessage('');
+                  }}
+                  type="button"
+                >
+                  <strong>{report.reportCode}</strong>
+                  <span>{humanize(report.category)} / {report.requestId || 'Platform issue'}</span>
+                  <StatusBadge tone={reportTone(report.status)}>{humanReportStatus(report.status)}</StatusBadge>
                 </button>
-              </>
-            ) : null}
+              ))}
+            </div>
+            <div className="detail-workspace">
+              {selectedReport ? (
+                <>
+                  <div className="vehicle-summary-card">
+                    <div>
+                      <p className="eyebrow">Report detail</p>
+                      <h3>{selectedReport.reportCode}</h3>
+                      <p className="muted">{selectedReport.description}</p>
+                    </div>
+                    <StatusBadge tone={reportTone(selectedReport.status)}>{humanReportStatus(selectedReport.status)}</StatusBadge>
+                    <div className="info-strip info-strip--four">
+                      <InfoPill label="Category" value={humanize(selectedReport.category)} />
+                      <InfoPill label="Request" value={selectedReport.requestId || 'Platform'} />
+                      <InfoPill label="Reporter" value={selectedReport.reporterId} />
+                      <InfoPill label="Reported user" value={selectedReport.reportedUserId || 'Not linked'} />
+                    </div>
+                  </div>
+                  <div className="support-card">
+                    <div className="detail-heading">
+                      <div>
+                        <p className="eyebrow">Evidence</p>
+                        <h3>Attached files</h3>
+                      </div>
+                      <StatusBadge tone={(selectedReport.evidenceFileIds ?? []).length ? 'warn' : 'muted'}>{(selectedReport.evidenceFileIds ?? []).length} files</StatusBadge>
+                    </div>
+                    <div className="evidence-grid">
+                      {(selectedReport.evidenceFileIds ?? []).length === 0 ? <p className="muted">No evidence files were attached to this report.</p> : null}
+                      {(selectedReport.evidenceFileIds ?? []).map((fileId) => (
+                        <span className="evidence-chip" key={fileId}>
+                          <FileText aria-hidden="true" size={16} />
+                          {fileId}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="decision-card">
+                    <div>
+                      <p className="eyebrow">Resolution</p>
+                      <h3>Record outcome</h3>
+                    </div>
+                    <label>
+                      Outcome
+                      <select onChange={(event) => setReportOutcome(event.target.value)} value={reportOutcome}>
+                        {reportResolutionOutcomes.map((outcome) => (
+                          <option key={outcome} value={outcome}>{humanize(outcome)}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="decision-label">
+                      Resolution note
+                      <textarea onChange={(event) => setReportNote(event.target.value)} placeholder="Required audit note for the report outcome." value={reportNote} />
+                    </label>
+                    <button className="icon-button" disabled={pendingAction === 'report'} onClick={resolveReport} type="button">
+                      {pendingAction === 'report' ? 'Resolving...' : 'Resolve report'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <EmptyState title="Select a report" description="Report details, evidence, and resolution controls appear here." />
+              )}
+            </div>
           </div>
-        </div> : null}
+        </section>
+      </>
+    );
+  }
 
-        {view === 'payments' ? <div className="support-column support-column--wide">
-          <div className="queue-list">
+  const disputedPayments = payments.filter((payment) => payment.status === 'disputed').length;
+  const pendingPayments = payments.filter((payment) => payment.status === 'pending').length;
+
+  return (
+    <>
+      <PageIntro
+        eyebrow="Manual cash"
+        title="Payment management"
+        description="Review cash payment records, owner confirmations, and client disputes without implying digital processing."
+        action={<StatusBadge tone={paymentsQuery.isError ? 'blocked' : disputedPayments ? 'blocked' : pendingPayments ? 'warn' : 'ready'}>{paymentsQuery.isError ? 'Needs token' : `${payments.length} payments`}</StatusBadge>}
+      />
+      {error ? <p className="field-error" role="alert">{error}</p> : null}
+      {message ? <p className="muted">{message}</p> : null}
+      {paymentsQuery.isError ? <p className="field-error">{getErrorMessage(paymentsQuery.error)}</p> : null}
+      <section className="summary-grid panel--wide" aria-label="Payments summary">
+        <SummaryCard icon={CreditCard} label="Payment records" value={payments.length} tone="ready" helper="Manual/cash records" />
+        <SummaryCard icon={CircleDollarSign} label="Pending" value={pendingPayments} tone={pendingPayments ? 'warn' : 'ready'} helper="Awaiting confirmation" />
+        <SummaryCard icon={FileWarning} label="Disputed" value={disputedPayments} tone={disputedPayments ? 'blocked' : 'ready'} helper="Needs admin review" />
+      </section>
+      <section className="panel panel--wide">
+        <div className="panel__header">
+          <div>
+            <p className="eyebrow">Payment workbench</p>
+            <h2>Cash states and resolution</h2>
+          </div>
+          <button className="secondary-action" type="button" onClick={() => paymentsQuery.refetch()}>
+            <RefreshCw aria-hidden="true" size={16} />
+            Refresh
+          </button>
+        </div>
+        <div className="admin-split admin-split--detail-heavy">
+          <div className="queue-list queue-list--sticky">
             {paymentsQuery.isLoading ? <p className="muted">Loading payments...</p> : null}
-            {payments.length === 0 && !paymentsQuery.isLoading ? <p className="muted">No payment records yet.</p> : null}
+            {payments.length === 0 && !paymentsQuery.isLoading ? <EmptyState title="No payment records" description="Completed trips with cash settlement will appear here." /> : null}
             {payments.map((payment) => (
               <button
                 className={`queue-item ${selectedPayment?.id === payment.id ? 'is-selected' : ''}`}
@@ -1931,40 +2333,54 @@ function AdminTrustFinancePanel({ enabled, view }: { enabled: boolean; view: 're
                 type="button"
               >
                 <strong>{formatMoney(payment.currency, payment.amountConfirmed ?? payment.amountExpected)}</strong>
-                <span>{payment.requestId} / owner {payment.payeeOwnerId || 'n/a'}</span>
-                <StatusBadge tone={paymentTone(payment.status)}>{payment.status.replaceAll('_', ' ')}</StatusBadge>
+                <span>{payment.requestId} / owner {payment.payeeOwnerId || 'Not assigned'}</span>
+                <StatusBadge tone={paymentTone(payment.status)}>{humanPaymentStatus(payment.status)}</StatusBadge>
               </button>
             ))}
           </div>
-
-          <div className="support-card">
-            <div className="detail-heading">
-              <div>
-                <h3>{selectedPayment ? formatMoney(selectedPayment.currency, selectedPayment.amountConfirmed ?? selectedPayment.amountExpected) : 'Select a payment'}</h3>
-                <p className="muted">{selectedPayment?.disputeReason || selectedPayment?.resolutionNote || 'Cash confirmations and disputes stay manual in v1.'}</p>
-              </div>
-              {selectedPayment ? <StatusBadge tone={paymentTone(selectedPayment.status)}>{selectedPayment.status.replaceAll('_', ' ')}</StatusBadge> : null}
-            </div>
+          <div className="detail-workspace">
             {selectedPayment ? (
               <>
-                <p className="muted">Request {selectedPayment.requestId} / client {selectedPayment.payerClientId || 'n/a'} / method {selectedPayment.method || 'manual_cash'}</p>
-                <label>
-                  Confirmed amount
-                  <input onChange={(event) => setPaymentAmount(event.target.value)} type="number" value={paymentAmount} />
-                </label>
-                <label className="decision-label">
-                  Resolution note
-                  <textarea onChange={(event) => setPaymentNote(event.target.value)} placeholder="Required audit note for the payment decision." value={paymentNote} />
-                </label>
-                <button className="icon-button" disabled={pendingAction === 'payment'} onClick={resolvePayment} type="button">
-                  {pendingAction === 'payment' ? 'Resolving...' : 'Resolve payment'}
-                </button>
+                <div className="vehicle-summary-card">
+                  <div>
+                    <p className="eyebrow">Payment detail</p>
+                    <h3>{formatMoney(selectedPayment.currency, selectedPayment.amountConfirmed ?? selectedPayment.amountExpected)}</h3>
+                    <p className="muted">{selectedPayment.disputeReason || selectedPayment.resolutionNote || 'Cash confirmations and disputes stay manual in v1.'}</p>
+                  </div>
+                  <StatusBadge tone={paymentTone(selectedPayment.status)}>{humanPaymentStatus(selectedPayment.status)}</StatusBadge>
+                  <div className="info-strip info-strip--four">
+                    <InfoPill label="Request" value={selectedPayment.requestId} />
+                    <InfoPill label="Client" value={selectedPayment.payerClientId || 'Not linked'} />
+                    <InfoPill label="Owner" value={selectedPayment.payeeOwnerId || 'Not linked'} />
+                    <InfoPill label="Method" value={humanize(selectedPayment.method || 'manual_cash')} />
+                  </div>
+                </div>
+                <div className="decision-card">
+                  <div>
+                    <p className="eyebrow">Resolution</p>
+                    <h3>Resolve cash record</h3>
+                    <p className="muted">Use this only for backend-confirmed payment records. Digital payment gateways are not part of v1.</p>
+                  </div>
+                  <label>
+                    Confirmed amount
+                    <input onChange={(event) => setPaymentAmount(event.target.value)} type="number" value={paymentAmount} />
+                  </label>
+                  <label className="decision-label">
+                    Resolution note
+                    <textarea onChange={(event) => setPaymentNote(event.target.value)} placeholder="Required audit note for the payment decision." value={paymentNote} />
+                  </label>
+                  <button className="icon-button" disabled={pendingAction === 'payment'} onClick={resolvePayment} type="button">
+                    {pendingAction === 'payment' ? 'Resolving...' : 'Resolve payment'}
+                  </button>
+                </div>
               </>
-            ) : null}
+            ) : (
+              <EmptyState title="Select a payment" description="Payment amount, parties, dispute reason, and resolution controls appear here." />
+            )}
           </div>
-        </div> : null}
-      </div>
-    </section>
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -1986,10 +2402,25 @@ function AdminTripOversightPanel({ enabled }: { enabled: boolean }) {
     queryKey: ['admin-kuli-requests', selectedRequest?.id, 'events'],
     queryFn: async () => ((await kuliApi.request(`/kuli-requests/${selectedRequest?.id}/events`)) as ApiEnvelope<StatusEvent[]>).data
   });
+  const requestReportsQuery = useQuery({
+    enabled,
+    queryKey: ['admin-reports', 'request-connections'],
+    queryFn: async () => ((await kuliApi.request('/admin/reports')) as ApiEnvelope<ReportRecord[]>).data
+  });
+  const requestPaymentsQuery = useQuery({
+    enabled,
+    queryKey: ['admin-payments', 'request-connections'],
+    queryFn: async () => ((await kuliApi.request('/admin/payments')) as ApiEnvelope<PaymentRecord[]>).data
+  });
   const filteredRequests = requests.filter((request) => {
     const haystack = `${request.requestCode} ${request.id} ${request.clientId} ${request.selectedOwnerId ?? ''} ${request.pickupLocation?.addressText ?? ''} ${request.destinationLocation?.addressText ?? ''}`.toLowerCase();
     return (!statusFilter || request.status === statusFilter) && (!search.trim() || haystack.includes(search.trim().toLowerCase()));
   });
+  const activeRequests = requests.filter((request) => ['pending', 'accepted', 'en_route_to_pickup', 'arrived_at_pickup', 'loading', 'in_transit', 'unloading'].includes(request.status)).length;
+  const completedRequests = requests.filter((request) => request.status === 'completed').length;
+  const cancelledRequests = requests.filter((request) => ['cancelled', 'timed_out'].includes(request.status)).length;
+  const relatedReports = (requestReportsQuery.data ?? []).filter((report) => report.requestId === selectedRequest?.id);
+  const relatedPayments = (requestPaymentsQuery.data ?? []).filter((payment) => payment.requestId === selectedRequest?.id);
 
   useEffect(() => {
     if (!selectedRequestId && requests[0]) {
@@ -2002,90 +2433,136 @@ function AdminTripOversightPanel({ enabled }: { enabled: boolean }) {
   }
 
   return (
-    <section className="panel panel--wide">
-      <div className="panel__header">
-        <div>
-          <p className="eyebrow">Trip oversight</p>
-          <h2>KULI requests</h2>
-        </div>
-        <StatusBadge tone={requestsQuery.isError ? 'blocked' : filteredRequests.length ? 'warn' : 'ready'}>
-          {requestsQuery.isError ? 'Needs token' : `${filteredRequests.length} visible`}
-        </StatusBadge>
-      </div>
+    <>
+      <PageIntro
+        eyebrow="Marketplace oversight"
+        title="KULI requests"
+        description="Monitor request state, route summaries, owner assignment, timelines, and connected trust/payment records."
+        action={<StatusBadge tone={requestsQuery.isError ? 'blocked' : activeRequests ? 'warn' : 'ready'}>{requestsQuery.isError ? 'Needs token' : `${activeRequests} active`}</StatusBadge>}
+      />
       {requestsQuery.isError ? <p className="field-error">{getErrorMessage(requestsQuery.error)}</p> : null}
-      <div className="support-toolbar">
-        <label>
-          Status
-          <select onChange={(event) => setStatusFilter(event.target.value as KuliRequest['status'] | '')} value={statusFilter}>
-            <option value="">All</option>
-            {requestStatusOptions.map((status) => (
-              <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>
+      {requestReportsQuery.isError ? <p className="field-error">{getErrorMessage(requestReportsQuery.error)}</p> : null}
+      {requestPaymentsQuery.isError ? <p className="field-error">{getErrorMessage(requestPaymentsQuery.error)}</p> : null}
+      <section className="summary-grid panel--wide" aria-label="Request summary">
+        <SummaryCard icon={MapPin} label="Active requests" value={activeRequests} tone={activeRequests ? 'warn' : 'ready'} helper="Waiting or in progress" />
+        <SummaryCard icon={CheckCircle2} label="Completed" value={completedRequests} tone="ready" helper="Terminal successful trips" />
+        <SummaryCard icon={AlertTriangle} label="Cancelled/timed out" value={cancelledRequests} tone={cancelledRequests ? 'blocked' : 'muted'} helper="Terminal interruptions" />
+      </section>
+      <section className="panel panel--wide">
+        <div className="panel__header">
+          <div>
+            <p className="eyebrow">Oversight workbench</p>
+            <h2>Request list and timeline</h2>
+          </div>
+          <button className="secondary-action" type="button" onClick={() => {
+            requestsQuery.refetch();
+            eventsQuery.refetch();
+            requestReportsQuery.refetch();
+            requestPaymentsQuery.refetch();
+          }}>
+            <RefreshCw aria-hidden="true" size={16} />
+            Refresh
+          </button>
+        </div>
+        <div className="support-toolbar">
+          <label>
+            Status
+            <select onChange={(event) => setStatusFilter(event.target.value as KuliRequest['status'] | '')} value={statusFilter}>
+              <option value="">All statuses</option>
+              {requestStatusOptions.map((status) => (
+                <option key={status} value={status}>{humanRequestStatus(status)}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Search
+            <span className="input-with-icon">
+              <Search aria-hidden="true" size={16} />
+              <input onChange={(event) => setSearch(event.target.value)} placeholder="Request, client, owner, address" value={search} />
+            </span>
+          </label>
+        </div>
+        <div className="request-oversight-layout">
+          <div className="queue-list queue-list--sticky">
+            <p className="eyebrow">Request list</p>
+            {filteredRequests.length === 0 ? <EmptyState title="No requests found" description="Try a different status or search term." /> : null}
+            {filteredRequests.map((request) => (
+              <button
+                className={`queue-item request-card-row ${selectedRequest?.id === request.id ? 'is-selected' : ''}`}
+                key={request.id}
+                onClick={() => setSelectedRequestId(request.id)}
+                type="button"
+              >
+                <span className="request-card-row__top">
+                  <strong>{request.requestCode}</strong>
+                  <StatusBadge tone={request.status === 'completed' ? 'ready' : ['cancelled', 'timed_out'].includes(request.status) ? 'blocked' : 'warn'}>{humanRequestStatus(request.status)}</StatusBadge>
+                </span>
+                <span>{request.pickupLocation?.addressText || 'Pickup'} to {request.destinationLocation?.addressText || 'Destination'}</span>
+                <small>{formatMoney(request.quoteSnapshot?.currency, request.quoteSnapshot?.totalEstimate)}</small>
+              </button>
             ))}
-          </select>
-        </label>
-        <label>
-          Search
-          <input onChange={(event) => setSearch(event.target.value)} placeholder="Request, client, owner, address" value={search} />
-        </label>
-      </div>
-      <div className="request-oversight-layout">
-        <div className="queue-list queue-list--sticky">
-          <p className="eyebrow">Request list</p>
-          {filteredRequests.length === 0 ? <p className="muted">No requests match the current filters.</p> : null}
-          {filteredRequests.map((request) => (
-            <button
-              className={`queue-item request-card-row ${selectedRequest?.id === request.id ? 'is-selected' : ''}`}
-              key={request.id}
-              onClick={() => setSelectedRequestId(request.id)}
-              type="button"
-            >
-              <span className="request-card-row__top">
-                <strong>{request.requestCode}</strong>
-                <StatusBadge tone={request.status === 'completed' ? 'ready' : ['cancelled', 'timed_out'].includes(request.status) ? 'blocked' : 'warn'}>{humanize(request.status)}</StatusBadge>
-              </span>
-              <span>{request.pickupLocation?.addressText || 'Pickup'} to {request.destinationLocation?.addressText || 'Destination'}</span>
-              <small>{formatMoney(request.quoteSnapshot?.currency, request.quoteSnapshot?.totalEstimate)}</small>
-            </button>
-          ))}
-        </div>
-        <div className="request-inspector">
-          {selectedRequest ? (
-            <>
-              <div className="vehicle-summary-card">
-                <div>
-                  <p className="eyebrow">Request detail</p>
-                  <h3>{selectedRequest.requestCode}</h3>
-                  <p className="muted">{selectedRequest.pickupLocation?.addressText || 'Pickup'} to {selectedRequest.destinationLocation?.addressText || 'Destination'}</p>
-                </div>
-                <StatusBadge tone={selectedRequest.status === 'completed' ? 'ready' : ['cancelled', 'timed_out'].includes(selectedRequest.status) ? 'blocked' : 'warn'}>{humanize(selectedRequest.status)}</StatusBadge>
-                <div className="info-strip info-strip--four">
-                  <InfoPill label="Client" value={selectedRequest.clientId} />
-                  <InfoPill label="Owner" value={selectedRequest.selectedOwnerId || 'Not assigned'} />
-                  <InfoPill label="Vehicle" value={selectedRequest.selectedVehicleId || 'Not assigned'} />
-                  <InfoPill label="Estimate" value={formatMoney(selectedRequest.quoteSnapshot?.currency, selectedRequest.quoteSnapshot?.totalEstimate)} />
-                </div>
-              </div>
-              <div className="timeline-panel">
-                <div className="detail-heading">
+          </div>
+          <div className="request-inspector">
+            {selectedRequest ? (
+              <>
+                <div className="vehicle-summary-card">
                   <div>
-                    <p className="eyebrow">Timeline</p>
-                    <h3>Status events</h3>
+                    <p className="eyebrow">Request detail</p>
+                    <h3>{selectedRequest.requestCode}</h3>
+                    <p className="muted">{selectedRequest.pickupLocation?.addressText || 'Pickup'} to {selectedRequest.destinationLocation?.addressText || 'Destination'}</p>
                   </div>
-                  <StatusBadge tone={eventsQuery.isFetching ? 'warn' : 'ready'}>{eventsQuery.isFetching ? 'Refreshing' : `${eventsQuery.data?.length ?? 0} events`}</StatusBadge>
+                  <StatusBadge tone={selectedRequest.status === 'completed' ? 'ready' : ['cancelled', 'timed_out'].includes(selectedRequest.status) ? 'blocked' : 'warn'}>{humanRequestStatus(selectedRequest.status)}</StatusBadge>
+                  <div className="info-strip info-strip--four">
+                    <InfoPill label="Client" value={selectedRequest.clientId} />
+                    <InfoPill label="Owner" value={selectedRequest.selectedOwnerId || 'Not assigned'} />
+                    <InfoPill label="Vehicle" value={selectedRequest.selectedVehicleId || 'Not assigned'} />
+                    <InfoPill label="Estimate" value={formatMoney(selectedRequest.quoteSnapshot?.currency, selectedRequest.quoteSnapshot?.totalEstimate)} />
+                  </div>
                 </div>
-                {eventsQuery.isError ? <p className="field-error">{getErrorMessage(eventsQuery.error)}</p> : null}
-                {(eventsQuery.data ?? []).length === 0 ? <p className="muted">No status events returned yet.</p> : null}
-                {(eventsQuery.data ?? []).map((event) => (
-                  <TimelineEventRow event={event} key={event.id} />
-                ))}
-              </div>
-            </>
-          ) : (
-            <p className="muted">Select a request to inspect participants, estimate, and timeline.</p>
-          )}
+                <div className="support-card">
+                  <div className="detail-heading">
+                    <div>
+                      <p className="eyebrow">Connected records</p>
+                      <h3>Trust and payment links</h3>
+                    </div>
+                  </div>
+                  <div className="connection-grid">
+                    <div>
+                      <strong>Reports</strong>
+                      {relatedReports.length === 0 ? <p className="muted">No reports linked.</p> : relatedReports.map((report) => (
+                        <span className="connection-chip" key={report.id}>{report.reportCode} / {humanReportStatus(report.status)}</span>
+                      ))}
+                    </div>
+                    <div>
+                      <strong>Payments</strong>
+                      {relatedPayments.length === 0 ? <p className="muted">No payment record linked.</p> : relatedPayments.map((payment) => (
+                        <span className="connection-chip" key={payment.id}>{formatMoney(payment.currency, payment.amountConfirmed ?? payment.amountExpected)} / {humanPaymentStatus(payment.status)}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="timeline-panel">
+                  <div className="detail-heading">
+                    <div>
+                      <p className="eyebrow">Timeline</p>
+                      <h3>Status events</h3>
+                    </div>
+                    <StatusBadge tone={eventsQuery.isFetching ? 'warn' : 'ready'}>{eventsQuery.isFetching ? 'Refreshing' : `${eventsQuery.data?.length ?? 0} events`}</StatusBadge>
+                  </div>
+                  {eventsQuery.isError ? <p className="field-error">{getErrorMessage(eventsQuery.error)}</p> : null}
+                  {(eventsQuery.data ?? []).length === 0 ? <p className="muted">No status events returned yet.</p> : null}
+                  {(eventsQuery.data ?? []).map((event) => (
+                    <TimelineEventRow event={event} key={event.id} />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <EmptyState title="Select a request" description="Participants, route, estimate, connections, and timeline appear here." />
+            )}
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </>
   );
 }
 
@@ -2132,68 +2609,84 @@ function AdminAuditLogPanel({ enabled }: { enabled: boolean }) {
   }
 
   return (
-    <section className="panel panel--wide">
-      <div className="panel__header">
-        <div>
-          <p className="eyebrow">Audit viewer</p>
-          <h2>Append-only admin trail</h2>
-        </div>
-        <StatusBadge tone={auditQuery.isError ? 'blocked' : 'ready'}>{auditQuery.isError ? 'Needs token' : `${logs.length} logs`}</StatusBadge>
-      </div>
+    <>
+      <PageIntro
+        eyebrow="Security trail"
+        title="Audit logs"
+        description="Filter privileged actions, inspect targets, and review metadata without changing append-only records."
+        action={<StatusBadge tone={auditQuery.isError ? 'blocked' : 'ready'}>{auditQuery.isError ? 'Needs token' : `${logs.length} logs`}</StatusBadge>}
+      />
       {auditQuery.isError ? <p className="field-error">{getErrorMessage(auditQuery.error)}</p> : null}
-      <div className="support-toolbar support-toolbar--triple">
-        <label>
-          Actor user id
-          <input onChange={(event) => setActorUserId(event.target.value)} placeholder="usr_..." value={actorUserId} />
-        </label>
-        <label>
-          Action
-          <input onChange={(event) => setAction(event.target.value)} placeholder="vehicle.verification" value={action} />
-        </label>
-        <label>
-          Target type
-          <input onChange={(event) => setTargetType(event.target.value)} placeholder="vehicle, report, payment" value={targetType} />
-        </label>
-      </div>
-      <div className="split-panel">
-        <div className="queue-list">
-          {logs.length === 0 ? <p className="muted">No audit logs match the filters.</p> : null}
-          {logs.map((log) => (
-            <button
-              className={`queue-item ${selectedLog?.id === log.id ? 'is-selected' : ''}`}
-              key={log.id}
-              onClick={() => setSelectedLogId(log.id)}
-              type="button"
-            >
-              <strong>{log.action}</strong>
-              <span>{log.targetType || 'target'} / {log.targetId || 'no target id'}</span>
-              <StatusBadge tone={log.actorRole === 'admin' ? 'warn' : 'muted'}>{log.actorRole || 'system'}</StatusBadge>
-            </button>
-          ))}
+      <section className="panel panel--wide">
+        <div className="panel__header">
+          <div>
+            <p className="eyebrow">Audit workbench</p>
+            <h2>Filters and metadata preview</h2>
+          </div>
+          <button className="secondary-action" type="button" onClick={() => auditQuery.refetch()}>
+            <RefreshCw aria-hidden="true" size={16} />
+            Refresh
+          </button>
         </div>
-        <div className="decision-panel">
-          {selectedLog ? (
-            <>
-              <div className="detail-heading">
-                <div>
-                  <h3>{selectedLog.action}</h3>
-                  <p className="muted">{selectedLog.createdAt ? new Date(selectedLog.createdAt).toLocaleString() : 'No timestamp'}</p>
+        <div className="support-toolbar support-toolbar--triple">
+          <label>
+            Actor user id
+            <span className="input-with-icon">
+              <Search aria-hidden="true" size={16} />
+              <input onChange={(event) => setActorUserId(event.target.value)} placeholder="usr_..." value={actorUserId} />
+            </span>
+          </label>
+          <label>
+            Action
+            <input onChange={(event) => setAction(event.target.value)} placeholder="vehicle.approved" value={action} />
+          </label>
+          <label>
+            Target type
+            <input onChange={(event) => setTargetType(event.target.value)} placeholder="vehicle, report, payment" value={targetType} />
+          </label>
+        </div>
+        <div className="split-panel">
+          <div className="queue-list">
+            {logs.length === 0 ? <EmptyState title="No audit logs found" description="Try clearing filters or checking another actor/target." /> : null}
+            {logs.map((log) => (
+              <button
+                className={`queue-item ${selectedLog?.id === log.id ? 'is-selected' : ''}`}
+                key={log.id}
+                onClick={() => setSelectedLogId(log.id)}
+                type="button"
+              >
+                <strong>{humanAuditAction(log.action)}</strong>
+                <span>{humanize(log.targetType || 'target')} / {log.targetId || 'No target id'}</span>
+                <StatusBadge tone={log.actorRole === 'admin' ? 'warn' : 'muted'}>{humanRole(log.actorRole)}</StatusBadge>
+              </button>
+            ))}
+          </div>
+          <div className="decision-panel">
+            {selectedLog ? (
+              <>
+                <div className="detail-heading">
+                  <div>
+                    <p className="eyebrow">Selected log</p>
+                    <h3>{humanAuditAction(selectedLog.action)}</h3>
+                    <p className="muted">{formatDateTime(selectedLog.createdAt)}</p>
+                  </div>
+                  <StatusBadge tone="muted">{humanize(selectedLog.targetType || 'target')}</StatusBadge>
                 </div>
-                <StatusBadge tone="muted">{selectedLog.targetType || 'target'}</StatusBadge>
-              </div>
-              <div className="detail-grid">
-                <span>Actor <strong>{selectedLog.actorUserId || 'system'}</strong></span>
-                <span>Role <strong>{selectedLog.actorRole || 'system'}</strong></span>
-                <span>Target <strong>{selectedLog.targetId || 'none'}</strong></span>
-              </div>
-              <pre className="metadata-block">{JSON.stringify(selectedLog.metadata ?? {}, null, 2)}</pre>
-            </>
-          ) : (
-            <p className="muted">Select a log to inspect metadata.</p>
-          )}
+                <div className="detail-grid">
+                  <span>Actor <strong>{selectedLog.actorUserId || 'System'}</strong></span>
+                  <span>Role <strong>{humanRole(selectedLog.actorRole)}</strong></span>
+                  <span>Target <strong>{selectedLog.targetId || 'None'}</strong></span>
+                  <span>Action key <strong>{selectedLog.action}</strong></span>
+                </div>
+                <pre className="metadata-block">{JSON.stringify(selectedLog.metadata ?? {}, null, 2)}</pre>
+              </>
+            ) : (
+              <EmptyState title="Select a log" description="Audit metadata, actor, and target details appear here." />
+            )}
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </>
   );
 }
 
@@ -2696,7 +3189,7 @@ function BlockedAccount({ profile, onSignOut }: { profile: UserProfile; onSignOu
       <section className="login-panel">
         <p className="eyebrow">Account status</p>
         <h1>Staff commands are blocked.</h1>
-        <p className="muted">{profile.fullName || profile.email} is currently marked `{profile.accountStatus}`.</p>
+        <p className="muted">{profile.fullName || profile.email} is currently marked {humanAccountStatus(profile.accountStatus)}.</p>
         <button className="icon-button" type="button" onClick={onSignOut}>
           <LogOut aria-hidden="true" size={18} />
           Sign out
@@ -2812,7 +3305,7 @@ function StaffWorkspace({ profile, onSignOut }: { profile: UserProfile; onSignOu
         <div className="identity-card">
           <strong>{profile.fullName || profile.email}</strong>
           <span>{roleLabels[profile.role]}</span>
-          <StatusBadge tone={profile.accountStatus === 'active' ? 'ready' : 'warn'}>{profile.accountStatus}</StatusBadge>
+          <StatusBadge tone={profile.accountStatus === 'active' ? 'ready' : 'warn'}>{humanAccountStatus(profile.accountStatus)}</StatusBadge>
         </div>
         <div className="notice">
           <AlertTriangle aria-hidden="true" size={18} />
