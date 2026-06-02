@@ -302,6 +302,17 @@ type RouteItem = {
   detail: string;
 };
 
+type AdminPageKey = 'dashboard' | 'users' | 'verification' | 'vehicleClasses' | 'pricing' | 'reports' | 'payments' | 'kuliRequests' | 'audit';
+type AssistantPageKey = 'tickets' | 'booking' | 'clients';
+
+type AdminRouteItem = RouteItem & {
+  page: AdminPageKey;
+};
+
+type AssistantRouteItem = RouteItem & {
+  page: AssistantPageKey;
+};
+
 const roleLabels: Record<Role, string> = {
   client: 'Client',
   truck_owner: 'Truck owner',
@@ -312,22 +323,39 @@ const roleLabels: Record<Role, string> = {
 const accountStatusOptions: AccountStatus[] = ['active', 'pending_verification', 'suspended', 'banned', 'deleted'];
 const requestStatusOptions: KuliRequest['status'][] = ['pending', 'accepted', 'en_route_to_pickup', 'arrived_at_pickup', 'loading', 'in_transit', 'unloading', 'completed', 'cancelled', 'timed_out'];
 
-const adminRoutes: RouteItem[] = [
-  { path: '/admin/dashboard', label: 'Dashboard', icon: Gauge, detail: 'Operational metrics and release readiness.' },
-  { path: '/admin/users', label: 'Users', icon: UsersRound, detail: 'Role, status, and account controls.' },
-  { path: '/admin/vehicles/pending', label: 'Verification', icon: Truck, detail: 'Document review and approve/reject decisions.' },
-  { path: '/admin/vehicle-classes', label: 'Vehicle Classes', icon: Truck, detail: 'Capacity bands used by onboarding, pricing, and matching.' },
-  { path: '/admin/pricing', label: 'Pricing', icon: ClipboardList, detail: 'Versioned pricing rules and audit-backed edits.' },
-  { path: '/admin/reports', label: 'Reports', icon: FileWarning, detail: 'Trip reports, evidence links, and admin outcomes.' },
-  { path: '/admin/payments', label: 'Payments', icon: CreditCard, detail: 'Cash confirmations, disputes, and resolution notes.' },
-  { path: '/admin/audit-logs', label: 'Audit', icon: ShieldCheck, detail: 'Privileged action trail and filters.' }
+const adminRoutes: AdminRouteItem[] = [
+  { path: '/admin/dashboard', page: 'dashboard', label: 'Dashboard', icon: Gauge, detail: 'Operational metrics and release readiness.' },
+  { path: '/admin/users', page: 'users', label: 'Users', icon: UsersRound, detail: 'Role, status, and account controls.' },
+  { path: '/admin/verification', page: 'verification', label: 'Verification', icon: Truck, detail: 'Document review and approve/reject decisions.' },
+  { path: '/admin/vehicle-classes', page: 'vehicleClasses', label: 'Vehicle Classes', icon: Truck, detail: 'Capacity bands used by onboarding, pricing, and matching.' },
+  { path: '/admin/pricing', page: 'pricing', label: 'Pricing', icon: ClipboardList, detail: 'Versioned pricing rules and audit-backed edits.' },
+  { path: '/admin/reports', page: 'reports', label: 'Reports', icon: FileWarning, detail: 'Trip reports, evidence links, and admin outcomes.' },
+  { path: '/admin/payments', page: 'payments', label: 'Payments', icon: CreditCard, detail: 'Cash confirmations, disputes, and resolution notes.' },
+  { path: '/admin/kuli-requests', page: 'kuliRequests', label: 'KULI Requests', icon: MapPin, detail: 'Marketplace request oversight and status timelines.' },
+  { path: '/admin/audit', page: 'audit', label: 'Audit', icon: ShieldCheck, detail: 'Privileged action trail and filters.' }
 ];
 
-const assistantRoutes: RouteItem[] = [
-  { path: '/assistant/tickets', label: 'Tickets', icon: ClipboardList, detail: 'Claim, update, and close hotline tickets.' },
-  { path: '/assistant/bookings/new', label: 'Assisted Booking', icon: Truck, detail: 'Create KULI requests during live calls.' },
-  { path: '/assistant/clients', label: 'Client Lookup', icon: UsersRound, detail: 'Find clients by phone for assisted requests.' }
+const assistantRoutes: AssistantRouteItem[] = [
+  { path: '/assistant/tickets', page: 'tickets', label: 'Tickets', icon: ClipboardList, detail: 'Claim, update, and close hotline tickets.' },
+  { path: '/assistant/bookings/new', page: 'booking', label: 'Assisted Booking', icon: Truck, detail: 'Create KULI requests during live calls.' },
+  { path: '/assistant/clients', page: 'clients', label: 'Client Lookup', icon: UsersRound, detail: 'Find clients by phone for assisted requests.' }
 ];
+
+const routeAliases: Record<string, string> = {
+  '/': '/admin/dashboard',
+  '/admin': '/admin/dashboard',
+  '/admin/vehicles/pending': '/admin/verification',
+  '/admin/audit-logs': '/admin/audit',
+  '/assistant': '/assistant/tickets'
+};
+
+const normalizeWorkspacePath = (pathname: string, routes: RouteItem[]) => {
+  const withoutTrailingSlash = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+  const canonicalPath = routeAliases[withoutTrailingSlash] ?? withoutTrailingSlash;
+  const match = routes.find((route) => route.path === canonicalPath);
+
+  return match?.path ?? routes[0]?.path ?? '/admin/dashboard';
+};
 
 const isBlockedStatus = (status: AccountStatus) => ['suspended', 'banned', 'deleted'].includes(status);
 
@@ -1667,7 +1695,7 @@ const buildAssistantLocation = ({ address, lon, lat }: { address: string; lon: s
   }
 });
 
-function AdminTrustFinancePanel({ enabled }: { enabled: boolean }) {
+function AdminTrustFinancePanel({ enabled, view }: { enabled: boolean; view: 'reports' | 'payments' }) {
   const queryClient = useQueryClient();
   const [reportStatusFilter, setReportStatusFilter] = useState<ReportRecord['status'] | ''>('open');
   const [reportCategoryFilter, setReportCategoryFilter] = useState('');
@@ -1682,7 +1710,7 @@ function AdminTrustFinancePanel({ enabled }: { enabled: boolean }) {
   const [error, setError] = useState('');
 
   const reportsQuery = useQuery({
-    enabled,
+    enabled: enabled && view === 'reports',
     queryKey: ['admin-reports', reportStatusFilter, reportCategoryFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -1701,7 +1729,7 @@ function AdminTrustFinancePanel({ enabled }: { enabled: boolean }) {
   });
 
   const paymentsQuery = useQuery({
-    enabled,
+    enabled: enabled && view === 'payments',
     queryKey: ['admin-payments'],
     queryFn: async () => ((await kuliApi.request('/admin/payments')) as ApiEnvelope<PaymentRecord[]>).data
   });
@@ -1800,11 +1828,11 @@ function AdminTrustFinancePanel({ enabled }: { enabled: boolean }) {
     <section className="panel panel--wide">
       <div className="panel__header">
         <div>
-          <p className="eyebrow">Trust and finance</p>
-          <h2>Reports and payment disputes</h2>
+          <p className="eyebrow">{view === 'reports' ? 'Trust queue' : 'Manual cash'}</p>
+          <h2>{view === 'reports' ? 'Reports and disputes' : 'Payment management'}</h2>
         </div>
         <StatusBadge tone={reportsQuery.isError || paymentsQuery.isError ? 'blocked' : reports.length || payments.length ? 'warn' : 'ready'}>
-          {reportsQuery.isError || paymentsQuery.isError ? 'Needs token' : `${reports.length} reports / ${payments.length} payments`}
+          {reportsQuery.isError || paymentsQuery.isError ? 'Needs token' : view === 'reports' ? `${reports.length} reports` : `${payments.length} payments`}
         </StatusBadge>
       </div>
       {error ? <p className="field-error" role="alert">{error}</p> : null}
@@ -1813,7 +1841,7 @@ function AdminTrustFinancePanel({ enabled }: { enabled: boolean }) {
       {paymentsQuery.isError ? <p className="field-error">{getErrorMessage(paymentsQuery.error)}</p> : null}
 
       <div className="support-layout">
-        <div className="support-column">
+        {view === 'reports' ? <div className="support-column support-column--wide">
           <div className="support-toolbar">
             <label>
               Report status
@@ -1884,9 +1912,9 @@ function AdminTrustFinancePanel({ enabled }: { enabled: boolean }) {
               </>
             ) : null}
           </div>
-        </div>
+        </div> : null}
 
-        <div className="support-column support-column--wide">
+        {view === 'payments' ? <div className="support-column support-column--wide">
           <div className="queue-list">
             {paymentsQuery.isLoading ? <p className="muted">Loading payments...</p> : null}
             {payments.length === 0 && !paymentsQuery.isLoading ? <p className="muted">No payment records yet.</p> : null}
@@ -1934,7 +1962,7 @@ function AdminTrustFinancePanel({ enabled }: { enabled: boolean }) {
               </>
             ) : null}
           </div>
-        </div>
+        </div> : null}
       </div>
     </section>
   );
@@ -2694,9 +2722,63 @@ function ForbiddenWorkspace({ profile, onSignOut }: { profile: UserProfile; onSi
   );
 }
 
+function AdminRouteOutlet({ page }: { page: AdminPageKey }) {
+  switch (page) {
+    case 'dashboard':
+      return <AdminDashboardPanel enabled />;
+    case 'users':
+      return <AdminUsersPanel enabled />;
+    case 'verification':
+      return <AdminVerificationPanel enabled />;
+    case 'vehicleClasses':
+      return <AdminVehicleClassesPanel enabled />;
+    case 'pricing':
+      return <AdminPricingPanel enabled />;
+    case 'reports':
+      return <AdminTrustFinancePanel enabled view="reports" />;
+    case 'payments':
+      return <AdminTrustFinancePanel enabled view="payments" />;
+    case 'kuliRequests':
+      return <AdminTripOversightPanel enabled />;
+    case 'audit':
+      return <AdminAuditLogPanel enabled />;
+    default:
+      return <AdminDashboardPanel enabled />;
+  }
+}
+
 function StaffWorkspace({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
   const workspace = profile.role === 'admin' ? 'admin' : 'assistant';
   const routes = workspace === 'admin' ? adminRoutes : assistantRoutes;
+  const [activePath, setActivePath] = useState(() => normalizeWorkspacePath(window.location.pathname, routes));
+  const activeRoute = routes.find((route) => route.path === activePath) ?? routes[0];
+
+  useEffect(() => {
+    const nextPath = normalizeWorkspacePath(window.location.pathname, routes);
+    setActivePath(nextPath);
+
+    if (window.location.pathname !== nextPath) {
+      window.history.replaceState({}, '', nextPath);
+    }
+
+    const handlePopState = () => {
+      setActivePath(normalizeWorkspacePath(window.location.pathname, routes));
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [routes]);
+
+  const navigateTo = (path: string) => {
+    const nextPath = normalizeWorkspacePath(path, routes);
+
+    if (nextPath !== window.location.pathname) {
+      window.history.pushState({}, '', nextPath);
+    }
+
+    setActivePath(nextPath);
+  };
 
   return (
     <main className="app-shell">
@@ -2711,12 +2793,19 @@ function StaffWorkspace({ profile, onSignOut }: { profile: UserProfile; onSignOu
         <nav className="sidebar-nav" aria-label={`${workspace} sections`}>
           {routes.map((route) => {
             const Icon = route.icon;
+            const isActive = route.path === activePath;
 
             return (
-              <div className="sidebar-nav__item" key={route.path}>
+              <button
+                aria-current={isActive ? 'page' : undefined}
+                className={`sidebar-nav__item ${isActive ? 'is-active' : ''}`}
+                key={route.path}
+                onClick={() => navigateTo(route.path)}
+                type="button"
+              >
                 <Icon aria-hidden="true" size={18} />
                 <span>{route.label}</span>
-              </div>
+              </button>
             );
           })}
         </nav>
@@ -2738,8 +2827,9 @@ function StaffWorkspace({ profile, onSignOut }: { profile: UserProfile; onSignOu
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">{workspace === 'admin' ? 'Operations overview' : 'Live support'}</p>
-            <h2>{workspace === 'admin' ? 'Keep the marketplace ready' : 'Support active callers'}</h2>
+            <p className="eyebrow">{workspace === 'admin' ? 'Admin workspace' : 'Assistant workspace'}</p>
+            <h2>{activeRoute?.label ?? (workspace === 'admin' ? 'Admin dashboard' : 'Assistant console')}</h2>
+            <p className="muted">{activeRoute?.detail}</p>
           </div>
           <StatusBadge tone="ready">
             <CheckCircle2 aria-hidden="true" size={14} /> Authenticated
@@ -2747,17 +2837,7 @@ function StaffWorkspace({ profile, onSignOut }: { profile: UserProfile; onSignOu
         </header>
 
         <div className="panel-grid">
-          <ApiHealthPanel />
-          <RuntimePanel />
-          <AdminDashboardPanel enabled={profile.role === 'admin'} />
-          <AssistantSupportPanel enabled={profile.role === 'assistant'} profile={profile} />
-          <AdminVerificationPanel enabled={profile.role === 'admin'} />
-          <AdminVehicleClassesPanel enabled={profile.role === 'admin'} />
-          <AdminPricingPanel enabled={profile.role === 'admin'} />
-          <AdminTrustFinancePanel enabled={profile.role === 'admin'} />
-          <AdminTripOversightPanel enabled={profile.role === 'admin'} />
-          <AdminUsersPanel enabled={profile.role === 'admin'} />
-          <AdminAuditLogPanel enabled={profile.role === 'admin'} />
+          {workspace === 'admin' ? <AdminRouteOutlet page={(activeRoute as AdminRouteItem).page} /> : <AssistantSupportPanel enabled profile={profile} />}
         </div>
       </section>
     </main>
