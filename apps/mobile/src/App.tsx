@@ -19,7 +19,7 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NavigationContainer, useNavigation } from '@react-navigation/native';
+import { NavigationContainer, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -1012,8 +1012,10 @@ function FilePickerField({
   takeLabel?: string;
 }) {
   const [error, setError] = useState('');
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const pickFile = async (source: PickedFile['source']) => {
+    setSheetOpen(false);
     setError('');
 
     try {
@@ -1029,19 +1031,10 @@ function FilePickerField({
 
       const result =
         source === 'camera'
-          ? await ImagePicker.launchCameraAsync({
-              allowsEditing: false,
-              quality: 0.85
-            })
-          : await ImagePicker.launchImageLibraryAsync({
-              allowsEditing: false,
-              mediaTypes: ['images'],
-              quality: 0.85
-            });
+          ? await ImagePicker.launchCameraAsync({ allowsEditing: false, quality: 0.85 })
+          : await ImagePicker.launchImageLibraryAsync({ allowsEditing: false, mediaTypes: ['images'], quality: 0.85 });
 
-      if (result.canceled || !result.assets[0]) {
-        return;
-      }
+      if (result.canceled || !result.assets[0]) return;
 
       onChange(normalizePickedAsset(result.assets[0], source));
     } catch (pickError) {
@@ -1064,19 +1057,36 @@ function FilePickerField({
         <Text style={styles.muted}>{emptyText}</Text>
       )}
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
-      <View style={styles.actionRow}>
-        <Pressable accessibilityRole="button" onPress={() => pickFile('library')} style={[styles.secondaryButton, styles.actionButton]}>
-          <Text style={styles.secondaryButtonText}>{uploadLabel}</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" onPress={() => pickFile('camera')} style={[styles.secondaryButton, styles.actionButton]}>
-          <Text style={styles.secondaryButtonText}>{takeLabel}</Text>
+      <View style={styles.filePickerRow}>
+        <Pressable accessibilityRole="button" onPress={() => setSheetOpen(true)} style={styles.filePickerAttachBtn}>
+          <MaterialCommunityIcons name="paperclip" color={colors.textPrimary} size={18} />
+          <Text style={styles.filePickerAttachText}>{value ? 'Change photo' : 'Attach photo'}</Text>
         </Pressable>
         {value ? (
-          <Pressable accessibilityRole="button" onPress={() => onChange(null)} style={[styles.secondaryButton, styles.actionButton]}>
-            <Text style={styles.secondaryButtonText}>Remove</Text>
+          <Pressable accessibilityRole="button" onPress={() => onChange(null)} style={styles.filePickerRemoveBtn}>
+            <MaterialCommunityIcons name="close" color={colors.error} size={18} />
           </Pressable>
         ) : null}
       </View>
+      <Modal animationType="slide" transparent visible={sheetOpen} onRequestClose={() => setSheetOpen(false)}>
+        <Pressable style={styles.sheetBackdrop} onPress={() => setSheetOpen(false)}>
+          <View style={styles.sheetPanel}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>Attach photo</Text>
+            <Pressable accessibilityRole="button" onPress={() => pickFile('library')} style={styles.sheetOption}>
+              <MaterialCommunityIcons name="image-outline" color={colors.textPrimary} size={22} />
+              <Text style={styles.sheetOptionText}>{uploadLabel}</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => pickFile('camera')} style={styles.sheetOption}>
+              <MaterialCommunityIcons name="camera-outline" color={colors.textPrimary} size={22} />
+              <Text style={styles.sheetOptionText}>{takeLabel}</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => setSheetOpen(false)} style={[styles.sheetOption, styles.sheetCancel]}>
+              <Text style={styles.sheetCancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -1962,7 +1972,7 @@ function HomeOverview({ profile, onSignOut }: { profile: UserProfile; onSignOut:
         </View>
         <View style={styles.flex}>
           <Text style={styles.ownerHeaderKicker}>KULI Driver</Text>
-          <Text style={styles.ownerHeaderTitle}>Ready to drive, {firstName}?</Text>
+          <Text style={styles.ownerHeaderTitle}>Ready to drive, <Text style={styles.ownerHeaderNameAccent}>{firstName}</Text>?</Text>
           <Text style={styles.ownerHeaderCopy}>Addis Ababa requests appear when an approved vehicle is online.</Text>
         </View>
       </View>
@@ -2338,7 +2348,10 @@ function DocumentUploadField({
                   />
                 </View>
                 <View style={styles.flex}>
-                  <Text style={styles.ownerDocumentTitle}>{doc.label}</Text>
+                  <View style={styles.docTitleRow}>
+                    <Text style={styles.ownerDocumentTitle}>{doc.label}</Text>
+                    <StatusPill tone={doc.required ? 'blocked' : 'warn'}>{doc.required ? 'Required' : 'Optional'}</StatusPill>
+                  </View>
                   <Text style={styles.ownerDocumentCopy}>{doc.detail}</Text>
                 </View>
                 <StatusBadge tone={statusTone}>{statusLabel}</StatusBadge>
@@ -2372,12 +2385,6 @@ function DocumentUploadField({
                 emptyTone={doc.required ? 'blocked' : 'warn'}
                 uploadLabel="Upload"
                 takeLabel="Camera"
-              />
-              <PrimaryButton
-                disabled={!draft || pendingThis}
-                label={pendingThis ? 'Attaching...' : uploaded ? 'Replace document' : 'Attach document'}
-                loading={pendingThis}
-                onPress={() => submitOne(doc.type)}
               />
             </View>
           );
@@ -2846,6 +2853,19 @@ const normalizePickedAsset = (asset: ImagePicker.ImagePickerAsset, source: Picke
 const canPreviewVehiclePhoto = (uri?: string) => Boolean(uri && /^(https?:|file:|blob:|data:)/.test(uri));
 
 async function uploadVehicleFile(vehicleId: string, type: string, file: PickedFile) {
+  if (!file.uri) {
+    throw new Error(`Could not read ${file.name} for upload. Choose the file again.`);
+  }
+
+  // Fetch the blob first so we know the real byte size before creating the intent.
+  const fileResponse = await fetch(file.uri);
+  const fileBlob = await fileResponse.blob();
+  const actualSizeBytes = fileBlob.size > 0 ? fileBlob.size : file.sizeBytes;
+
+  if (!actualSizeBytes || actualSizeBytes <= 0) {
+    throw new Error(`Could not determine the file size of ${file.name}. Try picking the file again.`);
+  }
+
   const intent = (await kuliApi.request('/files/upload-intent', {
     method: 'POST',
     body: {
@@ -2853,20 +2873,14 @@ async function uploadVehicleFile(vehicleId: string, type: string, file: PickedFi
       type,
       originalFileName: file.name,
       mimeType: file.mimeType,
-      sizeBytes: file.sizeBytes
+      sizeBytes: actualSizeBytes
     }
   })) as ApiEnvelope<{ file: { id: string; originalFileName?: string; mimeType?: string; sizeBytes?: number }; upload: { url: string; method?: string } }>;
-
-  if (!file.uri) {
-    throw new Error(`Could not read ${file.name} for upload. Choose the file again.`);
-  }
 
   const uploadUrl = intent.data.upload.url.startsWith('http')
     ? intent.data.upload.url
     : `${kuliApi.baseUrl}${intent.data.upload.url.startsWith('/') ? intent.data.upload.url : `/${intent.data.upload.url}`}`;
   const accessToken = await getKuliAccessToken();
-  const fileResponse = await fetch(file.uri);
-  const fileBlob = await fileResponse.blob();
   const uploadResponse = await fetch(uploadUrl, {
     method: intent.data.upload.method ?? 'POST',
     headers: {
@@ -2877,7 +2891,7 @@ async function uploadVehicleFile(vehicleId: string, type: string, file: PickedFi
   });
 
   if (!uploadResponse.ok) {
-    let message = `Storage upload failed for ${file.name}.`;
+    let message = `KULI could not upload ${file.name}. Check that the backend is running and try again.`;
 
     try {
       const payload = await uploadResponse.json();
@@ -2887,15 +2901,6 @@ async function uploadVehicleFile(vehicleId: string, type: string, file: PickedFi
     }
 
     throw new Error(message);
-  }
-
-  if (!intent.data.upload.url.includes('/upload')) {
-    await kuliApi.request(`/files/${intent.data.file.id}/complete`, {
-      method: 'POST',
-      body: {
-        uploadedSizeBytes: file.sizeBytes
-      }
-    });
   }
 
   return intent.data.file;
@@ -3434,6 +3439,7 @@ function RouteMapPreview({
         </Pressable>
         {!fullScreen ? (
           <Pressable
+            accessibilityLabel="Open map full screen"
             accessibilityRole="button"
             onPress={(e) => {
               e.stopPropagation();
@@ -3441,7 +3447,8 @@ function RouteMapPreview({
             }}
             style={styles.mapExpandButton}
           >
-            <Text style={styles.mapExpandText}>Expand</Text>
+            <MaterialCommunityIcons name="fullscreen" color={colors.black} size={18} />
+            <Text style={styles.mapExpandText}>Full map</Text>
           </Pressable>
         ) : null}
       </View>
@@ -4780,7 +4787,7 @@ function ClientDashboardHero({
     <View style={styles.clientHomeHeroStack}>
       <View style={styles.clientTopBar}>
         <View style={styles.flex}>
-          <Text style={styles.clientGreeting}>{greetingForNow()}, {displayName}</Text>
+          <Text style={styles.clientGreeting}>{greetingForNow()}, <Text style={styles.clientGreetingName}>{displayName}</Text></Text>
           <View style={styles.clientLocationRow}>
             <MaterialCommunityIcons name="map-marker" color={colors.textSecondary} size={18} />
             <Text style={styles.clientLocation}>Addis Ababa</Text>
@@ -4952,6 +4959,7 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
   const [pendingCancelId, setPendingCancelId] = useState('');
   const [cancelTarget, setCancelTarget] = useState<KuliRequest | null>(null);
   const [expandedRequestIds, setExpandedRequestIds] = useState<string[]>([]);
+  const [dismissedRatingRequestIds, setDismissedRatingRequestIds] = useState<string[]>([]);
 
   const requestsQuery = useQuery({
     queryKey: ['kuli-requests', 'mine'],
@@ -4962,6 +4970,16 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
   const requests = requestsQuery.data ?? [];
   const activeRequests = requests.filter((request) => activeRequestStatuses.includes(request.status) || isPaymentSettlingRequest(request));
   const recentRequests = requests.filter((request) => !activeRequestStatuses.includes(request.status) && !isPaymentSettlingRequest(request)).slice(0, 3);
+  const ratingPromptRequest = requests.find(
+    (request) =>
+      request.status === 'completed' &&
+      request.selectedOwnerId &&
+      request.payment?.status === 'confirmed_by_owner' &&
+      !dismissedRatingRequestIds.includes(request.id)
+  );
+  const dismissRatingPrompt = (requestId: string) => {
+    setDismissedRatingRequestIds((current) => [...new Set([...current, requestId])]);
+  };
   const goToRequest = () => {
     (navigation as { navigate: (screen: string) => void }).navigate('Request');
   };
@@ -5077,6 +5095,34 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
           }
         }}
       />
+      <Modal animationType="fade" transparent visible={Boolean(ratingPromptRequest)} onRequestClose={() => ratingPromptRequest && dismissRatingPrompt(ratingPromptRequest.id)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.pickerDialog}>
+            <View style={styles.ratingModalHeader}>
+              <View style={styles.flex}>
+                <Text style={styles.pickerEyebrow}>Payment confirmed!</Text>
+                <Text style={styles.pickerTitle}>Rate your KULI move</Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss rating"
+                onPress={() => ratingPromptRequest && dismissRatingPrompt(ratingPromptRequest.id)}
+                style={styles.ratingModalClose}
+              >
+                <MaterialCommunityIcons name="close" color={colors.textSecondary} size={22} />
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={styles.modalScrollContent}>
+              {ratingPromptRequest ? (
+                <>
+                  <Text style={styles.muted}>{ratingPromptRequest.requestCode} / {ratingPromptRequest.pickupLocation?.addressText} to {ratingPromptRequest.destinationLocation?.addressText}</Text>
+                  <RatingReportPanel request={ratingPromptRequest} onRatingSaved={() => dismissRatingPrompt(ratingPromptRequest.id)} onDismiss={() => dismissRatingPrompt(ratingPromptRequest.id)} />
+                </>
+              ) : null}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -5200,6 +5246,7 @@ function OwnerOfferCard({
 
 function OwnerOffersScreen({ profile }: { profile: UserProfile }) {
   const queryClient = useQueryClient();
+  const markingViewedRef = useRef(false);
   const [pendingOfferId, setPendingOfferId] = useState('');
   const [expandedOfferId, setExpandedOfferId] = useState('');
   const [message, setMessage] = useState('');
@@ -5230,6 +5277,29 @@ function OwnerOffersScreen({ profile }: { profile: UserProfile }) {
   const approvedVehicleCount = vehicles.filter((vehicle) => vehicle.verificationStatus === 'approved').length;
   const acceptedRequest = acceptedResult?.request;
   const showAcceptedResult = Boolean(acceptedRequest && (activeRequestStatuses.includes(acceptedRequest.status) || isPaymentSettlingRequest(acceptedRequest)));
+
+  useFocusEffect(
+    useCallback(() => {
+      const sentOffers = offers.filter((offer) => offer.status === 'sent');
+      if (sentOffers.length === 0 || markingViewedRef.current) {
+        return;
+      }
+
+      markingViewedRef.current = true;
+      Promise.allSettled(
+        sentOffers.map((offer) =>
+          kuliApi.request(`/offers/${offer.id}/viewed`, {
+            method: 'POST'
+          })
+        )
+      )
+        .then(() => queryClient.invalidateQueries({ queryKey: ['owner-offers'] }))
+        .catch(() => undefined)
+        .finally(() => {
+          markingViewedRef.current = false;
+        });
+    }, [offers, queryClient])
+  );
 
   const toggleOfferDetails = async (offer: TripOffer) => {
     const nextExpanded = expandedOfferId === offer.id ? '' : offer.id;
@@ -5658,6 +5728,7 @@ function NotificationEmptyState({ profile }: { profile: UserProfile }) {
 function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
   const navigation = useNavigation<any>();
   const queryClient = useQueryClient();
+  const markingReadRef = useRef(false);
   const [pushEnabled, setPushEnabled] = useState(true);
   const [smsEnabled, setSmsEnabled] = useState(false);
   const [emailEnabled, setEmailEnabled] = useState(true);
@@ -5678,6 +5749,29 @@ function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
   const availableFilters = notificationFilters.filter((filter) => filter.key === 'all' || notifications.some((notification) => notificationCategoryForType(notification.type) === filter.key));
   const filteredNotifications = activeFilter === 'all' ? notifications : notifications.filter((notification) => notificationCategoryForType(notification.type) === activeFilter);
   const unreadLabel = unreadCount === 1 ? '1 unread' : `${unreadCount} unread`;
+
+  useFocusEffect(
+    useCallback(() => {
+      const unreadNotifications = notifications.filter((notification) => notification.deliveryStatus !== 'read');
+      if (unreadNotifications.length === 0 || markingReadRef.current) {
+        return;
+      }
+
+      markingReadRef.current = true;
+      Promise.allSettled(
+        unreadNotifications.map((notification) =>
+          kuliApi.request(`/notifications/${notification.id}/read`, {
+            method: 'PATCH'
+          })
+        )
+      )
+        .then(() => queryClient.invalidateQueries({ queryKey: ['notifications'] }))
+        .catch(() => undefined)
+        .finally(() => {
+          markingReadRef.current = false;
+        });
+    }, [notifications, queryClient])
+  );
 
   const markRead = async (notification: NotificationRecord) => {
     setPendingId(notification.id);
@@ -6224,7 +6318,13 @@ function ClientHistoryScreen({ profile }: { profile: UserProfile }) {
   const requests = requestsQuery.data ?? [];
   const terminalRequests = requests.filter((request) => terminalRequestStatuses.includes(request.status));
   const filteredRequests = terminalRequests.filter((request) => historyFilterMatches(request, activeFilter));
-  const ratingPromptRequest = terminalRequests.find((request) => request.status === 'completed' && request.selectedOwnerId && !dismissedRatingRequestIds.includes(request.id));
+  const ratingPromptRequest = terminalRequests.find(
+    (request) =>
+      request.status === 'completed' &&
+      request.selectedOwnerId &&
+      request.payment?.status === 'confirmed_by_owner' &&
+      !dismissedRatingRequestIds.includes(request.id)
+  );
 
   const dismissRatingPrompt = (requestId: string) => {
     setDismissedRatingRequestIds((current) => [...new Set([...current, requestId])]);
@@ -6282,9 +6382,21 @@ function ClientHistoryScreen({ profile }: { profile: UserProfile }) {
       <Modal animationType="fade" transparent visible={Boolean(ratingPromptRequest)} onRequestClose={() => ratingPromptRequest && dismissRatingPrompt(ratingPromptRequest.id)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.pickerDialog}>
+            <View style={styles.ratingModalHeader}>
+              <View style={styles.flex}>
+                <Text style={styles.pickerEyebrow}>Trip complete</Text>
+                <Text style={styles.pickerTitle}>Rate your KULI move</Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss rating"
+                onPress={() => ratingPromptRequest && dismissRatingPrompt(ratingPromptRequest.id)}
+                style={styles.ratingModalClose}
+              >
+                <MaterialCommunityIcons name="close" color={colors.textSecondary} size={22} />
+              </Pressable>
+            </View>
             <ScrollView contentContainerStyle={styles.modalScrollContent}>
-              <Text style={styles.pickerEyebrow}>Trip complete</Text>
-              <Text style={styles.pickerTitle}>Rate your KULI move</Text>
               {ratingPromptRequest ? (
                 <>
                   <Text style={styles.muted}>{ratingPromptRequest.requestCode} / {ratingPromptRequest.pickupLocation?.addressText} to {ratingPromptRequest.destinationLocation?.addressText}</Text>
@@ -6448,23 +6560,43 @@ function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
 }
 
 function ClientTabs({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
+  const notificationsQuery = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => ((await kuliApi.request('/notifications')) as ApiEnvelope<NotificationRecord[]>).data,
+    refetchInterval: 20000
+  });
+  const unreadNotifications = (notificationsQuery.data ?? []).filter((notification) => notification.deliveryStatus !== 'read').length;
+
   return (
     <Tab.Navigator screenOptions={createTabScreenOptions(clientTabIcons)}>
       <Tab.Screen name="Home">{() => <ClientHomeScreen profile={profile} onSignOut={onSignOut} />}</Tab.Screen>
       <Tab.Screen name="Request" component={ClientQuoteScreen} />
       <Tab.Screen name="Activity">{() => <ClientHistoryScreen profile={profile} />}</Tab.Screen>
-      <Tab.Screen name="Notifications">{() => <NotificationCenterScreen profile={profile} />}</Tab.Screen>
+      <Tab.Screen name="Notifications" options={tabBadgeOptions(unreadNotifications)}>{() => <NotificationCenterScreen profile={profile} />}</Tab.Screen>
     </Tab.Navigator>
   );
 }
 
 function OwnerTabs({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
+  const notificationsQuery = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => ((await kuliApi.request('/notifications')) as ApiEnvelope<NotificationRecord[]>).data,
+    refetchInterval: 20000
+  });
+  const offersQuery = useQuery({
+    queryKey: ['owner-offers'],
+    queryFn: async () => ((await kuliApi.request('/owner/offers')) as ApiEnvelope<TripOffer[]>).data,
+    refetchInterval: 15000
+  });
+  const unreadNotifications = (notificationsQuery.data ?? []).filter((notification) => notification.deliveryStatus !== 'read').length;
+  const unreadOffers = (offersQuery.data ?? []).filter((offer) => offer.status === 'sent').length;
+
   return (
     <Tab.Navigator screenOptions={createTabScreenOptions(ownerTabIcons)}>
       <Tab.Screen name="Home">{() => <HomeOverview profile={profile} onSignOut={onSignOut} />}</Tab.Screen>
       <Tab.Screen name="Vehicles" component={OwnerVehiclesScreen} />
-      <Tab.Screen name="Offers">{() => <OwnerOffersScreen profile={profile} />}</Tab.Screen>
-      <Tab.Screen name="Notifications">{() => <NotificationCenterScreen profile={profile} />}</Tab.Screen>
+      <Tab.Screen name="Offers" options={tabBadgeOptions(unreadOffers)}>{() => <OwnerOffersScreen profile={profile} />}</Tab.Screen>
+      <Tab.Screen name="Notifications" options={tabBadgeOptions(unreadNotifications)}>{() => <NotificationCenterScreen profile={profile} />}</Tab.Screen>
       <Tab.Screen name="Earnings">{() => <OwnerEarningsScreen profile={profile} />}</Tab.Screen>
     </Tab.Navigator>
   );
@@ -6889,6 +7021,14 @@ const createTabScreenOptions = (icons: TabIconConfig) => ({ route }: { route: { 
   };
 };
 
+const tabBadgeOptions = (count: number) =>
+  count > 0
+    ? {
+        tabBarBadge: count > 99 ? '99+' : count,
+        tabBarBadgeStyle: styles.tabBarBadge
+      }
+    : undefined;
+
 const styles = StyleSheet.create({
   flex: {
     flex: 1
@@ -6903,6 +7043,15 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     justifyContent: 'center',
     padding: spacing.xl
+  },
+  tabBarBadge: {
+    backgroundColor: colors.error,
+    borderColor: colors.card,
+    borderWidth: 2,
+    color: colors.card,
+    fontSize: 11,
+    fontWeight: '900',
+    minWidth: 20
   },
   content: {
     gap: spacing.lg,
@@ -7501,6 +7650,13 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: '900',
     lineHeight: 36
+  },
+  clientGreetingName: {
+    color: colors.primary,
+    fontSize: 32,
+    fontWeight: '900',
+    fontStyle: 'italic',
+    letterSpacing: -0.5
   },
   clientLocationRow: {
     alignItems: 'center',
@@ -8260,6 +8416,13 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '900',
     lineHeight: 34
+  },
+  ownerHeaderNameAccent: {
+    color: colors.primary,
+    fontSize: 30,
+    fontWeight: '900',
+    fontStyle: 'italic',
+    letterSpacing: -0.5
   },
   ownerHeaderCopy: {
     color: colors.textSecondary,
@@ -9615,6 +9778,120 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.55
   },
+  // File picker single-button + action sheet styles
+  filePickerRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  filePickerAttachBtn: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flex: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'center',
+    minHeight: 48,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md
+  },
+  filePickerAttachText: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '700'
+  },
+  filePickerRemoveBtn: {
+    alignItems: 'center',
+    backgroundColor: colors.errorTint,
+    borderColor: colors.error,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    height: 48,
+    justifyContent: 'center',
+    width: 48
+  },
+  sheetBackdrop: {
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    flex: 1,
+    justifyContent: 'flex-end'
+  },
+  sheetPanel: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+    gap: spacing.xs,
+    paddingBottom: 40,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    backgroundColor: colors.border,
+    borderRadius: 3,
+    height: 4,
+    marginBottom: spacing.md,
+    width: 40
+  },
+  sheetTitle: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '800',
+    marginBottom: spacing.sm
+  },
+  sheetOption: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginVertical: spacing.xs,
+    minHeight: 56,
+    paddingHorizontal: spacing.lg
+  },
+  sheetOptionText: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '700'
+  },
+  sheetCancel: {
+    backgroundColor: colors.errorTint,
+    justifyContent: 'center',
+    marginTop: spacing.sm
+  },
+  sheetCancelText: {
+    color: colors.error,
+    fontSize: 16,
+    fontWeight: '800',
+    textAlign: 'center'
+  },
+  // Rating modal header with X button
+  ratingModalHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg
+  },
+  ratingModalClose: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.sm,
+    height: 36,
+    justifyContent: 'center',
+    width: 36
+  },
+  // Document card title row with required/optional pill
+  docTitleRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginBottom: spacing.xs
+  },
   card: {
     backgroundColor: colors.panel,
     borderColor: colors.line,
@@ -9986,6 +10263,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radii.sm,
     borderWidth: 1,
+    flexDirection: 'row',
+    gap: 4,
     minHeight: 34,
     justifyContent: 'center',
     paddingHorizontal: spacing.sm

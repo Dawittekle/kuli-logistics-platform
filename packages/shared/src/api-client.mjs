@@ -156,7 +156,7 @@ const ERROR_CODE_MAPPINGS = {
   // Document Uploads
   'DOCUMENT_UPLOAD_INVALID': {
     message: 'Document upload failed.',
-    action: 'The file format or size is invalid. Please upload a clear photo or PDF under 5MB.'
+    action: 'The file format or size is invalid. Please upload a clear JPEG, PNG, or PDF under 10MB.'
   },
 
   // System & Rate Limiting
