@@ -5,11 +5,33 @@ export const bootstrapAdmin = async ({ accountService, config }) => {
     return null;
   }
 
-  const existing = await accountService.userRepository.findBySupabaseUserId(config.bootstrapAdminSupabaseUserId);
+  const existingBySupabaseId =
+  await accountService.userRepository.findBySupabaseUserId(
+    config.bootstrapAdminSupabaseUserId
+  );
 
-  if (existing) {
-    return existing;
+if (existingBySupabaseId) {
+  return existingBySupabaseId;
+}
+
+if (config.bootstrapAdminEmail) {
+  const existingByEmail =
+    await accountService.userRepository.findByEmail(config.bootstrapAdminEmail);
+
+  if (existingByEmail) {
+    return accountService.userRepository.save({
+      ...existingByEmail,
+      supabaseUserId: config.bootstrapAdminSupabaseUserId,
+      role: roles.admin,
+      accountStatus: 'active',
+      fullName: existingByEmail.fullName || config.bootstrapAdminFullName,
+      staffMeta: existingByEmail.staffMeta ?? {
+        createdByAdminId: null,
+        lastPrivilegedLoginAt: null
+      }
+    });
   }
+}
 
   return accountService.userRepository.save({
     id: 'usr_admin_seed',
