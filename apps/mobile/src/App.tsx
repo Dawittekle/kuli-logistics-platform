@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -16,13 +18,14 @@ import {
 import type { StyleProp, ViewStyle } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { NavigationContainer, useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { NavigationContainer, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import type { Session } from '@supabase/supabase-js';
 
-import { clearDemoAccessToken, kuliApi, setDemoAccessToken } from './lib/api';
+import { clearSessionAccessToken, getKuliAccessToken, kuliApi, setSessionAccessToken } from './lib/api';
 import { supabase } from './lib/supabase';
 import { runtimeConfig, runtimeReadiness } from './config/runtime';
 import { colors, radii, spacing } from './theme';
@@ -40,10 +43,14 @@ import { SectionHeader } from './components/ui/SectionHeader';
 import { StatusBadge } from './components/ui/StatusBadge';
 import { MetricCard } from './components/visual/MetricCard';
 import { RoutePill } from './components/visual/RoutePill';
+import { decidePostSignUpAction, registrationSessionActions, shouldSuppressRegistrationSessionEvent } from './auth-flow.mjs';
+
+declare const __DEV__: boolean;
 
 type Role = 'client' | 'truck_owner' | 'assistant' | 'admin';
 type AccountStatus = 'active' | 'pending_verification' | 'suspended' | 'banned' | 'deleted';
 type AuthMode = 'login' | 'register' | 'forgot';
+type ResetPasswordStep = 'request' | 'verify';
 type PublicRole = Extract<Role, 'client' | 'truck_owner'>;
 type VerificationDraft = {
   email: string;
@@ -365,6 +372,220 @@ const offerStatusLabels: Record<TripOffer['status'], string> = {
 };
 
 const isBlockedStatus = (status: AccountStatus) => ['suspended', 'banned', 'deleted'].includes(status);
+const AUTH_ONBOARDING_COMPLETED_KEY = 'kuli.authOnboardingCompleted';
+const AUTH_PROFILE_DRAFT_PREFIX = 'kuli.profileDraft.';
+const VERIFICATION_RESEND_COOLDOWN_SECONDS = 60;
+const REQUIRE_EMAIL_CONFIRMATION_AFTER_SIGNUP = true;
+const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+const publicRoles: PublicRole[] = ['client', 'truck_owner'];
+const isPublicRole = (value: unknown): value is PublicRole => typeof value === 'string' && publicRoles.includes(value as PublicRole);
+
+const passwordRules = [
+  { id: 'length', label: 'At least 8 characters', test: (value: string) => value.length >= 8 },
+  { id: 'uppercase', label: 'One uppercase letter', test: (value: string) => /[A-Z]/.test(value) },
+  { id: 'lowercase', label: 'One lowercase letter', test: (value: string) => /[a-z]/.test(value) },
+  { id: 'number', label: 'One number', test: (value: string) => /\d/.test(value) }
+];
+
+const getPasswordChecks = (value: string) => passwordRules.map((rule) => ({ ...rule, met: rule.test(value) }));
+const isStrongPassword = (value: string) => getPasswordChecks(value).every((check) => check.met);
+
+const validateEthiopianPhone = (value: string) => {
+  const raw = value.trim();
+  const compact = raw.replace(/[\s().-]/g, '');
+  let normalized = '';
+
+  if (!compact) {
+    return {
+      valid: false,
+      normalized,
+      message: 'Use an Ethiopian mobile number, for example +251911000000.'
+    };
+  }
+
+  if (/^0[79]\d{8}$/.test(compact)) {
+    normalized = `+251${compact.slice(1)}`;
+  } else if (/^251[79]\d{8}$/.test(compact)) {
+    normalized = `+${compact}`;
+  } else if (/^\+251[79]\d{8}$/.test(compact)) {
+    normalized = compact;
+  }
+
+  if (!normalized) {
+    return {
+      valid: false,
+      normalized: raw,
+      message: 'Enter a valid Ethiopian mobile number, such as +251911000000 or 0911000000.'
+    };
+  }
+
+  return {
+    valid: true,
+    normalized,
+    message: `Looks good: ${normalized}`
+  };
+};
+
+const readStringMetadata = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+const isStaffSession = (session: Session) => ['admin', 'assistant'].includes(readStringMetadata(session.user.user_metadata?.role));
+
+const draftFromSessionMetadata = (session: Session): VerificationDraft | null => {
+  const metadata = session.user.user_metadata ?? {};
+  const role = metadata.role;
+  const email = session.user.email?.trim().toLowerCase() ?? '';
+  const fullName = readStringMetadata(metadata.full_name) || readStringMetadata(metadata.fullName);
+  const phone = readStringMetadata(metadata.phone);
+  const phoneValidation = validateEthiopianPhone(phone);
+
+  if (!email || !fullName || !isPublicRole(role)) {
+    return null;
+  }
+
+  return {
+    email,
+    role,
+    fullName,
+    phone: phoneValidation.valid ? phoneValidation.normalized : phone
+  };
+};
+
+const normalizeProfileDraft = (value: unknown): VerificationDraft | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const source = value as Record<string, unknown>;
+  const email = readStringMetadata(source.email).toLowerCase();
+  const role = source.role;
+  const fullName = readStringMetadata(source.fullName);
+  const phone = readStringMetadata(source.phone);
+  const phoneValidation = validateEthiopianPhone(phone);
+
+  if (!email || !isValidEmail(email) || !fullName || !isPublicRole(role)) {
+    return null;
+  }
+
+  return {
+    email,
+    role,
+    fullName,
+    phone: phoneValidation.valid ? phoneValidation.normalized : phone
+  };
+};
+
+const profileDraftStorageKey = (email: string) => `${AUTH_PROFILE_DRAFT_PREFIX}${email.trim().toLowerCase()}`;
+
+const saveStoredProfileDraft = async (draft: VerificationDraft) => {
+  const normalizedDraft = normalizeProfileDraft(draft);
+
+  if (!normalizedDraft) {
+    return;
+  }
+
+  await AsyncStorage.setItem(profileDraftStorageKey(normalizedDraft.email), JSON.stringify(normalizedDraft)).catch(() => undefined);
+};
+
+const loadStoredProfileDraft = async (email?: string | null) => {
+  const normalizedEmail = email?.trim().toLowerCase();
+
+  if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
+    return null;
+  }
+
+  const draftJson = await AsyncStorage.getItem(profileDraftStorageKey(normalizedEmail)).catch(() => null);
+
+  if (!draftJson) {
+    return null;
+  }
+
+  try {
+    const draft = normalizeProfileDraft(JSON.parse(draftJson));
+
+    if (!draft) {
+      await AsyncStorage.removeItem(profileDraftStorageKey(normalizedEmail)).catch(() => undefined);
+    }
+
+    return draft;
+  } catch {
+    await AsyncStorage.removeItem(profileDraftStorageKey(normalizedEmail)).catch(() => undefined);
+    return null;
+  }
+};
+
+const clearStoredProfileDraft = async (email?: string | null) => {
+  const normalizedEmail = email?.trim().toLowerCase();
+
+  if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
+    return;
+  }
+
+  await AsyncStorage.removeItem(profileDraftStorageKey(normalizedEmail)).catch(() => undefined);
+};
+
+const syncProfileFromDraft = async (session: Session, draft: VerificationDraft) => {
+  const normalizedDraft = normalizeProfileDraft(draft);
+
+  if (!normalizedDraft) {
+    return null;
+  }
+
+  setSessionAccessToken(session.access_token);
+
+  const result = (await kuliApi.syncProfile({
+    role: normalizedDraft.role,
+    fullName: normalizedDraft.fullName,
+    phone: normalizedDraft.phone || undefined,
+    email: normalizedDraft.email
+  })) as ApiEnvelope<ProfileSyncResult>;
+
+  await clearStoredProfileDraft(normalizedDraft.email);
+
+  return result.data.user;
+};
+
+const syncPublicProfileFromSession = async (session: Session) => {
+  const draft = draftFromSessionMetadata(session);
+
+  if (!draft) {
+    return null;
+  }
+
+  return syncProfileFromDraft(session, draft);
+};
+
+const syncStoredProfileFromSession = async (session: Session) => {
+  const draft = await loadStoredProfileDraft(session.user.email);
+
+  if (!draft) {
+    return null;
+  }
+
+  return syncProfileFromDraft(session, draft);
+};
+
+const fetchProfileForSession = async (session: Session) => {
+  setSessionAccessToken(session.access_token);
+
+  try {
+    const result = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
+    return result.data;
+  } catch (error) {
+    if ((error as { status?: number }).status !== 401) {
+      throw error;
+    }
+
+    const { data } = await supabase.auth.getSession();
+    const refreshedSession = data.session;
+
+    if (!refreshedSession?.access_token) {
+      throw error;
+    }
+
+    setSessionAccessToken(refreshedSession.access_token);
+    const retry = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
+    return retry.data;
+  }
+};
 
 const documentTypes: Array<{ type: VehicleDocumentType; label: string; detail: string; required: boolean; tips: string[] }> = [
   {
@@ -427,22 +648,37 @@ const getErrorMessage = (error: unknown) => {
 const isEmailNotConfirmedError = (error: unknown) =>
   error instanceof Error && error.message.toLowerCase().includes('email not confirmed');
 
-const createDemoSession = ({ accessToken, email }: { accessToken: string; email?: string }) =>
-  ({
-    access_token: accessToken,
-    refresh_token: 'local-demo-refresh-token',
-    token_type: 'bearer',
-    expires_in: 3600,
-    expires_at: Math.floor(Date.now() / 1000) + 3600,
-    user: {
-      id: accessToken.replace(/^dev:/, ''),
-      app_metadata: {},
-      user_metadata: {},
-      aud: 'authenticated',
-      created_at: new Date().toISOString(),
-      email
+const authDebug = (...messages: unknown[]) => {
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    console.log('[KULI auth]', ...messages);
+  }
+};
+
+const readAuthUrlParams = (url: string) => {
+  const params = new URLSearchParams();
+  const appendParams = (value?: string) => {
+    if (!value) {
+      return;
     }
-  }) as Session;
+
+    new URLSearchParams(value).forEach((paramValue, key) => {
+      params.set(key, paramValue);
+    });
+  };
+
+  const queryStart = url.indexOf('?');
+  const hashStart = url.indexOf('#');
+
+  if (queryStart >= 0) {
+    appendParams(url.slice(queryStart + 1, hashStart >= 0 ? hashStart : undefined));
+  }
+
+  if (hashStart >= 0) {
+    appendParams(url.slice(hashStart + 1));
+  }
+
+  return params;
+};
 
 function StatusPill({ tone, children }: { tone: 'ready' | 'warn' | 'blocked'; children: ReactNode }) {
   return (
@@ -458,36 +694,6 @@ function ShellCard({ title, children }: { title: string; children: ReactNode }) 
       <Text style={styles.cardTitle}>{title}</Text>
       {children}
     </View>
-  );
-}
-
-function HealthCard() {
-  const [state, setState] = useState<'idle' | 'checking' | 'ready' | 'blocked'>('idle');
-  const [message, setMessage] = useState(runtimeConfig.apiBaseUrl);
-
-  const checkHealth = async () => {
-    setState('checking');
-
-    try {
-      await kuliApi.health();
-      setState('ready');
-      setMessage('Backend health check succeeded.');
-    } catch (error) {
-      setState('blocked');
-      setMessage(getErrorMessage(error));
-    }
-  };
-
-  return (
-    <UiCard style={styles.authCard}>
-      <View style={styles.cardHeader}>
-        <SectionHeader eyebrow="Diagnostics" title="API connection" description={message} style={styles.flex} />
-        <StatusBadge tone={state === 'ready' ? 'success' : state === 'blocked' ? 'error' : 'warning'}>
-          {state === 'ready' ? 'Ready' : state === 'blocked' ? 'Check API' : state === 'checking' ? 'Checking' : 'Idle'}
-        </StatusBadge>
-      </View>
-      <SecondaryButton label="Check health" onPress={checkHealth} />
-    </UiCard>
   );
 }
 
@@ -508,20 +714,42 @@ function Field({
   keyboardType?: 'default' | 'email-address' | 'phone-pad' | 'numeric' | 'decimal-pad';
   containerStyle?: StyleProp<ViewStyle>;
 }) {
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const isPassword = Boolean(secureTextEntry);
+
   return (
     <View style={[styles.field, containerStyle]}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput
-        accessibilityLabel={label}
-        autoCapitalize="none"
-        keyboardType={keyboardType}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor="#829197"
-        secureTextEntry={secureTextEntry}
-        style={styles.input}
-        value={value}
-      />
+      <View style={styles.inputShell}>
+        <TextInput
+          accessibilityLabel={label}
+          autoCapitalize="none"
+          keyboardType={keyboardType}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor="#829197"
+          secureTextEntry={isPassword && !passwordVisible}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          style={[
+            styles.input,
+            isPassword && styles.inputWithIcon,
+            focused && { borderColor: colors.primary, backgroundColor: '#FFFFFF' }
+          ]}
+          value={value}
+        />
+        {isPassword ? (
+          <Pressable
+            accessibilityLabel={passwordVisible ? 'Hide password' : 'Show password'}
+            accessibilityRole="button"
+            onPress={() => setPasswordVisible((visible) => !visible)}
+            style={styles.inputEyeButton}
+          >
+            <MaterialCommunityIcons color={colors.textSecondary} name={passwordVisible ? 'eye-off-outline' : 'eye-outline'} size={22} />
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -535,31 +763,48 @@ function RoleOption({
   selected: boolean;
   onPress: () => void;
 }) {
+  const icon = role === 'client' ? 'home-city-outline' : 'truck-fast-outline';
+
   return (
     <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} style={[styles.roleOption, selected && styles.roleOptionSelected]}>
-      <Text style={[styles.roleOptionTitle, selected && styles.roleOptionTitleSelected]}>{roleLabels[role]}</Text>
-      <Text style={[styles.roleOptionText, selected && styles.roleOptionTextSelected]}>
-        {role === 'client' ? 'Book verified trucks and follow your move.' : 'Register vehicles and receive verified requests.'}
-      </Text>
+      <View style={[styles.roleOptionIcon, selected && styles.roleOptionIconSelected]}>
+        <MaterialCommunityIcons color={selected ? colors.black : colors.textPrimary} name={icon} size={24} />
+      </View>
+      <View style={styles.roleOptionBody}>
+        <Text style={[styles.roleOptionTitle, selected && styles.roleOptionTitleSelected]}>
+          {role === 'client' ? 'Request trucks' : 'Earn with your truck'}
+        </Text>
+        <Text style={[styles.roleOptionText, selected && styles.roleOptionTextSelected]}>
+          {role === 'client' ? 'Book verified trucks for moves and deliveries.' : 'Register a vehicle and receive nearby requests.'}
+        </Text>
+      </View>
+      {selected ? <MaterialCommunityIcons color={colors.card} name="check-circle" size={22} /> : null}
     </Pressable>
   );
 }
 
 function AuthBrandPanel({ mode }: { mode: AuthMode }) {
+  const title = mode === 'register' ? 'Join KULI.' : mode === 'forgot' ? 'Recover your account.' : 'Welcome back.';
+  const copy =
+    mode === 'register'
+      ? 'Create a client or truck-owner account for verified logistics in Addis Ababa.'
+      : mode === 'forgot'
+        ? 'Enter your email and we will send a secure password reset code.'
+        : 'Sign in to request trucks, manage offers, and follow every move with your KULI account.';
+
   return (
     <View style={styles.authHero}>
-      <View style={styles.authLogoMark}>
-        <Text style={styles.authLogoText}>KULI</Text>
+      <View style={styles.authHeroTop}>
+        <View style={styles.authLogoMark}>
+          <Text style={styles.authLogoText}>KULI</Text>
+        </View>
+        <Text style={styles.authCityLabel}>Addis Ababa</Text>
       </View>
-      <Text style={styles.authHeroTitle}>
-        {mode === 'register' ? 'Create your KULI account.' : mode === 'forgot' ? 'Recover access securely.' : 'Move with verified trucks.'}
-      </Text>
-      <Text style={styles.authHeroCopy}>
-        {mode === 'forgot'
-          ? 'Enter your email and Supabase will send a secure password reset link.'
-          : 'Book, verify, accept, and track logistics work with your KULI account.'}
-      </Text>
-      {runtimeConfig.demoAuthEnabled ? <StatusBadge tone="warning">Local demo mode</StatusBadge> : null}
+      <View style={styles.authHeroCenter}>
+        <MaterialCommunityIcons color={colors.card} name="truck-delivery-outline" size={42} />
+        <Text style={styles.authHeroTitle}>{title}</Text>
+        <Text style={styles.authHeroCopy}>{copy}</Text>
+      </View>
     </View>
   );
 }
@@ -585,6 +830,172 @@ function AuthMessage({ tone, message }: { tone: 'notice' | 'error'; message: str
   );
 }
 
+function PasswordChecklist({
+  password,
+  confirmPassword = '',
+  includeMatch = false
+}: {
+  password: string;
+  confirmPassword?: string;
+  includeMatch?: boolean;
+}) {
+  const checks = [
+    ...getPasswordChecks(password),
+    ...(includeMatch
+      ? [
+          {
+            id: 'match',
+            label: 'Passwords match',
+            met: Boolean(password && confirmPassword && password === confirmPassword)
+          }
+        ]
+      : [])
+  ];
+
+  return (
+    <View style={styles.validationCard}>
+      {checks.map((check) => (
+        <View key={check.id} style={styles.validationRow}>
+          <MaterialCommunityIcons
+            color={check.met ? colors.success : colors.textSecondary}
+            name={check.met ? 'check-circle' : 'circle-outline'}
+            size={18}
+          />
+          <Text style={[styles.validationText, check.met && styles.validationTextMet]}>{check.label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function PhoneValidationHint({ value }: { value: string }) {
+  const validation = validateEthiopianPhone(value);
+  const touched = Boolean(value.trim());
+
+  return (
+    <View style={[styles.validationHint, touched && (validation.valid ? styles.validationHintSuccess : styles.validationHintError)]}>
+      <MaterialCommunityIcons
+        color={!touched ? colors.textSecondary : validation.valid ? colors.success : colors.error}
+        name={!touched ? 'cellphone' : validation.valid ? 'check-circle' : 'alert-circle'}
+        size={17}
+      />
+      <Text style={[styles.validationHintText, touched && (validation.valid ? styles.validationHintTextSuccess : styles.validationHintTextError)]}>
+        {validation.message}
+      </Text>
+    </View>
+  );
+}
+
+function SplashScreen({ compact = false }: { compact?: boolean }) {
+  const dot1 = useRef(new Animated.Value(0.25)).current;
+  const dot2 = useRef(new Animated.Value(0.25)).current;
+  const dot3 = useRef(new Animated.Value(0.25)).current;
+
+  useEffect(() => {
+    const pulseDot = (val: Animated.Value, delay: number) => {
+      return Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(val, { toValue: 1.0, duration: 300, useNativeDriver: true }),
+        Animated.timing(val, { toValue: 0.25, duration: 400, useNativeDriver: true }),
+        Animated.delay(500)
+      ]);
+    };
+
+    const anim = Animated.loop(
+      Animated.parallel([
+        pulseDot(dot1, 0),
+        pulseDot(dot2, 200),
+        pulseDot(dot3, 400)
+      ])
+    );
+
+    anim.start();
+
+    return () => {
+      anim.stop();
+    };
+  }, [dot1, dot2, dot3]);
+
+  return (
+    <SafeAreaView style={styles.splashScreen}>
+      <View style={styles.splashGrain} />
+      <View style={styles.splashContent}>
+        <View style={styles.splashLogoBox}>
+          <Text style={styles.splashLogoText}>KULI</Text>
+        </View>
+        <View style={styles.splashDots} accessibilityElementsHidden>
+          <Animated.View style={[styles.splashDot, { opacity: dot1 }]} />
+          <Animated.View style={[styles.splashDot, { opacity: dot2 }]} />
+          <Animated.View style={[styles.splashDot, { opacity: dot3 }]} />
+        </View>
+      </View>
+      <View style={styles.splashFooter}>
+        <Text style={styles.splashTitle}>{compact ? 'Opening your workspace.' : 'Your logistics partner in Addis.'}</Text>
+        <Text style={styles.splashCopy}>Verified trucks. Clear prices. Accountable moves.</Text>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+function VerificationRequiredScreen({
+  draft,
+  code,
+  cooldown,
+  pending,
+  notice,
+  error,
+  onCodeChange,
+  onVerifyCode,
+  onRefresh,
+  onResend,
+  onBack
+}: {
+  draft: VerificationDraft;
+  code: string;
+  cooldown: number;
+  pending: boolean;
+  notice: string;
+  error: string;
+  onCodeChange: (value: string) => void;
+  onVerifyCode: () => void;
+  onRefresh: () => void;
+  onResend: () => void;
+  onBack: () => void;
+}) {
+  const canResend = cooldown <= 0 && !pending;
+
+  return (
+    <UiCard style={styles.authCard}>
+      <View style={styles.verificationIcon}>
+        <MaterialCommunityIcons color={colors.black} name="email-check-outline" size={30} />
+      </View>
+      <SectionHeader
+        eyebrow="Email confirmation"
+        title="Check your email"
+        description="Open the confirmation link or enter the code Supabase sent. KULI will not resend automatically."
+      />
+      <View style={styles.verificationEmailBox}>
+        <Text style={styles.fieldLabel}>{draft.email}</Text>
+        <Text style={styles.muted}>Resending too often may be rate-limited. Use the resend button only when needed.</Text>
+      </View>
+      <Field label="Confirmation code" value={code} onChangeText={onCodeChange} placeholder="6-digit code" keyboardType="numeric" />
+      {error ? <AuthMessage tone="error" message={error} /> : null}
+      {notice ? <AuthMessage tone="notice" message={notice} /> : null}
+      <PrimaryButton disabled={!code.trim() || pending} label={pending ? 'Checking...' : 'Verify code'} loading={pending} onPress={onVerifyCode} />
+      <SecondaryButton disabled={pending} label="I verified my email" loading={pending} onPress={onRefresh} />
+      <View style={styles.actionRow}>
+        <SecondaryButton
+          disabled={!canResend}
+          label={cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend email'}
+          onPress={onResend}
+          style={styles.actionButton}
+        />
+        <SecondaryButton disabled={pending} label="Use another email" onPress={onBack} style={styles.actionButton} />
+      </View>
+    </UiCard>
+  );
+}
+
 function FilePickerField({
   label,
   value,
@@ -603,8 +1014,10 @@ function FilePickerField({
   takeLabel?: string;
 }) {
   const [error, setError] = useState('');
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const pickFile = async (source: PickedFile['source']) => {
+    setSheetOpen(false);
     setError('');
 
     try {
@@ -620,19 +1033,10 @@ function FilePickerField({
 
       const result =
         source === 'camera'
-          ? await ImagePicker.launchCameraAsync({
-              allowsEditing: false,
-              quality: 0.85
-            })
-          : await ImagePicker.launchImageLibraryAsync({
-              allowsEditing: false,
-              mediaTypes: ['images'],
-              quality: 0.85
-            });
+          ? await ImagePicker.launchCameraAsync({ allowsEditing: false, quality: 0.85 })
+          : await ImagePicker.launchImageLibraryAsync({ allowsEditing: false, mediaTypes: ['images'], quality: 0.85 });
 
-      if (result.canceled || !result.assets[0]) {
-        return;
-      }
+      if (result.canceled || !result.assets[0]) return;
 
       onChange(normalizePickedAsset(result.assets[0], source));
     } catch (pickError) {
@@ -655,59 +1059,160 @@ function FilePickerField({
         <Text style={styles.muted}>{emptyText}</Text>
       )}
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
-      <View style={styles.actionRow}>
-        <Pressable accessibilityRole="button" onPress={() => pickFile('library')} style={[styles.secondaryButton, styles.actionButton]}>
-          <Text style={styles.secondaryButtonText}>{uploadLabel}</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" onPress={() => pickFile('camera')} style={[styles.secondaryButton, styles.actionButton]}>
-          <Text style={styles.secondaryButtonText}>{takeLabel}</Text>
+      <View style={styles.filePickerRow}>
+        <Pressable accessibilityRole="button" onPress={() => setSheetOpen(true)} style={styles.filePickerAttachBtn}>
+          <MaterialCommunityIcons name="paperclip" color={colors.textPrimary} size={18} />
+          <Text style={styles.filePickerAttachText}>{value ? 'Change photo' : 'Attach photo'}</Text>
         </Pressable>
         {value ? (
-          <Pressable accessibilityRole="button" onPress={() => onChange(null)} style={[styles.secondaryButton, styles.actionButton]}>
-            <Text style={styles.secondaryButtonText}>Remove</Text>
+          <Pressable accessibilityRole="button" onPress={() => onChange(null)} style={styles.filePickerRemoveBtn}>
+            <MaterialCommunityIcons name="close" color={colors.error} size={18} />
           </Pressable>
         ) : null}
       </View>
+      <Modal animationType="slide" transparent visible={sheetOpen} onRequestClose={() => setSheetOpen(false)}>
+        <Pressable style={styles.sheetBackdrop} onPress={() => setSheetOpen(false)}>
+          <View style={styles.sheetPanel}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>Attach photo</Text>
+            <Pressable accessibilityRole="button" onPress={() => pickFile('library')} style={styles.sheetOption}>
+              <MaterialCommunityIcons name="image-outline" color={colors.textPrimary} size={22} />
+              <Text style={styles.sheetOptionText}>{uploadLabel}</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => pickFile('camera')} style={styles.sheetOption}>
+              <MaterialCommunityIcons name="camera-outline" color={colors.textPrimary} size={22} />
+              <Text style={styles.sheetOptionText}>{takeLabel}</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => setSheetOpen(false)} style={[styles.sheetOption, styles.sheetCancel]}>
+              <Text style={styles.sheetCancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
 
-function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfile, session: Session) => void }) {
+function AuthScreen({
+  initialNotice = '',
+  onAuthenticated,
+  onPasswordRecoveryVerified,
+  onRegistrationVerificationStarted,
+  onRegistrationVerificationAllowed,
+  onRegistrationVerificationCancelled
+}: {
+  initialNotice?: string;
+  onAuthenticated: (profile: UserProfile, session: Session) => void;
+  onPasswordRecoveryVerified: (session: Session) => void;
+  onRegistrationVerificationStarted: (email: string) => void;
+  onRegistrationVerificationAllowed: (email: string) => void;
+  onRegistrationVerificationCancelled: (email: string) => void;
+}) {
   const [mode, setMode] = useState<AuthMode>('login');
   const [role, setRole] = useState<PublicRole>('client');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [pending, setPending] = useState(false);
   const [verificationDraft, setVerificationDraft] = useState<VerificationDraft | null>(null);
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationPending, setVerificationPending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resetStep, setResetStep] = useState<ResetPasswordStep>('request');
+  const [resetCode, setResetCode] = useState('');
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetCooldown, setResetCooldown] = useState(0);
   const [resetPending, setResetPending] = useState(false);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState(initialNotice);
   const [error, setError] = useState('');
 
   const isLogin = mode === 'login';
   const isRegister = mode === 'register';
   const normalizedEmail = email.trim().toLowerCase();
-  const canSubmit = runtimeConfig.demoAuthEnabled
-    ? Boolean(normalizedEmail) && (isLogin || (isRegister && Boolean(fullName.trim())))
-    : Boolean(normalizedEmail) && password.length >= 6 && (isLogin || (isRegister && Boolean(fullName.trim())));
+  const phoneValidation = validateEthiopianPhone(phone);
+  const normalizedPhone = phoneValidation.valid ? phoneValidation.normalized : phone.trim();
+  const passwordsMatch = Boolean(password && confirmPassword && password === confirmPassword);
+  const canSubmit =
+    Boolean(normalizedEmail) &&
+    (isLogin
+      ? password.length >= 1
+      : Boolean(fullName.trim()) && phoneValidation.valid && isStrongPassword(password) && passwordsMatch);
   const canResetPassword = !resetPending;
 
   const changeMode = (nextMode: AuthMode) => {
     setMode(nextMode);
     setError('');
     setNotice('');
+
+    if (nextMode !== 'forgot') {
+      setResetStep('request');
+      setResetCode('');
+      setResetEmail('');
+      setResetCooldown(0);
+      setResetPending(false);
+    }
+
+    if (nextMode !== 'register') {
+      setConfirmPassword('');
+    }
   };
 
+  useEffect(() => {
+    setNotice(initialNotice);
+  }, [initialNotice]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) {
+      return;
+    }
+
+    const timer = setTimeout(() => setResendCooldown((value) => Math.max(0, value - 1)), 1000);
+
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
+  useEffect(() => {
+    if (resetCooldown <= 0) {
+      return;
+    }
+
+    const timer = setTimeout(() => setResetCooldown((value) => Math.max(0, value - 1)), 1000);
+
+    return () => clearTimeout(timer);
+  }, [resetCooldown]);
+
   const loadProfile = async (session: Session) => {
-    const profile = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
-    onAuthenticated(profile.data, session);
+    try {
+      const profile = await fetchProfileForSession(session);
+      onAuthenticated(profile, session);
+    } catch (profileError) {
+      if ((profileError as { code?: string }).code === 'PROFILE_NOT_FOUND') {
+        const syncedProfile = (await syncPublicProfileFromSession(session)) ?? (await syncStoredProfileFromSession(session));
+
+        if (syncedProfile) {
+          onAuthenticated(syncedProfile, session);
+          return;
+        }
+      }
+
+      throw profileError;
+    }
+  };
+
+  const syncDraftProfile = async (session: Session, draft: VerificationDraft) => {
+    const syncedProfile = (await syncProfileFromDraft(session, draft)) ?? (await syncPublicProfileFromSession(session)) ?? (await syncStoredProfileFromSession(session));
+
+    if (!syncedProfile) {
+      throw new Error('Your email is confirmed, but KULI could not find the registration details for this account. Sign out and register again with the same email.');
+    }
+
+    onAuthenticated(syncedProfile, session);
   };
 
   const sendPasswordReset = async () => {
-    if (resetPending) {
+    if (resetPending || resetCooldown > 0) {
       return;
     }
 
@@ -719,7 +1224,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
       return;
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    if (!isValidEmail(normalizedEmail)) {
       setError('Enter a valid email address.');
       return;
     }
@@ -732,13 +1237,19 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
     setResetPending(true);
 
     try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(normalizedEmail);
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+        redirectTo: runtimeConfig.passwordResetRedirectUrl
+      });
 
       if (resetError) {
         throw resetError;
       }
 
-      setNotice('Password reset email sent. Open the Supabase link from your inbox, then return to sign in.');
+      setResetEmail(normalizedEmail);
+      setResetCode('');
+      setResetStep('verify');
+      setResetCooldown(VERIFICATION_RESEND_COOLDOWN_SECONDS);
+      setNotice('Password reset code sent. Enter the code from your email to choose a new password in KULI.');
     } catch (resetError) {
       setError(getErrorMessage(resetError));
     } finally {
@@ -746,51 +1257,65 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
     }
   };
 
-  const startDemoProfile = async (demoRole: PublicRole, options: { preserveExistingRole?: boolean } = {}) => {
-    if (!runtimeConfig.demoAuthEnabled || pending) {
+  const verifyPasswordResetCode = async () => {
+    const targetEmail = (resetEmail || normalizedEmail).trim().toLowerCase();
+
+    if (resetPending) {
       return;
     }
 
-    setPending(true);
     setError('');
     setNotice('');
 
-    try {
-      const suffix = normalizedEmail
-        ? normalizedEmail.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 42)
-        : Date.now().toString(36);
-      const result = (await kuliApi.request('/dev/demo-profile', {
-        method: 'POST',
-        body: {
-          role: demoRole,
-          suffix,
-          fullName: fullName.trim() || (options.preserveExistingRole ? undefined : demoRole === 'client' ? `Demo Client ${suffix}` : `Demo Owner ${suffix}`),
-          email: normalizedEmail || `${demoRole}-${suffix}@demo.kuli.local`,
-          phone: phone.trim() || undefined,
-          preserveExistingRole: Boolean(options.preserveExistingRole)
-        }
-      })) as ApiEnvelope<{ user: UserProfile; accessToken: string }>;
+    if (!isValidEmail(targetEmail)) {
+      setError('Enter a valid email address before verifying the code.');
+      setResetStep('request');
+      return;
+    }
 
-      setDemoAccessToken(result.data.accessToken);
-      onAuthenticated(result.data.user, createDemoSession({
-        accessToken: result.data.accessToken,
-        email: result.data.user.email
-      }));
-    } catch (demoError) {
-      setError(getErrorMessage(demoError));
+    if (!resetCode.trim()) {
+      setError('Enter the reset code from your email.');
+      return;
+    }
+
+    setResetPending(true);
+
+    try {
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+        email: targetEmail,
+        token: resetCode.trim(),
+        type: 'recovery'
+      });
+
+      if (verifyError) {
+        throw verifyError;
+      }
+
+      const recoverySession = data.session ?? (await supabase.auth.getSession()).data.session;
+
+      if (!recoverySession) {
+        setError('The code was accepted, but KULI could not open a recovery session. Request a new code and try again.');
+        return;
+      }
+
+      setSessionAccessToken(recoverySession.access_token);
+      onPasswordRecoveryVerified(recoverySession);
+    } catch (verifyError) {
+      setError(getErrorMessage(verifyError));
     } finally {
-      setPending(false);
+      setResetPending(false);
     }
   };
 
   const resendConfirmation = async (targetEmail = verificationDraft?.email) => {
-    if (!targetEmail || verificationPending) {
+    if (!targetEmail || verificationPending || resendCooldown > 0) {
       return;
     }
 
     setVerificationPending(true);
     setError('');
     setNotice('');
+    setResendCooldown(VERIFICATION_RESEND_COOLDOWN_SECONDS);
 
     try {
       const { error: resendError } = await supabase.auth.resend({
@@ -810,6 +1335,67 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
     }
   };
 
+  const refreshVerification = async () => {
+    if (!verificationDraft || verificationPending) {
+      return;
+    }
+
+    setVerificationPending(true);
+    setError('');
+    setNotice('');
+
+    try {
+      const { data: currentData } = await supabase.auth.getSession();
+      let nextSession = currentData.session;
+      let authSessionAllowed = false;
+
+      if (nextSession?.user.email?.toLowerCase() !== verificationDraft.email) {
+        nextSession = null;
+      }
+
+      if (!nextSession && password.length >= 6) {
+        onRegistrationVerificationAllowed(verificationDraft.email);
+        authSessionAllowed = true;
+
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email: verificationDraft.email,
+          password
+        });
+
+        if (signInError) {
+          throw signInError;
+        }
+
+        nextSession = data.session;
+      }
+
+      if (!nextSession) {
+        if (authSessionAllowed) {
+          onRegistrationVerificationStarted(verificationDraft.email);
+        }
+        setNotice('If you opened a confirmation link, sign in with your email and password to continue.');
+        return;
+      }
+
+      if (!authSessionAllowed) {
+        onRegistrationVerificationAllowed(verificationDraft.email);
+      }
+
+      await syncDraftProfile(nextSession, verificationDraft);
+    } catch (refreshError) {
+      onRegistrationVerificationStarted(verificationDraft.email);
+
+      if (isEmailNotConfirmedError(refreshError)) {
+        setNotice('Email is still waiting for confirmation. Check your inbox or resend after the cooldown.');
+        return;
+      }
+
+      setError(getErrorMessage(refreshError));
+    } finally {
+      setVerificationPending(false);
+    }
+  };
+
   const verifyEmailCode = async () => {
     if (!verificationDraft || !verificationCode.trim() || verificationPending) {
       return;
@@ -820,6 +1406,8 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
     setNotice('');
 
     try {
+      onRegistrationVerificationAllowed(verificationDraft.email);
+
       const { data, error: verifyError } = await supabase.auth.verifyOtp({
         email: verificationDraft.email,
         token: verificationCode.trim(),
@@ -830,28 +1418,29 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
         throw verifyError;
       }
 
-      if (!data.session) {
+      let nextSession = data.session ?? (await supabase.auth.getSession()).data.session;
+
+      if (!nextSession && password.length >= 6) {
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: verificationDraft.email,
+          password
+        });
+
+        if (signInError) {
+          throw signInError;
+        }
+
+        nextSession = signInData.session;
+      }
+
+      if (!nextSession) {
         setNotice('Email confirmed. Sign in with your password to continue.');
-        setVerificationDraft(null);
-        setVerificationCode('');
-        setMode('login');
         return;
       }
 
-      if (verificationDraft.fullName) {
-        const result = (await kuliApi.syncProfile({
-          role: verificationDraft.role,
-          fullName: verificationDraft.fullName,
-          phone: verificationDraft.phone || undefined,
-          email: verificationDraft.email
-        })) as ApiEnvelope<ProfileSyncResult>;
-
-        onAuthenticated(result.data.user, data.session);
-        return;
-      }
-
-      await loadProfile(data.session);
+      await syncDraftProfile(nextSession, verificationDraft);
     } catch (verifyError) {
+      onRegistrationVerificationStarted(verificationDraft.email);
       setError(getErrorMessage(verifyError));
     } finally {
       setVerificationPending(false);
@@ -860,13 +1449,6 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
 
   const submit = async () => {
     if (!canSubmit || pending) {
-      return;
-    }
-
-    if (runtimeConfig.demoAuthEnabled) {
-      await startDemoProfile(mode === 'register' ? role : 'client', {
-        preserveExistingRole: mode === 'login'
-      });
       return;
     }
 
@@ -881,6 +1463,11 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
       }
 
       if (mode === 'login') {
+        if (!isValidEmail(normalizedEmail)) {
+          setError('Enter a valid email address.');
+          return;
+        }
+
         const { data, error: authError } = await supabase.auth.signInWithPassword({
           email: normalizedEmail,
           password
@@ -891,7 +1478,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
         }
 
         if (!data.session) {
-          setNotice('Check your email to finish sign in.');
+          setNotice('Check your email if Supabase asks for confirmation. KULI will not resend automatically.');
           return;
         }
 
@@ -899,13 +1486,44 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
         return;
       }
 
+      if (!isValidEmail(normalizedEmail)) {
+        setError('Enter a valid email address.');
+        return;
+      }
+
+      if (!phoneValidation.valid) {
+        setError(phoneValidation.message);
+        return;
+      }
+
+      if (!isStrongPassword(password)) {
+        setError('Use a stronger password before creating the account.');
+        return;
+      }
+
+      if (!passwordsMatch) {
+        setError('Confirm password must match your password.');
+        return;
+      }
+
+      const registrationDraft: VerificationDraft = {
+        email: normalizedEmail,
+        role,
+        fullName: fullName.trim(),
+        phone: normalizedPhone
+      };
+
+      await saveStoredProfileDraft(registrationDraft);
+      onRegistrationVerificationStarted(registrationDraft.email);
+
       const { data, error: authError } = await supabase.auth.signUp({
         email: normalizedEmail,
         password,
         options: {
+          emailRedirectTo: runtimeConfig.authRedirectUrl,
           data: {
             full_name: fullName.trim(),
-            phone,
+            phone: normalizedPhone,
             role
           }
         }
@@ -915,40 +1533,64 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
         throw authError;
       }
 
-      if (!data.session) {
-        setVerificationDraft({
-          email: normalizedEmail,
-          role,
-          fullName: fullName.trim(),
-          phone: phone.trim()
-        });
+      const postSignUpAction = decidePostSignUpAction({
+        hasSession: Boolean(data.session),
+        requireEmailConfirmation: REQUIRE_EMAIL_CONFIRMATION_AFTER_SIGNUP
+      });
+
+      if (postSignUpAction === registrationSessionActions.requireVerification) {
+        if (data.session) {
+          setSessionAccessToken(null);
+          await supabase.auth.signOut();
+        }
+
+        setVerificationDraft(registrationDraft);
         setVerificationCode('');
-        setNotice('Account created. Check your email for a confirmation code or link, then finish verification here.');
+        setResendCooldown(VERIFICATION_RESEND_COOLDOWN_SECONDS);
+        setNotice(
+          data.session
+            ? 'Account created. Email confirmation is required before KULI opens your account. Check your email for a code or confirmation link.'
+            : 'Account created. Check your email for a confirmation code or link. We will not resend unless you press Resend.'
+        );
         setMode('login');
         return;
       }
 
-      const result = (await kuliApi.syncProfile({
-        role,
-        fullName: fullName.trim(),
-        phone: phone.trim() || undefined,
-        email: normalizedEmail
-      })) as ApiEnvelope<ProfileSyncResult>;
+      onRegistrationVerificationAllowed(registrationDraft.email);
 
-      onAuthenticated(result.data.user, data.session);
+      if (!data.session) {
+        throw new Error('KULI could not open a verified signup session. Confirm your email, then sign in.');
+      }
+
+      const syncedProfile = await syncProfileFromDraft(data.session, registrationDraft);
+
+      if (!syncedProfile) {
+        throw new Error('KULI could not finish creating your mobile profile. Try signing in again.');
+      }
+
+      onAuthenticated(syncedProfile, data.session);
     } catch (submitError) {
       if (mode === 'login' && isEmailNotConfirmedError(submitError)) {
-        const normalizedEmail = email.trim().toLowerCase();
-        setVerificationDraft({
-          email: normalizedEmail,
-          role,
-          fullName: fullName.trim(),
-          phone: phone.trim()
-        });
+        const loginEmail = email.trim().toLowerCase();
+        const storedDraft = await loadStoredProfileDraft(loginEmail);
+        onRegistrationVerificationStarted(loginEmail);
+        setVerificationDraft(
+          storedDraft ?? {
+            email: loginEmail,
+            role,
+            fullName: fullName.trim(),
+            phone: phoneValidation.valid ? phoneValidation.normalized : phone.trim()
+          }
+        );
         setVerificationCode('');
         setError('');
         setNotice('Email not confirmed. Use the code or link already sent to your email, or press Resend after the rate-limit window clears.');
         return;
+      }
+
+      if (mode === 'register') {
+        onRegistrationVerificationCancelled(normalizedEmail);
+        await clearStoredProfileDraft(normalizedEmail);
       }
 
       setError(getErrorMessage(submitError));
@@ -963,20 +1605,74 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
         <ScrollView contentContainerStyle={styles.authContent}>
           <AuthBrandPanel mode={mode} />
 
-          {mode !== 'forgot' ? <AuthModeTabs mode={mode} onChange={changeMode} /> : null}
+          {mode !== 'forgot' && !verificationDraft ? <AuthModeTabs mode={mode} onChange={changeMode} /> : null}
 
-          {mode === 'forgot' ? (
+          {verificationDraft ? (
+            <VerificationRequiredScreen
+              draft={verificationDraft}
+              code={verificationCode}
+              cooldown={resendCooldown}
+              pending={verificationPending}
+              notice={notice}
+              error={error}
+              onCodeChange={setVerificationCode}
+              onVerifyCode={verifyEmailCode}
+              onRefresh={refreshVerification}
+              onResend={() => resendConfirmation()}
+              onBack={() => {
+                setVerificationDraft(null);
+                setVerificationCode('');
+                setError('');
+                setNotice('');
+                setMode('login');
+              }}
+            />
+          ) : mode === 'forgot' ? (
             <UiCard style={styles.authCard}>
               <AppHeader
                 eyebrow="Account recovery"
-                title="Reset your password."
-                subtitle="We will send a secure reset link to the email on your KULI account."
+                title={resetStep === 'request' ? 'Reset your password.' : 'Enter your reset code.'}
+                subtitle={
+                  resetStep === 'request'
+                    ? 'We will email a one-time reset code. You can finish the password change inside KULI.'
+                    : `Use the code sent to ${resetEmail || normalizedEmail}.`
+                }
               />
-              <Field label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" />
+              {resetStep === 'request' ? (
+                <Field label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" />
+              ) : (
+                <>
+                  <View style={styles.verificationEmailBox}>
+                    <Text style={styles.fieldLabel}>{resetEmail || normalizedEmail}</Text>
+                    <Text style={styles.muted}>Reset codes can expire. Request a new one if this code no longer works.</Text>
+                  </View>
+                  <Field label="Reset code" value={resetCode} onChangeText={setResetCode} placeholder="6-digit code" keyboardType="numeric" />
+                </>
+              )}
               {error ? <AuthMessage tone="error" message={error} /> : null}
               {notice ? <AuthMessage tone="notice" message={notice} /> : null}
-              <PrimaryButton disabled={!canResetPassword} label={resetPending ? 'Sending...' : 'Send reset email'} loading={resetPending} onPress={sendPasswordReset} />
-              <SecondaryButton label="Back to login" onPress={() => changeMode('login')} />
+              {resetStep === 'request' ? (
+                <PrimaryButton disabled={!canResetPassword} label={resetPending ? 'Sending...' : 'Send reset code'} loading={resetPending} onPress={sendPasswordReset} />
+              ) : (
+                <>
+                  <PrimaryButton disabled={resetPending || !resetCode.trim()} label={resetPending ? 'Checking...' : 'Verify code'} loading={resetPending} onPress={verifyPasswordResetCode} />
+                  <SecondaryButton
+                    disabled={resetPending || resetCooldown > 0}
+                    label={resetCooldown > 0 ? `Send a new code in ${resetCooldown}s` : 'Send a new code'}
+                    onPress={sendPasswordReset}
+                  />
+                </>
+              )}
+              <SecondaryButton
+                label="Back to login"
+                onPress={() => {
+                  setResetStep('request');
+                  setResetCode('');
+                  setResetEmail('');
+                  setResetCooldown(0);
+                  changeMode('login');
+                }}
+              />
             </UiCard>
           ) : (
             <>
@@ -999,8 +1695,19 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
                 />
                 {mode === 'register' ? <Field label="Full name" value={fullName} onChangeText={setFullName} placeholder="Abebe Bekele" /> : null}
                 <Field label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" />
-                {mode === 'register' ? <Field label="Phone" value={phone} onChangeText={setPhone} placeholder="+251911000000" keyboardType="phone-pad" /> : null}
-                <Field label="Password" value={password} onChangeText={setPassword} placeholder="Minimum 6 characters" secureTextEntry />
+                {mode === 'register' ? (
+                  <>
+                    <Field label="Phone" value={phone} onChangeText={setPhone} placeholder="+251911000000" keyboardType="phone-pad" />
+                    <PhoneValidationHint value={phone} />
+                  </>
+                ) : null}
+                <Field label="Password" value={password} onChangeText={setPassword} placeholder={mode === 'register' ? 'At least 8 characters' : 'Your password'} secureTextEntry />
+                {mode === 'register' ? (
+                  <>
+                    <Field label="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Repeat your password" secureTextEntry />
+                    <PasswordChecklist password={password} confirmPassword={confirmPassword} includeMatch />
+                  </>
+                ) : null}
                 {mode === 'login' ? (
                   <Pressable accessibilityRole="button" onPress={() => changeMode('forgot')} style={styles.authInlineLink}>
                     <Text style={styles.authInlineLinkText}>Forgot password?</Text>
@@ -1016,50 +1723,9 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
                 />
               </UiCard>
 
-              {verificationDraft ? (
-                <UiCard style={styles.authCard}>
-                  <SectionHeader
-                    eyebrow="Email confirmation"
-                    title="Confirm your email."
-                    description="Enter the confirmation code from your email. If Supabase sent a link instead, open that link, then return and sign in."
-                  />
-                  <Text style={styles.muted}>{verificationDraft.email}</Text>
-                  <Field label="Confirmation code" value={verificationCode} onChangeText={setVerificationCode} placeholder="6-digit code" keyboardType="numeric" />
-                  <View style={styles.actionRow}>
-                    <PrimaryButton
-                      disabled={!verificationCode.trim() || verificationPending}
-                      label={verificationPending ? 'Checking...' : 'Verify'}
-                      loading={verificationPending}
-                      onPress={verifyEmailCode}
-                      style={styles.actionButton}
-                    />
-                    <SecondaryButton disabled={verificationPending} label="Resend" onPress={() => resendConfirmation()} style={styles.actionButton} />
-                  </View>
-                </UiCard>
-              ) : null}
-
-              {runtimeConfig.demoAuthEnabled ? (
-                <UiCard style={styles.authCard}>
-                  <SectionHeader
-                    eyebrow="Development only"
-                    title="Local demo access"
-                    description="Explore KULI without Supabase email verification. Demo profiles use local dev tokens."
-                  />
-                  <View style={styles.actionRow}>
-                    <SecondaryButton disabled={pending} label="Demo client" onPress={() => startDemoProfile('client')} style={styles.actionButton} />
-                    <PrimaryButton disabled={pending} label="Demo owner" onPress={() => startDemoProfile('truck_owner')} style={styles.actionButton} />
-                  </View>
-                </UiCard>
-              ) : null}
             </>
           )}
 
-          {runtimeConfig.demoAuthEnabled ? (
-            <>
-              <HealthCard />
-              <RuntimeReadiness />
-            </>
-          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -1067,15 +1733,7 @@ function AuthScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfil
 }
 
 function SessionLoadingScreen() {
-  return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.centered}>
-        <ActivityIndicator color={colors.primary} size="large" />
-        <Text style={styles.cardTitle}>Opening KULI</Text>
-        <Text style={styles.muted}>Checking your account details.</Text>
-      </View>
-    </SafeAreaView>
-  );
+  return <SplashScreen compact />;
 }
 
 function ForbiddenScreen({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
@@ -1086,6 +1744,23 @@ function ForbiddenScreen({ profile, onSignOut }: { profile: UserProfile; onSignO
         <Text style={styles.title}>Use the right workspace.</Text>
         <ShellCard title="Mobile access blocked">
           <Text style={styles.copy}>This account belongs in the web dashboard. Sign out here and continue from the staff workspace.</Text>
+          <Pressable accessibilityRole="button" onPress={onSignOut} style={styles.secondaryButton}>
+            <Text style={styles.secondaryButtonText}>Sign out</Text>
+          </Pressable>
+        </ShellCard>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function StaffMobileBlockedScreen({ onSignOut }: { onSignOut: () => void }) {
+  return (
+    <SafeAreaView style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.eyebrow}>Staff workspace</Text>
+        <Text style={styles.title}>Use the web dashboard.</Text>
+        <ShellCard title="Mobile access blocked">
+          <Text style={styles.copy}>Admin and assistant accounts are provisioned for the KULI web dashboard, not the customer mobile app.</Text>
           <Pressable accessibilityRole="button" onPress={onSignOut} style={styles.secondaryButton}>
             <Text style={styles.secondaryButtonText}>Sign out</Text>
           </Pressable>
@@ -1116,33 +1791,46 @@ function AccountBlockedScreen({ profile, onSignOut }: { profile: UserProfile; on
   );
 }
 
-function ProfileRequiredScreen({ session, onAuthenticated, onSignOut }: { session: Session; onAuthenticated: (profile: UserProfile, session: Session) => void; onSignOut: () => void }) {
-  const [role, setRole] = useState<PublicRole>('client');
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
+function ResetPasswordScreen({ onComplete, onSignOut }: { onComplete: () => Promise<void>; onSignOut: () => void }) {
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [pending, setPending] = useState(false);
+  const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
-  const email = session.user.email ?? '';
+  const passwordsMatch = Boolean(newPassword && confirmPassword && newPassword === confirmPassword);
+  const canSubmit = isStrongPassword(newPassword) && passwordsMatch;
 
   const submit = async () => {
-    if (!fullName.trim() || pending) {
+    if (pending) {
+      return;
+    }
+
+    setError('');
+    setNotice('');
+
+    if (!isStrongPassword(newPassword)) {
+      setError('Use a stronger password before saving it.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError('The password confirmation does not match.');
       return;
     }
 
     setPending(true);
-    setError('');
 
     try {
-      const result = (await kuliApi.syncProfile({
-        role,
-        fullName: fullName.trim(),
-        email,
-        phone: phone.trim() || undefined
-      })) as ApiEnvelope<ProfileSyncResult>;
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
 
-      onAuthenticated(result.data.user, session);
-    } catch (syncError) {
-      setError(getErrorMessage(syncError));
+      if (updateError) {
+        throw updateError;
+      }
+
+      setNotice('Password updated. You can now sign in with your new password.');
+      await onComplete();
+    } catch (resetError) {
+      setError(getErrorMessage(resetError));
     } finally {
       setPending(false);
     }
@@ -1150,24 +1838,45 @@ function ProfileRequiredScreen({ session, onAuthenticated, onSignOut }: { sessio
 
   return (
     <SafeAreaView style={styles.screen}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+        <ScrollView contentContainerStyle={styles.authContent}>
+          <AuthBrandPanel mode="forgot" />
+          <UiCard style={styles.authCard}>
+            <AppHeader
+              eyebrow="Account recovery"
+              title="Choose a new password."
+              subtitle="Enter a new password for your KULI account. After it is saved, you will sign in again."
+            />
+            <Field label="New password" value={newPassword} onChangeText={setNewPassword} placeholder="At least 8 characters" secureTextEntry />
+            <Field label="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Repeat new password" secureTextEntry />
+            <PasswordChecklist password={newPassword} confirmPassword={confirmPassword} includeMatch />
+            {error ? <AuthMessage tone="error" message={error} /> : null}
+            {notice ? <AuthMessage tone="notice" message={notice} /> : null}
+            <PrimaryButton disabled={pending || !canSubmit} label={pending ? 'Saving...' : 'Update password'} loading={pending} onPress={submit} />
+            <SecondaryButton disabled={pending} label="Back to login" onPress={onSignOut} />
+          </UiCard>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+function ProfileLoadErrorScreen({ message, onRetry, onSignOut }: { message: string; onRetry: () => void; onSignOut: () => void }) {
+  return (
+    <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>Profile required</Text>
-        <Text style={styles.title}>Finish your profile.</Text>
-        <Text style={styles.copy}>Add the details KULI needs to set up your mobile account.</Text>
-        <View style={styles.roleGrid}>
-          <RoleOption role="client" selected={role === 'client'} onPress={() => setRole('client')} />
-          <RoleOption role="truck_owner" selected={role === 'truck_owner'} onPress={() => setRole('truck_owner')} />
-        </View>
-        <ShellCard title="Profile details">
-          <Field label="Full name" value={fullName} onChangeText={setFullName} placeholder="Abebe Bekele" />
-          <Field label="Phone" value={phone} onChangeText={setPhone} placeholder="+251911000000" keyboardType="phone-pad" />
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          <Pressable accessibilityRole="button" disabled={!fullName.trim() || pending} onPress={submit} style={[styles.primaryButton, (!fullName.trim() || pending) && styles.buttonDisabled]}>
-            <Text style={styles.primaryButtonText}>{pending ? 'Saving...' : 'Create profile'}</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" onPress={onSignOut} style={styles.secondaryButton}>
-            <Text style={styles.secondaryButtonText}>Sign out</Text>
-          </Pressable>
+        <Text style={styles.eyebrow}>Account check</Text>
+        <Text style={styles.title}>We could not open your workspace.</Text>
+        <ShellCard title="Profile check failed">
+          <Text style={styles.copy}>{message}</Text>
+          <View style={styles.actionRow}>
+            <Pressable accessibilityRole="button" onPress={onRetry} style={[styles.primaryButton, styles.actionButton]}>
+              <Text style={styles.primaryButtonText}>Try again</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={onSignOut} style={[styles.secondaryButton, styles.actionButton]}>
+              <Text style={styles.secondaryButtonText}>Sign out</Text>
+            </Pressable>
+          </View>
         </ShellCard>
       </ScrollView>
     </SafeAreaView>
@@ -1314,7 +2023,7 @@ function HomeOverview({ profile, onSignOut }: { profile: UserProfile; onSignOut:
         </View>
         <View style={styles.flex}>
           <Text style={styles.ownerHeaderKicker}>KULI Driver</Text>
-          <Text style={styles.ownerHeaderTitle}>Ready to drive, {firstName}?</Text>
+          <Text style={styles.ownerHeaderTitle}>Ready to drive, <Text style={styles.ownerHeaderNameAccent}>{firstName}</Text>?</Text>
           <Text style={styles.ownerHeaderCopy}>Addis Ababa requests appear when an approved vehicle is online.</Text>
         </View>
       </View>
@@ -1690,7 +2399,10 @@ function DocumentUploadField({
                   />
                 </View>
                 <View style={styles.flex}>
-                  <Text style={styles.ownerDocumentTitle}>{doc.label}</Text>
+                  <View style={styles.docTitleRow}>
+                    <Text style={styles.ownerDocumentTitle}>{doc.label}</Text>
+                    <StatusPill tone={doc.required ? 'blocked' : 'warn'}>{doc.required ? 'Required' : 'Optional'}</StatusPill>
+                  </View>
                   <Text style={styles.ownerDocumentCopy}>{doc.detail}</Text>
                 </View>
                 <StatusBadge tone={statusTone}>{statusLabel}</StatusBadge>
@@ -1724,12 +2436,6 @@ function DocumentUploadField({
                 emptyTone={doc.required ? 'blocked' : 'warn'}
                 uploadLabel="Upload"
                 takeLabel="Camera"
-              />
-              <PrimaryButton
-                disabled={!draft || pendingThis}
-                label={pendingThis ? 'Attaching...' : uploaded ? 'Replace document' : 'Attach document'}
-                loading={pendingThis}
-                onPress={() => submitOne(doc.type)}
               />
             </View>
           );
@@ -2198,6 +2904,19 @@ const normalizePickedAsset = (asset: ImagePicker.ImagePickerAsset, source: Picke
 const canPreviewVehiclePhoto = (uri?: string) => Boolean(uri && /^(https?:|file:|blob:|data:)/.test(uri));
 
 async function uploadVehicleFile(vehicleId: string, type: string, file: PickedFile) {
+  if (!file.uri) {
+    throw new Error(`Could not read ${file.name} for upload. Choose the file again.`);
+  }
+
+  // Fetch the blob first so we know the real byte size before creating the intent.
+  const fileResponse = await fetch(file.uri);
+  const fileBlob = await fileResponse.blob();
+  const actualSizeBytes = fileBlob.size > 0 ? fileBlob.size : file.sizeBytes;
+
+  if (!actualSizeBytes || actualSizeBytes <= 0) {
+    throw new Error(`Could not determine the file size of ${file.name}. Try picking the file again.`);
+  }
+
   const intent = (await kuliApi.request('/files/upload-intent', {
     method: 'POST',
     body: {
@@ -2205,36 +2924,35 @@ async function uploadVehicleFile(vehicleId: string, type: string, file: PickedFi
       type,
       originalFileName: file.name,
       mimeType: file.mimeType,
-      sizeBytes: file.sizeBytes
+      sizeBytes: actualSizeBytes
     }
   })) as ApiEnvelope<{ file: { id: string; originalFileName?: string; mimeType?: string; sizeBytes?: number }; upload: { url: string; method?: string } }>;
 
-  if (intent.data.upload.url.startsWith('http')) {
-    if (!file.uri) {
-      throw new Error(`Could not read ${file.name} for upload. Choose the file again.`);
-    }
-
-    const fileResponse = await fetch(file.uri);
-    const fileBlob = await fileResponse.blob();
-    const uploadResponse = await fetch(intent.data.upload.url, {
-      method: intent.data.upload.method ?? 'PUT',
-      headers: {
-        'content-type': file.mimeType
-      },
-      body: fileBlob
-    });
-
-    if (!uploadResponse.ok) {
-      throw new Error(`Storage upload failed for ${file.name}.`);
-    }
-  }
-
-  await kuliApi.request(`/files/${intent.data.file.id}/complete`, {
-    method: 'POST',
-    body: {
-      uploadedSizeBytes: file.sizeBytes
-    }
+  const uploadUrl = intent.data.upload.url.startsWith('http')
+    ? intent.data.upload.url
+    : `${kuliApi.baseUrl}${intent.data.upload.url.startsWith('/') ? intent.data.upload.url : `/${intent.data.upload.url}`}`;
+  const accessToken = await getKuliAccessToken();
+  const uploadResponse = await fetch(uploadUrl, {
+    method: intent.data.upload.method ?? 'POST',
+    headers: {
+      'content-type': file.mimeType,
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
+    },
+    body: fileBlob
   });
+
+  if (!uploadResponse.ok) {
+    let message = `KULI could not upload ${file.name}. Check that the backend is running and try again.`;
+
+    try {
+      const payload = await uploadResponse.json();
+      message = payload?.error?.message ?? message;
+    } catch {
+      // Keep the generic message when the upload endpoint returns a non-JSON body.
+    }
+
+    throw new Error(message);
+  }
 
   return intent.data.file;
 }
@@ -2333,21 +3051,59 @@ function LocationDropdown({
   avoidKey?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [searchText, setSearchText] = useState('');
   const selected = getLocationOption(selectedKey);
+
+  const filteredOptions = useMemo(() => {
+    if (!searchText) return addisLocationOptions;
+    const query = searchText.toLowerCase();
+    return addisLocationOptions.filter(
+      (option) =>
+        option.label.toLowerCase().includes(query) ||
+        option.area.toLowerCase().includes(query) ||
+        option.detail.toLowerCase().includes(query)
+    );
+  }, [searchText]);
+
+  const displayVal = open ? searchText : selected.label;
 
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <Pressable accessibilityRole="button" onPress={() => setOpen((value) => !value)} style={styles.locationSelectButton}>
-        <View style={styles.flex}>
-          <Text style={styles.locationSelectTitle}>{selected.label}</Text>
-          <Text style={styles.muted}>{selected.area} / {selected.detail}</Text>
-        </View>
-        <Text style={styles.locationChevron}>{open ? 'Close' : 'Change'}</Text>
-      </Pressable>
+      <View style={styles.locationSelectButton}>
+        <TextInput
+          accessibilityRole="text"
+          style={{ flex: 1, fontSize: 16, color: colors.textPrimary, paddingVertical: 4, paddingHorizontal: 0 }}
+          placeholder="Type to search location..."
+          placeholderTextColor={colors.muted}
+          value={displayVal}
+          onChangeText={(text) => {
+            setSearchText(text);
+            if (!open) setOpen(true);
+          }}
+          onFocus={() => {
+            setOpen(true);
+            setSearchText('');
+          }}
+        />
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            if (open) {
+              setOpen(false);
+              setSearchText('');
+            } else {
+              setOpen(true);
+              setSearchText('');
+            }
+          }}
+        >
+          <Text style={styles.locationChevron}>{open ? 'Close' : 'Change'}</Text>
+        </Pressable>
+      </View>
       {open ? (
-        <ScrollView style={styles.locationMenu} contentContainerStyle={styles.locationMenuContent}>
-          {addisLocationOptions.map((option) => {
+        <ScrollView style={styles.locationMenu} contentContainerStyle={styles.locationMenuContent} keyboardShouldPersistTaps="handled">
+          {filteredOptions.map((option) => {
             const selectedOption = option.key === selectedKey;
             const sameAsOtherPoint = option.key === avoidKey;
 
@@ -2360,6 +3116,7 @@ function LocationDropdown({
                 onPress={() => {
                   onSelect(option);
                   setOpen(false);
+                  setSearchText('');
                 }}
                 style={[styles.locationOption, selectedOption && styles.locationOptionSelected, sameAsOtherPoint && styles.buttonDisabled]}
               >
@@ -2371,6 +3128,11 @@ function LocationDropdown({
               </Pressable>
             );
           })}
+          {filteredOptions.length === 0 ? (
+            <View style={{ padding: spacing.md, alignItems: 'center' }}>
+              <Text style={styles.muted}>No matching areas in Addis Ababa</Text>
+            </View>
+          ) : null}
         </ScrollView>
       ) : null}
     </View>
@@ -2532,71 +3294,222 @@ function RouteMapPreview({
   destination,
   truck,
   statusLabel,
-  style
+  style,
+  onMapTouch
 }: {
   pickup: MapLocationInput;
   destination: MapLocationInput;
   truck?: QuoteLocation;
   statusLabel?: string;
   style?: StyleProp<ViewStyle>;
+  onMapTouch?: (location: { lat: string; lon: string; type: 'pickup' | 'destination' }) => void;
 }) {
   const [zoom, setZoom] = useState(12);
   const [expanded, setExpanded] = useState(false);
+  const [routePoints, setRoutePoints] = useState<{ lon: number; lat: number }[]>([]);
+  const [layoutWidth, setLayoutWidth] = useState(360);
+  const [layoutHeight, setLayoutHeight] = useState(190);
+  const [activeMode, setActiveMode] = useState<'pickup' | 'destination'>('pickup');
+
   const pickupPoint = normalizeMapLocation(pickup, 'Pickup');
   const destinationPoint = normalizeMapLocation(destination, 'Drop-off');
   const truckPoint = truck ? normalizeMapLocation(truck, 'Truck') : undefined;
-  const googleMapUrl = buildGoogleStaticMapUrl({ pickup: pickupPoint, destination: destinationPoint, truck: truckPoint, zoom });
-  const fallbackTileUrl = buildOpenStreetMapTileUrl(pickupPoint, destinationPoint, zoom);
-  const mapProviderLabel = googleMapUrl ? 'Google map' : 'OpenStreetMap preview';
-  const zoomMap = (direction: 'in' | 'out') => setZoom((current) => Math.max(10, Math.min(15, direction === 'in' ? current + 1 : current - 1)));
-  const toPointStyle = (location: { lon: number; lat: number }) => {
-    const lon = Number(location.lon);
-    const lat = Number(location.lat);
-    const left = Math.max(6, Math.min(88, ((lon - 38.65) / (38.91 - 38.65)) * 100));
-    const top = Math.max(8, Math.min(84, (1 - (lat - 8.88) / (9.08 - 8.88)) * 100));
-    return {
-      left: `${left}%` as ViewStyle['left'],
-      top: `${top}%` as ViewStyle['top']
+
+  useEffect(() => {
+    let active = true;
+    const fetchRoute = async () => {
+      try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${pickupPoint.lon},${pickupPoint.lat};${destinationPoint.lon},${destinationPoint.lat}?overview=full&geometries=geojson`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('OSRM request failed');
+        const data = await response.json();
+        if (active && data.routes && data.routes[0]) {
+          const coords = data.routes[0].geometry.coordinates.map(([lon, lat]: [number, number]) => ({ lon, lat }));
+          setRoutePoints(coords);
+        }
+      } catch (err) {
+        console.warn('OSRM routing failed, falling back to straight line:', err);
+        if (active) {
+          setRoutePoints([pickupPoint, destinationPoint]);
+        }
+      }
     };
+
+    fetchRoute();
+    return () => {
+      active = false;
+    };
+  }, [pickupPoint.lon, pickupPoint.lat, destinationPoint.lon, destinationPoint.lat]);
+
+  const coordsPath = useMemo(() => {
+    if (!routePoints.length) return '';
+    const step = Math.max(1, Math.round(routePoints.length / 25));
+    const decimated = routePoints.filter((_, idx) => idx % step === 0 || idx === routePoints.length - 1);
+    return decimated.map(p => `${p.lon},${p.lat}`).join(',');
+  }, [routePoints]);
+
+  const googlePath = useMemo(() => {
+    if (!routePoints.length) return '';
+    const step = Math.max(1, Math.round(routePoints.length / 25));
+    const decimated = routePoints.filter((_, idx) => idx % step === 0 || idx === routePoints.length - 1);
+    return decimated.map(p => `${p.lat},${p.lon}`).join('%7C');
+  }, [routePoints]);
+
+  const mapCenter = useMemo(() => {
+    if (pickupPoint.lat && destinationPoint.lat) {
+      return {
+        lat: (pickupPoint.lat + destinationPoint.lat) / 2,
+        lon: (pickupPoint.lon + destinationPoint.lon) / 2
+      };
+    }
+    return {
+      lat: pickupPoint.lat || 8.9806,
+      lon: pickupPoint.lon || 38.7892
+    };
+  }, [pickupPoint, destinationPoint]);
+
+  const onLayout = (e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    if (width > 0) setLayoutWidth(width);
+    if (height > 0) setLayoutHeight(height);
   };
 
+  const handlePress = (event: GestureResponderEvent) => {
+    if (!onMapTouch) return;
+    const { locationX, locationY } = event.nativeEvent;
+    
+    const centerLat = mapCenter.lat;
+    const centerLon = mapCenter.lon;
+    const latRad = centerLat * Math.PI / 180;
+    
+    const metersPerPixel = (156543.03 * Math.cos(latRad)) / Math.pow(2, zoom);
+    
+    const dxPixels = locationX - layoutWidth / 2;
+    const dyPixels = layoutHeight / 2 - locationY;
+    
+    const dxMeters = dxPixels * metersPerPixel;
+    const dyMeters = dyPixels * metersPerPixel;
+    
+    const dLat = dyMeters / 111320;
+    const dLon = dxMeters / (111320 * Math.cos(latRad));
+    
+    const touchedLat = centerLat + dLat;
+    const touchedLon = centerLon + dLon;
+    
+    onMapTouch({
+      lat: String(touchedLat.toFixed(6)),
+      lon: String(touchedLon.toFixed(6)),
+      type: activeMode
+    });
+  };
+
+  const mapProviderLabel = runtimeConfig.googleMapsApiKey ? 'Google map (road path)' : 'OpenStreetMap (road path)';
+
+  const staticMapUrl = useMemo(() => {
+    if (runtimeConfig.googleMapsApiKey) {
+      const markers = [
+        `markers=color:green%7Clabel:P%7C${pickupPoint.lat},${pickupPoint.lon}`,
+        `markers=color:orange%7Clabel:D%7C${destinationPoint.lat},${destinationPoint.lon}`,
+        truckPoint ? `markers=color:blue%7Clabel:T%7C${truckPoint.lat},${truckPoint.lon}` : ''
+      ].filter(Boolean);
+      const pathParam = googlePath ? `path=color:0x0000ffff%7Cweight:5%7C${googlePath}` : `path=color:0x0000ffff%7Cweight:5%7C${pickupPoint.lat},${pickupPoint.lon}%7C${destinationPoint.lat},${destinationPoint.lon}`;
+      return `https://maps.googleapis.com/maps/api/staticmap?center=${mapCenter.lat},${mapCenter.lon}&zoom=${zoom}&size=640x320&scale=2&maptype=roadmap&${markers.join('&')}&${pathParam}&key=${encodeURIComponent(runtimeConfig.googleMapsApiKey)}`;
+    }
+
+    const ptParam = [
+      `${pickupPoint.lon},${pickupPoint.lat},pm2gnm`,
+      `${destinationPoint.lon},${destinationPoint.lat},pm2rdm`,
+      truckPoint ? `${truckPoint.lon},${truckPoint.lat},pm2blm` : ''
+    ].filter(Boolean).join('~');
+
+    const plParam = coordsPath ? `&pl=c:0000FFf0,w:5,${coordsPath}` : `&pl=c:0000FFf0,w:5,${pickupPoint.lon},${pickupPoint.lat},${destinationPoint.lon},${destinationPoint.lat}`;
+
+    return `https://static-maps.yandex.ru/1.x/?l=map&size=600,300&ll=${mapCenter.lon},${mapCenter.lat}&z=${zoom}&pt=${ptParam}${plParam}`;
+  }, [pickupPoint, destinationPoint, truckPoint, mapCenter, zoom, coordsPath, googlePath]);
+
+  const zoomMap = (direction: 'in' | 'out') => setZoom((current) => Math.max(10, Math.min(15, direction === 'in' ? current + 1 : current - 1)));
+
   const renderMap = (fullScreen = false) => (
-    <View style={[styles.mapPreview, !fullScreen && style, fullScreen && styles.mapPreviewFullScreen]}>
-      <Image source={{ uri: googleMapUrl || fallbackTileUrl }} resizeMode="cover" style={styles.mapTile} />
+    <Pressable
+      accessibilityRole="button"
+      onPress={handlePress}
+      onLayout={onLayout}
+      style={[styles.mapPreview, !fullScreen && style, fullScreen && styles.mapPreviewFullScreen]}
+    >
+      <Image source={{ uri: staticMapUrl }} resizeMode="cover" style={styles.mapTile} />
       <View style={styles.mapScrim} />
       <View style={styles.mapGridLineVertical} />
       <View style={styles.mapGridLineHorizontal} />
       <View style={styles.mapRoute} />
-      <View style={[styles.mapPin, styles.mapPinPickup, toPointStyle(pickupPoint)]}>
-        <Text style={styles.mapPinText}>P</Text>
-      </View>
-      <View style={[styles.mapPin, styles.mapPinDestination, toPointStyle(destinationPoint)]}>
-        <Text style={styles.mapPinText}>D</Text>
-      </View>
-      {truckPoint ? (
-        <View style={[styles.mapPin, styles.mapPinTruck, toPointStyle(truckPoint)]}>
-          <Text style={styles.mapPinText}>T</Text>
+      
+      {onMapTouch ? (
+        <View style={styles.mapActiveModeRow}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={(e) => {
+              e.stopPropagation();
+              setActiveMode('pickup');
+            }}
+            style={[styles.mapModeButton, activeMode === 'pickup' && styles.mapModeButtonActive]}
+          >
+            <Text style={[styles.mapModeText, activeMode === 'pickup' && styles.mapModeTextActive]}>📍 Pickup</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={(e) => {
+              e.stopPropagation();
+              setActiveMode('destination');
+            }}
+            style={[styles.mapModeButton, activeMode === 'destination' && styles.mapModeButtonActive]}
+          >
+            <Text style={[styles.mapModeText, activeMode === 'destination' && styles.mapModeTextActive]}>🏁 Drop-off</Text>
+          </Pressable>
         </View>
       ) : null}
+
       <View style={styles.mapControls}>
-        <Pressable accessibilityRole="button" onPress={() => zoomMap('in')} style={styles.mapControlButton}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={(e) => {
+            e.stopPropagation();
+            zoomMap('in');
+          }}
+          style={styles.mapControlButton}
+        >
           <Text style={styles.mapControlText}>+</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" onPress={() => zoomMap('out')} style={styles.mapControlButton}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={(e) => {
+            e.stopPropagation();
+            zoomMap('out');
+          }}
+          style={styles.mapControlButton}
+        >
           <Text style={styles.mapControlText}>-</Text>
         </Pressable>
         {!fullScreen ? (
-          <Pressable accessibilityRole="button" onPress={() => setExpanded(true)} style={styles.mapExpandButton}>
-            <Text style={styles.mapExpandText}>Expand</Text>
+          <Pressable
+            accessibilityLabel="Open map full screen"
+            accessibilityRole="button"
+            onPress={(e) => {
+              e.stopPropagation();
+              setExpanded(true);
+            }}
+            style={styles.mapExpandButton}
+          >
+            <MaterialCommunityIcons name="fullscreen" color={colors.black} size={18} />
+            <Text style={styles.mapExpandText}>Full map</Text>
           </Pressable>
         ) : null}
       </View>
       <View style={styles.mapLegend}>
-        <Text style={styles.mapLegendText}>{mapProviderLabel} / Pickup: {pickupPoint.label}</Text>
-        <Text style={styles.mapLegendText}>Drop-off: {destinationPoint.label}</Text>
+        <Text style={styles.mapLegendText}>{mapProviderLabel}</Text>
+        <Text style={styles.mapLegendText}>📍 Pickup: {pickupPoint.label} {pickupPoint.key === 'custom' ? `(${Number(pickupPoint.lon).toFixed(4)}, ${Number(pickupPoint.lat).toFixed(4)})` : ''}</Text>
+        <Text style={styles.mapLegendText}>🏁 Drop-off: {destinationPoint.label} {destinationPoint.key === 'custom' ? `(${Number(destinationPoint.lon).toFixed(4)}, ${Number(destinationPoint.lat).toFixed(4)})` : ''}</Text>
         {truckPoint ? <Text style={styles.mapLegendText}>Truck: {truckPoint.label}{statusLabel ? ` / ${statusLabel}` : ''}</Text> : null}
       </View>
-    </View>
+    </Pressable>
   );
 
   return (
@@ -2823,8 +3736,41 @@ function ClientQuoteScreen() {
   const vehicleClasses = vehicleClassesQuery.data ?? [];
   const selectedVehicleClass = vehicleClasses.find((vehicleClass) => vehicleClass.id === vehicleClassId);
   const selectedCapacityLabel = selectedVehicleClass?.capacityKg ? `${selectedVehicleClass.capacityKg}kg` : 'class';
-  const pickupOption = getLocationOption(pickupLocationKey);
-  const destinationOption = getLocationOption(destinationLocationKey);
+  const pickupOption = useMemo(() => {
+    if (pickupLocationKey === 'custom') {
+      return {
+        key: 'custom',
+        label: 'Custom pin',
+        lon: pickupLon,
+        lat: pickupLat
+      };
+    }
+    return getLocationOption(pickupLocationKey);
+  }, [pickupLocationKey, pickupLon, pickupLat]);
+
+  const destinationOption = useMemo(() => {
+    if (destinationLocationKey === 'custom') {
+      return {
+        key: 'custom',
+        label: 'Custom pin',
+        lon: destinationLon,
+        lat: destinationLat
+      };
+    }
+    return getLocationOption(destinationLocationKey);
+  }, [destinationLocationKey, destinationLon, destinationLat]);
+
+  const handleMapTouch = useCallback(({ lat, lon, type }: { lat: string; lon: string; type: 'pickup' | 'destination' }) => {
+    if (type === 'pickup') {
+      setPickupLon(lon);
+      setPickupLat(lat);
+      setPickupLocationKey('custom');
+    } else {
+      setDestinationLon(lon);
+      setDestinationLat(lat);
+      setDestinationLocationKey('custom');
+    }
+  }, []);
 
   useEffect(() => {
     if (!vehicleClassId && vehicleClasses[0]) {
@@ -2958,7 +3904,7 @@ function ClientQuoteScreen() {
   return (
     <Screen padded={false} contentStyle={styles.requestFlowContent}>
       <View style={styles.requestMapStage}>
-        <RouteMapPreview pickup={pickupOption} destination={destinationOption} style={styles.requestHeroMap} />
+        <RouteMapPreview pickup={pickupOption} destination={destinationOption} style={styles.requestHeroMap} onMapTouch={handleMapTouch} />
         <View style={styles.requestFloatingHeader}>
           <AppHeader
             eyebrow="KULI Request"
@@ -2980,7 +3926,7 @@ function ClientQuoteScreen() {
             <SectionHeader
               eyebrow="Step 1"
               title="Set your route."
-              description="Choose pickup and drop-off areas. You can fine tune map pins when needed."
+              description="Choose pickup and drop-off areas or tap/touch the map directly to place custom pins."
               action={<StatusBadge tone="dark">Addis Ababa</StatusBadge>}
             />
             <RoutePill pickup={routeSummaryPickup} destination={routeSummaryDestination} />
@@ -3022,23 +3968,6 @@ function ClientQuoteScreen() {
               }}
             />
             <Field label="Drop-off note" value={destinationAddressNote} onChangeText={setDestinationAddressNote} placeholder="Building, gate, floor, or nearby landmark" />
-            <SecondaryButton
-              label={showManualCoordinates ? 'Hide pin details' : 'Adjust map pin'}
-              onPress={() => setShowManualCoordinates((value) => !value)}
-            />
-            {showManualCoordinates ? (
-              <View style={styles.requestManualPanel}>
-                <Text style={styles.muted}>Fine tune generated coordinates only when the selected area is not close enough.</Text>
-                <View style={styles.inlineFields}>
-                  <Field containerStyle={styles.inlineField} label="Pickup lon" value={pickupLon} onChangeText={setPickupLon} placeholder="38.7903" keyboardType="decimal-pad" />
-                  <Field containerStyle={styles.inlineField} label="Pickup lat" value={pickupLat} onChangeText={setPickupLat} placeholder="8.9806" keyboardType="decimal-pad" />
-                </View>
-                <View style={styles.inlineFields}>
-                  <Field containerStyle={styles.inlineField} label="Drop-off lon" value={destinationLon} onChangeText={setDestinationLon} placeholder="38.7578" keyboardType="decimal-pad" />
-                  <Field containerStyle={styles.inlineField} label="Drop-off lat" value={destinationLat} onChangeText={setDestinationLat} placeholder="9.0350" keyboardType="decimal-pad" />
-                </View>
-              </View>
-            ) : null}
             <PrimaryButton label="Continue" onPress={continueToTruckAndLoad} />
           </>
         ) : null}
@@ -3909,7 +4838,7 @@ function ClientDashboardHero({
     <View style={styles.clientHomeHeroStack}>
       <View style={styles.clientTopBar}>
         <View style={styles.flex}>
-          <Text style={styles.clientGreeting}>{greetingForNow()}, {displayName}</Text>
+          <Text style={styles.clientGreeting}>{greetingForNow()}, <Text style={styles.clientGreetingName}>{displayName}</Text></Text>
           <View style={styles.clientLocationRow}>
             <MaterialCommunityIcons name="map-marker" color={colors.textSecondary} size={18} />
             <Text style={styles.clientLocation}>Addis Ababa</Text>
@@ -4081,6 +5010,7 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
   const [pendingCancelId, setPendingCancelId] = useState('');
   const [cancelTarget, setCancelTarget] = useState<KuliRequest | null>(null);
   const [expandedRequestIds, setExpandedRequestIds] = useState<string[]>([]);
+  const [dismissedRatingRequestIds, setDismissedRatingRequestIds] = useState<string[]>([]);
 
   const requestsQuery = useQuery({
     queryKey: ['kuli-requests', 'mine'],
@@ -4091,6 +5021,16 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
   const requests = requestsQuery.data ?? [];
   const activeRequests = requests.filter((request) => activeRequestStatuses.includes(request.status) || isPaymentSettlingRequest(request));
   const recentRequests = requests.filter((request) => !activeRequestStatuses.includes(request.status) && !isPaymentSettlingRequest(request)).slice(0, 3);
+  const ratingPromptRequest = requests.find(
+    (request) =>
+      request.status === 'completed' &&
+      request.selectedOwnerId &&
+      request.payment?.status === 'confirmed_by_owner' &&
+      !dismissedRatingRequestIds.includes(request.id)
+  );
+  const dismissRatingPrompt = (requestId: string) => {
+    setDismissedRatingRequestIds((current) => [...new Set([...current, requestId])]);
+  };
   const goToRequest = () => {
     (navigation as { navigate: (screen: string) => void }).navigate('Request');
   };
@@ -4206,6 +5146,34 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
           }
         }}
       />
+      <Modal animationType="fade" transparent visible={Boolean(ratingPromptRequest)} onRequestClose={() => ratingPromptRequest && dismissRatingPrompt(ratingPromptRequest.id)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.pickerDialog}>
+            <View style={styles.ratingModalHeader}>
+              <View style={styles.flex}>
+                <Text style={styles.pickerEyebrow}>Payment confirmed!</Text>
+                <Text style={styles.pickerTitle}>Rate your KULI move</Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss rating"
+                onPress={() => ratingPromptRequest && dismissRatingPrompt(ratingPromptRequest.id)}
+                style={styles.ratingModalClose}
+              >
+                <MaterialCommunityIcons name="close" color={colors.textSecondary} size={22} />
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={styles.modalScrollContent}>
+              {ratingPromptRequest ? (
+                <>
+                  <Text style={styles.muted}>{ratingPromptRequest.requestCode} / {ratingPromptRequest.pickupLocation?.addressText} to {ratingPromptRequest.destinationLocation?.addressText}</Text>
+                  <RatingReportPanel request={ratingPromptRequest} onRatingSaved={() => dismissRatingPrompt(ratingPromptRequest.id)} onDismiss={() => dismissRatingPrompt(ratingPromptRequest.id)} />
+                </>
+              ) : null}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -4329,6 +5297,7 @@ function OwnerOfferCard({
 
 function OwnerOffersScreen({ profile }: { profile: UserProfile }) {
   const queryClient = useQueryClient();
+  const markingViewedRef = useRef(false);
   const [pendingOfferId, setPendingOfferId] = useState('');
   const [expandedOfferId, setExpandedOfferId] = useState('');
   const [message, setMessage] = useState('');
@@ -4359,6 +5328,29 @@ function OwnerOffersScreen({ profile }: { profile: UserProfile }) {
   const approvedVehicleCount = vehicles.filter((vehicle) => vehicle.verificationStatus === 'approved').length;
   const acceptedRequest = acceptedResult?.request;
   const showAcceptedResult = Boolean(acceptedRequest && (activeRequestStatuses.includes(acceptedRequest.status) || isPaymentSettlingRequest(acceptedRequest)));
+
+  useFocusEffect(
+    useCallback(() => {
+      const sentOffers = offers.filter((offer) => offer.status === 'sent');
+      if (sentOffers.length === 0 || markingViewedRef.current) {
+        return;
+      }
+
+      markingViewedRef.current = true;
+      Promise.allSettled(
+        sentOffers.map((offer) =>
+          kuliApi.request(`/offers/${offer.id}/viewed`, {
+            method: 'POST'
+          })
+        )
+      )
+        .then(() => queryClient.invalidateQueries({ queryKey: ['owner-offers'] }))
+        .catch(() => undefined)
+        .finally(() => {
+          markingViewedRef.current = false;
+        });
+    }, [offers, queryClient])
+  );
 
   const toggleOfferDetails = async (offer: TripOffer) => {
     const nextExpanded = expandedOfferId === offer.id ? '' : offer.id;
@@ -4787,6 +5779,7 @@ function NotificationEmptyState({ profile }: { profile: UserProfile }) {
 function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
   const navigation = useNavigation<any>();
   const queryClient = useQueryClient();
+  const markingReadRef = useRef(false);
   const [pushEnabled, setPushEnabled] = useState(true);
   const [smsEnabled, setSmsEnabled] = useState(false);
   const [emailEnabled, setEmailEnabled] = useState(true);
@@ -4807,6 +5800,29 @@ function NotificationCenterScreen({ profile }: { profile: UserProfile }) {
   const availableFilters = notificationFilters.filter((filter) => filter.key === 'all' || notifications.some((notification) => notificationCategoryForType(notification.type) === filter.key));
   const filteredNotifications = activeFilter === 'all' ? notifications : notifications.filter((notification) => notificationCategoryForType(notification.type) === activeFilter);
   const unreadLabel = unreadCount === 1 ? '1 unread' : `${unreadCount} unread`;
+
+  useFocusEffect(
+    useCallback(() => {
+      const unreadNotifications = notifications.filter((notification) => notification.deliveryStatus !== 'read');
+      if (unreadNotifications.length === 0 || markingReadRef.current) {
+        return;
+      }
+
+      markingReadRef.current = true;
+      Promise.allSettled(
+        unreadNotifications.map((notification) =>
+          kuliApi.request(`/notifications/${notification.id}/read`, {
+            method: 'PATCH'
+          })
+        )
+      )
+        .then(() => queryClient.invalidateQueries({ queryKey: ['notifications'] }))
+        .catch(() => undefined)
+        .finally(() => {
+          markingReadRef.current = false;
+        });
+    }, [notifications, queryClient])
+  );
 
   const markRead = async (notification: NotificationRecord) => {
     setPendingId(notification.id);
@@ -5353,7 +6369,13 @@ function ClientHistoryScreen({ profile }: { profile: UserProfile }) {
   const requests = requestsQuery.data ?? [];
   const terminalRequests = requests.filter((request) => terminalRequestStatuses.includes(request.status));
   const filteredRequests = terminalRequests.filter((request) => historyFilterMatches(request, activeFilter));
-  const ratingPromptRequest = terminalRequests.find((request) => request.status === 'completed' && request.selectedOwnerId && !dismissedRatingRequestIds.includes(request.id));
+  const ratingPromptRequest = terminalRequests.find(
+    (request) =>
+      request.status === 'completed' &&
+      request.selectedOwnerId &&
+      request.payment?.status === 'confirmed_by_owner' &&
+      !dismissedRatingRequestIds.includes(request.id)
+  );
 
   const dismissRatingPrompt = (requestId: string) => {
     setDismissedRatingRequestIds((current) => [...new Set([...current, requestId])]);
@@ -5411,9 +6433,21 @@ function ClientHistoryScreen({ profile }: { profile: UserProfile }) {
       <Modal animationType="fade" transparent visible={Boolean(ratingPromptRequest)} onRequestClose={() => ratingPromptRequest && dismissRatingPrompt(ratingPromptRequest.id)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.pickerDialog}>
+            <View style={styles.ratingModalHeader}>
+              <View style={styles.flex}>
+                <Text style={styles.pickerEyebrow}>Trip complete</Text>
+                <Text style={styles.pickerTitle}>Rate your KULI move</Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss rating"
+                onPress={() => ratingPromptRequest && dismissRatingPrompt(ratingPromptRequest.id)}
+                style={styles.ratingModalClose}
+              >
+                <MaterialCommunityIcons name="close" color={colors.textSecondary} size={22} />
+              </Pressable>
+            </View>
             <ScrollView contentContainerStyle={styles.modalScrollContent}>
-              <Text style={styles.pickerEyebrow}>Trip complete</Text>
-              <Text style={styles.pickerTitle}>Rate your KULI move</Text>
               {ratingPromptRequest ? (
                 <>
                   <Text style={styles.muted}>{ratingPromptRequest.requestCode} / {ratingPromptRequest.pickupLocation?.addressText} to {ratingPromptRequest.destinationLocation?.addressText}</Text>
@@ -5431,7 +6465,6 @@ function ClientHistoryScreen({ profile }: { profile: UserProfile }) {
 function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
   const queryClient = useQueryClient();
   const [pendingRequestId, setPendingRequestId] = useState('');
-  const [amountConfirmed, setAmountConfirmed] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -5462,7 +6495,7 @@ function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
     setMessage('');
 
     try {
-      const amount = Number(amountConfirmed || request.quoteSnapshot?.totalEstimate || 0);
+      const amount = Number(request.quoteSnapshot?.totalEstimate || 0);
       const result = (await kuliApi.request(`/kuli-requests/${request.id}/payment/confirm`, {
         method: 'POST',
         body: {
@@ -5509,7 +6542,6 @@ function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
           </View>
           <StatusBadge tone={pendingConfirmations ? 'warning' : 'success'}>{`${pendingConfirmations} pending`}</StatusBadge>
         </View>
-        <Field label="Override amount ETB" value={amountConfirmed} onChangeText={setAmountConfirmed} placeholder="Leave blank for estimate" keyboardType="numeric" />
         {allCompletedRequests.length === 0 ? (
           <View style={styles.ownerEmptyCard}>
             <MaterialCommunityIcons name="cash-clock" color={colors.black} size={44} />
@@ -5579,87 +6611,285 @@ function OwnerEarningsScreen({ profile }: { profile: UserProfile }) {
 }
 
 function ClientTabs({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
+  const notificationsQuery = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => ((await kuliApi.request('/notifications')) as ApiEnvelope<NotificationRecord[]>).data,
+    refetchInterval: 20000
+  });
+  const unreadNotifications = (notificationsQuery.data ?? []).filter((notification) => notification.deliveryStatus !== 'read').length;
+
   return (
     <Tab.Navigator screenOptions={createTabScreenOptions(clientTabIcons)}>
       <Tab.Screen name="Home">{() => <ClientHomeScreen profile={profile} onSignOut={onSignOut} />}</Tab.Screen>
       <Tab.Screen name="Request" component={ClientQuoteScreen} />
       <Tab.Screen name="Activity">{() => <ClientHistoryScreen profile={profile} />}</Tab.Screen>
-      <Tab.Screen name="Notifications">{() => <NotificationCenterScreen profile={profile} />}</Tab.Screen>
+      <Tab.Screen name="Notifications" options={tabBadgeOptions(unreadNotifications)}>{() => <NotificationCenterScreen profile={profile} />}</Tab.Screen>
     </Tab.Navigator>
   );
 }
 
 function OwnerTabs({ profile, onSignOut }: { profile: UserProfile; onSignOut: () => void }) {
+  const notificationsQuery = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => ((await kuliApi.request('/notifications')) as ApiEnvelope<NotificationRecord[]>).data,
+    refetchInterval: 20000
+  });
+  const offersQuery = useQuery({
+    queryKey: ['owner-offers'],
+    queryFn: async () => ((await kuliApi.request('/owner/offers')) as ApiEnvelope<TripOffer[]>).data,
+    refetchInterval: 15000
+  });
+  const unreadNotifications = (notificationsQuery.data ?? []).filter((notification) => notification.deliveryStatus !== 'read').length;
+  const unreadOffers = (offersQuery.data ?? []).filter((offer) => offer.status === 'sent').length;
+
   return (
     <Tab.Navigator screenOptions={createTabScreenOptions(ownerTabIcons)}>
       <Tab.Screen name="Home">{() => <HomeOverview profile={profile} onSignOut={onSignOut} />}</Tab.Screen>
       <Tab.Screen name="Vehicles" component={OwnerVehiclesScreen} />
-      <Tab.Screen name="Offers">{() => <OwnerOffersScreen profile={profile} />}</Tab.Screen>
-      <Tab.Screen name="Notifications">{() => <NotificationCenterScreen profile={profile} />}</Tab.Screen>
+      <Tab.Screen name="Offers" options={tabBadgeOptions(unreadOffers)}>{() => <OwnerOffersScreen profile={profile} />}</Tab.Screen>
+      <Tab.Screen name="Notifications" options={tabBadgeOptions(unreadNotifications)}>{() => <NotificationCenterScreen profile={profile} />}</Tab.Screen>
       <Tab.Screen name="Earnings">{() => <OwnerEarningsScreen profile={profile} />}</Tab.Screen>
     </Tab.Navigator>
   );
 }
 
-function RuntimeReadiness() {
-  const readinessItems = useMemo(
-    () => [
-      { label: 'API base URL', ready: runtimeReadiness.hasApiBaseUrl },
-      { label: 'Supabase URL', ready: runtimeReadiness.hasSupabaseUrl },
-      { label: 'Supabase anon key', ready: runtimeReadiness.hasSupabaseAnonKey },
-      { label: 'Local demo auth', ready: runtimeReadiness.demoAuthEnabled }
-    ],
-    []
-  );
-
-  return (
-    <UiCard style={styles.authCard}>
-      <SectionHeader
-        eyebrow="Development readiness"
-        title="Runtime configuration"
-        description="These values help verify local mobile web and Expo builds before testing auth flows."
-      />
-      {readinessItems.map((item) => (
-        <View key={item.label} style={styles.readinessRow}>
-          <Text style={styles.readinessText}>{item.label}</Text>
-          <StatusBadge tone={item.ready ? 'success' : 'error'}>{item.ready ? 'Set' : 'Missing'}</StatusBadge>
-        </View>
-      ))}
-    </UiCard>
-  );
-}
-
+/**
+ * Core Application Controller that orchestrates authentication session status (via Supabase),
+ * remote user profile sync status, loading screens, and conditional screen/navigator routing.
+ */
 function AppContent() {
   const query = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileMissing, setProfileMissing] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [authNotice, setAuthNotice] = useState('');
+  const [passwordRecoverySession, setPasswordRecoverySession] = useState<Session | null>(null);
+  const [splashReady, setSplashReady] = useState(false);
+  const [splashSeen, setSplashSeen] = useState(true);
+  const activeSessionUserIdRef = useRef<string | null>(null);
+  const recoveryInProgressRef = useRef(false);
+  const registrationVerificationEmailRef = useRef<string | null>(null);
+  const registrationVerificationAllowedEmailRef = useRef<string | null>(null);
+
+  const markRegistrationVerificationStarted = useCallback((email: string) => {
+    registrationVerificationEmailRef.current = email.trim().toLowerCase();
+    registrationVerificationAllowedEmailRef.current = null;
+  }, []);
+
+  const markRegistrationVerificationAllowed = useCallback((email: string) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    registrationVerificationAllowedEmailRef.current = normalizedEmail;
+
+    if (registrationVerificationEmailRef.current === normalizedEmail) {
+      registrationVerificationEmailRef.current = null;
+    }
+  }, []);
+
+  const clearRegistrationVerificationHold = useCallback((email?: string | null) => {
+    const normalizedEmail = email?.trim().toLowerCase();
+
+    if (!normalizedEmail || registrationVerificationEmailRef.current === normalizedEmail) {
+      registrationVerificationEmailRef.current = null;
+    }
+
+    if (!normalizedEmail || registrationVerificationAllowedEmailRef.current === normalizedEmail) {
+      registrationVerificationAllowedEmailRef.current = null;
+    }
+  }, []);
 
   const loadCurrentProfile = useCallback(async (nextSession: Session | null) => {
+    const nextUserId = nextSession?.user.id ?? null;
+    const sameUser = Boolean(nextUserId && activeSessionUserIdRef.current === nextUserId);
+
     setSession(nextSession);
-    setProfile(null);
     setProfileMissing(false);
+    setProfileError('');
 
     if (!nextSession) {
+      setSessionAccessToken(null);
+      activeSessionUserIdRef.current = null;
+      setProfile(null);
       setLoading(false);
       return;
     }
 
+    setSessionAccessToken(nextSession.access_token);
+
+    if (!sameUser) {
+      setProfile(null);
+      setLoading(true);
+    }
+
     try {
-      const result = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
-      setProfile(result.data);
+      authDebug('loading profile', {
+        hasSession: true,
+        email: nextSession.user.email,
+        userId: nextSession.user.id
+      });
+
+      const profile = await fetchProfileForSession(nextSession);
+      activeSessionUserIdRef.current = nextUserId;
+      setProfile(profile);
+      setProfileMissing(false);
+      setProfileError('');
+      authDebug('profile loaded', {
+        role: profile.role,
+        accountStatus: profile.accountStatus,
+        route: profile.role === 'client' ? 'mobile-client' : profile.role === 'truck_owner' ? 'mobile-owner' : 'mobile-forbidden'
+      });
     } catch (error) {
+      authDebug('profile load failed', {
+        code: (error as { code?: string }).code,
+        message: getErrorMessage(error),
+        hasSession: Boolean(nextSession)
+      });
+
       if ((error as { code?: string }).code === 'PROFILE_NOT_FOUND') {
+        try {
+          const syncedProfile = (await syncPublicProfileFromSession(nextSession)) ?? (await syncStoredProfileFromSession(nextSession));
+
+          if (syncedProfile) {
+            activeSessionUserIdRef.current = nextUserId;
+            setProfile(syncedProfile);
+            setProfileMissing(false);
+            setProfileError('');
+            authDebug('missing public profile synced', {
+              role: syncedProfile.role,
+              route: syncedProfile.role === 'client' ? 'mobile-client' : 'mobile-owner'
+            });
+            return;
+          }
+        } catch (syncError) {
+          authDebug('missing profile sync failed', {
+            code: (syncError as { code?: string }).code,
+            message: getErrorMessage(syncError)
+          });
+          setProfileError(getErrorMessage(syncError));
+        }
+
+        activeSessionUserIdRef.current = nextUserId;
+        if (!sameUser) {
+          setProfile(null);
+        }
         setProfileMissing(true);
+        setProfileError('This signed-in Supabase account does not have a KULI mobile profile. Register with KULI using the same email, or contact support to link the account.');
+      } else if (!sameUser) {
+        setProfile(null);
+        setProfileError(getErrorMessage(error));
+      } else {
+        setProfileError(getErrorMessage(error));
       }
     } finally {
       setLoading(false);
     }
   }, []);
 
+  const handleAuthUrl = useCallback(async (url: string | null) => {
+    if (!url || (!url.includes('auth/callback') && !url.includes('auth/reset-password') && !url.includes('access_token=') && !url.includes('code='))) {
+      return;
+    }
+
+    const params = readAuthUrlParams(url);
+    const type = params.get('type');
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    const code = params.get('code');
+    const isRecovery = type === 'recovery' || url.includes('reset-password');
+
+    authDebug('auth callback opened', { type, hasAccessToken: Boolean(accessToken), hasRefreshToken: Boolean(refreshToken), hasCode: Boolean(code), isRecovery });
+
+    try {
+      let nextSession: Session | null = null;
+
+      if (code) {
+        const { data: codeData, error: codeError } = await supabase.auth.exchangeCodeForSession(code);
+
+        if (codeError) {
+          throw codeError;
+        }
+
+        nextSession = codeData.session;
+      } else if (accessToken && refreshToken) {
+        const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken
+        });
+
+        if (sessionError) {
+          throw sessionError;
+        }
+
+        nextSession = sessionData.session;
+      } else {
+        nextSession = (await supabase.auth.getSession()).data.session;
+      }
+
+      if (!nextSession) {
+        setAuthNotice('The email link opened, but no active session was created. Try signing in again.');
+        return;
+      }
+
+      if (isRecovery) {
+        setSessionAccessToken(nextSession.access_token);
+        recoveryInProgressRef.current = true;
+        setPasswordRecoverySession(nextSession);
+        setSession(nextSession);
+        setLoading(false);
+        return;
+      }
+
+      await loadCurrentProfile(nextSession);
+    } catch (callbackError) {
+      authDebug('auth callback failed', callbackError);
+      setAuthNotice(getErrorMessage(callbackError));
+      setLoading(false);
+    }
+  }, [loadCurrentProfile]);
+
   useEffect(() => {
     let mounted = true;
+
+    AsyncStorage.getItem(AUTH_ONBOARDING_COMPLETED_KEY)
+      .then((value) => {
+        if (!mounted) {
+          return;
+        }
+
+        const alreadySeen = value === 'true';
+        setSplashSeen(alreadySeen);
+
+        if (alreadySeen) {
+          setSplashReady(true);
+          return;
+        }
+
+        setTimeout(() => {
+          AsyncStorage.setItem(AUTH_ONBOARDING_COMPLETED_KEY, 'true').catch(() => undefined);
+
+          if (mounted) {
+            setSplashReady(true);
+          }
+        }, 900);
+      })
+      .catch(() => {
+        if (mounted) {
+          setSplashReady(true);
+        }
+      });
+
+    Linking.getInitialURL()
+      .then((url) => {
+        if (mounted) {
+          handleAuthUrl(url);
+        }
+      })
+      .catch((linkError) => authDebug('initial link failed', linkError));
+
+    const linkSubscription = Linking.addEventListener('url', ({ url }) => {
+      handleAuthUrl(url);
+    });
 
     supabase.auth.getSession().then(({ data }) => {
       if (mounted) {
@@ -5667,46 +6897,154 @@ function AppContent() {
       }
     });
 
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: subscriptionData } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      authDebug('auth state changed', { event, hasSession: Boolean(nextSession), userId: nextSession?.user.id });
+
+      if (
+        nextSession &&
+        shouldSuppressRegistrationSessionEvent({
+          event,
+          sessionEmail: nextSession.user.email,
+          pendingVerificationEmail: registrationVerificationEmailRef.current,
+          verificationAllowedEmail: registrationVerificationAllowedEmailRef.current
+        })
+      ) {
+        authDebug('suppressing registration session before email confirmation', { email: nextSession.user.email });
+        setSessionAccessToken(null);
+        setSession(null);
+        setProfile(null);
+        setProfileMissing(false);
+        setProfileError('');
+        setAuthNotice('Email confirmation is required before opening KULI. Enter the code from your email or use the confirmation link.');
+        setLoading(false);
+        supabase.auth.signOut().catch((signOutError) => authDebug('registration session sign-out failed', signOutError));
+        return;
+      }
+
+      if (event === 'PASSWORD_RECOVERY' && nextSession) {
+        setSessionAccessToken(nextSession.access_token);
+        recoveryInProgressRef.current = true;
+        setPasswordRecoverySession(nextSession);
+        setSession(nextSession);
+        setLoading(false);
+        return;
+      }
+
+      if (recoveryInProgressRef.current) {
+        setSessionAccessToken(nextSession?.access_token);
+        setSession(nextSession);
+        setLoading(false);
+        return;
+      }
+
       loadCurrentProfile(nextSession);
     });
 
     return () => {
       mounted = false;
-      data.subscription.unsubscribe();
+      linkSubscription.remove();
+      subscriptionData.subscription.unsubscribe();
     };
-  }, [loadCurrentProfile]);
+  }, [handleAuthUrl, loadCurrentProfile]);
 
   const handleAuthenticated = (nextProfile: UserProfile, nextSession: Session) => {
+    AsyncStorage.setItem(AUTH_ONBOARDING_COMPLETED_KEY, 'true').catch(() => undefined);
+    clearStoredProfileDraft(nextProfile.email ?? nextSession.user.email).catch(() => undefined);
+    clearRegistrationVerificationHold(nextProfile.email ?? nextSession.user.email);
+    setSessionAccessToken(nextSession.access_token);
+    activeSessionUserIdRef.current = nextSession.user.id ?? null;
     setSession(nextSession);
     setProfile(nextProfile);
     setProfileMissing(false);
+    setProfileError('');
+    setAuthNotice('');
+    setLoading(false);
+  };
+
+  const handlePasswordRecoveryVerified = (nextSession: Session) => {
+    recoveryInProgressRef.current = true;
+    activeSessionUserIdRef.current = null;
+    setSessionAccessToken(nextSession.access_token);
+    setPasswordRecoverySession(nextSession);
+    setSession(nextSession);
+    setProfile(null);
+    setProfileMissing(false);
+    setProfileError('');
+    setAuthNotice('');
     setLoading(false);
   };
 
   const handleSignOut = async () => {
-    clearDemoAccessToken();
+    clearSessionAccessToken();
+    clearRegistrationVerificationHold();
+    recoveryInProgressRef.current = false;
+    setPasswordRecoverySession(null);
     await supabase.auth.signOut();
     query.clear();
+    activeSessionUserIdRef.current = null;
     setSession(null);
     setProfile(null);
     setProfileMissing(false);
+    setProfileError('');
   };
 
-  if (loading) {
-    return <SessionLoadingScreen />;
+  const handleResetComplete = async () => {
+    recoveryInProgressRef.current = false;
+    setPasswordRecoverySession(null);
+    setAuthNotice('Password updated. Sign in with your new password.');
+    setSessionAccessToken(null);
+    clearRegistrationVerificationHold();
+    await supabase.auth.signOut();
+    query.clear();
+    activeSessionUserIdRef.current = null;
+    setSession(null);
+    setProfile(null);
+    setProfileMissing(false);
+    setProfileError('');
+  };
+
+  const retryProfileLoad = () => {
+    setLoading(true);
+    supabase.auth.getSession().then(({ data }) => loadCurrentProfile(data.session));
+  };
+
+  if (loading || !splashReady) {
+    return <SplashScreen compact={splashSeen} />;
+  }
+
+  if (passwordRecoverySession) {
+    return <ResetPasswordScreen onComplete={handleResetComplete} onSignOut={handleSignOut} />;
   }
 
   if (!session) {
-    return <AuthScreen onAuthenticated={handleAuthenticated} />;
+    return (
+      <AuthScreen
+        initialNotice={authNotice}
+        onAuthenticated={handleAuthenticated}
+        onPasswordRecoveryVerified={handlePasswordRecoveryVerified}
+        onRegistrationVerificationAllowed={markRegistrationVerificationAllowed}
+        onRegistrationVerificationCancelled={clearRegistrationVerificationHold}
+        onRegistrationVerificationStarted={markRegistrationVerificationStarted}
+      />
+    );
   }
 
   if (profileMissing) {
-    return <ProfileRequiredScreen session={session} onAuthenticated={handleAuthenticated} onSignOut={handleSignOut} />;
+    if (session && isStaffSession(session)) {
+      return <StaffMobileBlockedScreen onSignOut={handleSignOut} />;
+    }
+
+    return (
+      <ProfileLoadErrorScreen
+        message={profileError || 'This signed-in account does not have a KULI mobile profile. Register with KULI using the same email, or contact support to link the account.'}
+        onRetry={retryProfileLoad}
+        onSignOut={handleSignOut}
+      />
+    );
   }
 
   if (!profile) {
-    return <AuthScreen onAuthenticated={handleAuthenticated} />;
+    return <ProfileLoadErrorScreen message={profileError || 'Your Supabase session is active, but KULI could not load the matching profile.'} onRetry={retryProfileLoad} onSignOut={handleSignOut} />;
   }
 
   if (isBlockedStatus(profile.accountStatus)) {
@@ -5724,6 +7062,12 @@ function AppContent() {
   );
 }
 
+/**
+ * Root Entrypoint of the KULI Mobile Client App.
+ * Wraps the app in global context providers:
+ * - SafeAreaProvider: Cross-platform iOS/Android safe area layout bounds.
+ * - QueryClientProvider: React Query context for data-fetching, caching, and cache invalidation.
+ */
 export default function App() {
   return (
     <SafeAreaProvider>
@@ -5745,7 +7089,7 @@ const clientTabIcons: TabIconConfig = {
 };
 
 const ownerTabIcons: TabIconConfig = {
-  Home: { name: 'speedometer-outline', label: 'Home', iconSet: 'material' },
+  Home: { name: 'home-outline', label: 'Home' },
   Vehicles: { name: 'truck-outline', label: 'Vehicles', iconSet: 'material' },
   Offers: { name: 'clipboard-list-outline', label: 'Offers', iconSet: 'material' },
   Notifications: { name: 'notifications-outline', label: 'Notifications' },
@@ -5789,6 +7133,14 @@ const createTabScreenOptions = (icons: TabIconConfig) => ({ route }: { route: { 
   };
 };
 
+const tabBadgeOptions = (count: number) =>
+  count > 0
+    ? {
+        tabBarBadge: count > 99 ? '99+' : count,
+        tabBarBadgeStyle: styles.tabBarBadge
+      }
+    : undefined;
+
 const styles = StyleSheet.create({
   flex: {
     flex: 1
@@ -5804,6 +7156,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.xl
   },
+  tabBarBadge: {
+    backgroundColor: colors.error,
+    borderColor: colors.card,
+    borderWidth: 2,
+    color: colors.card,
+    fontSize: 11,
+    fontWeight: '900',
+    minWidth: 20
+  },
   content: {
     gap: spacing.lg,
     padding: spacing.xl,
@@ -5813,6 +7174,79 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
     padding: spacing.lg,
     paddingBottom: spacing.xxl
+  },
+  splashScreen: {
+    backgroundColor: colors.black,
+    flex: 1,
+    overflow: 'hidden'
+  },
+  splashGrain: {
+    backgroundColor: '#0A0A0A',
+    bottom: 0,
+    left: 0,
+    opacity: 0.65,
+    position: 'absolute',
+    right: 0,
+    top: 0
+  },
+  splashContent: {
+    alignItems: 'center',
+    flex: 1,
+    gap: spacing.xl,
+    justifyContent: 'center',
+    padding: spacing.xl
+  },
+  splashLogoBox: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: radii.xl,
+    justifyContent: 'center',
+    minHeight: 118,
+    minWidth: 214,
+    shadowColor: colors.card,
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.16,
+    shadowRadius: 46
+  },
+  splashLogoText: {
+    color: colors.black,
+    fontSize: 42,
+    fontWeight: '900',
+    letterSpacing: 0
+  },
+  splashDots: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  splashDot: {
+    backgroundColor: colors.card,
+    borderRadius: 4,
+    height: 7,
+    opacity: 0.75,
+    width: 7
+  },
+  splashDotMuted: {
+    opacity: 0.25
+  },
+  splashFooter: {
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.xl,
+    paddingBottom: spacing.xxl
+  },
+  splashTitle: {
+    color: colors.card,
+    fontSize: 22,
+    fontWeight: '900',
+    lineHeight: 28,
+    textAlign: 'center'
+  },
+  splashCopy: {
+    color: '#AEB4B8',
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
+    textAlign: 'center'
   },
   requestFlowContent: {
     backgroundColor: colors.background,
@@ -6329,6 +7763,13 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     lineHeight: 36
   },
+  clientGreetingName: {
+    color: colors.primary,
+    fontSize: 32,
+    fontWeight: '900',
+    fontStyle: 'italic',
+    letterSpacing: -0.5
+  },
   clientLocationRow: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -6728,10 +8169,25 @@ const styles = StyleSheet.create({
   authHero: {
     backgroundColor: colors.black,
     borderRadius: radii.xl,
-    gap: spacing.md,
-    minHeight: 220,
-    justifyContent: 'flex-end',
+    gap: spacing.xl,
+    minHeight: 292,
+    justifyContent: 'space-between',
     padding: spacing.xl
+  },
+  authHeroTop: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between'
+  },
+  authCityLabel: {
+    color: '#D1D5DB',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase'
+  },
+  authHeroCenter: {
+    gap: spacing.md
   },
   authLogoMark: {
     alignItems: 'center',
@@ -6751,9 +8207,9 @@ const styles = StyleSheet.create({
   },
   authHeroTitle: {
     color: colors.card,
-    fontSize: 30,
+    fontSize: 34,
     fontWeight: '900',
-    lineHeight: 36
+    lineHeight: 39
   },
   authHeroCopy: {
     color: '#D1D5DB',
@@ -6790,6 +8246,22 @@ const styles = StyleSheet.create({
   authCard: {
     gap: spacing.lg
   },
+  verificationIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: 22,
+    height: 56,
+    justifyContent: 'center',
+    width: 56
+  },
+  verificationEmailBox: {
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    gap: spacing.xs,
+    padding: spacing.md
+  },
   authInlineLink: {
     alignSelf: 'flex-end',
     minHeight: 36,
@@ -6822,6 +8294,54 @@ const styles = StyleSheet.create({
     color: colors.success
   },
   authMessageTextError: {
+    color: colors.error
+  },
+  validationCard: {
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  validationRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  validationText: {
+    color: colors.textSecondary,
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700'
+  },
+  validationTextMet: {
+    color: colors.success
+  },
+  validationHint: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: -spacing.sm,
+    paddingHorizontal: spacing.xs
+  },
+  validationHintSuccess: {
+    borderColor: colors.success
+  },
+  validationHintError: {
+    borderColor: colors.error
+  },
+  validationHintText: {
+    color: colors.textSecondary,
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18
+  },
+  validationHintTextSuccess: {
+    color: colors.success
+  },
+  validationHintTextError: {
     color: colors.error
   },
   eyebrow: {
@@ -6878,17 +8398,34 @@ const styles = StyleSheet.create({
     gap: spacing.sm
   },
   roleOption: {
+    alignItems: 'center',
     backgroundColor: colors.panel,
     borderColor: colors.line,
-    borderRadius: radii.md,
+    borderRadius: radii.lg,
     borderWidth: 1,
-    gap: spacing.xs,
-    minHeight: 92,
+    flexDirection: 'row',
+    gap: spacing.md,
+    minHeight: 104,
     padding: spacing.lg
   },
   roleOptionSelected: {
     backgroundColor: colors.black,
     borderColor: colors.black
+  },
+  roleOptionIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    height: 52,
+    justifyContent: 'center',
+    width: 52
+  },
+  roleOptionIconSelected: {
+    backgroundColor: colors.card
+  },
+  roleOptionBody: {
+    flex: 1,
+    gap: spacing.xs
   },
   roleOptionTitle: {
     color: colors.ink,
@@ -6961,7 +8498,7 @@ const styles = StyleSheet.create({
   },
   ownerHomeContent: {
     gap: spacing.lg,
-    paddingBottom: spacing.xxl
+    paddingBottom: 128
   },
   ownerHomeHeader: {
     alignItems: 'center',
@@ -6991,6 +8528,13 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '900',
     lineHeight: 34
+  },
+  ownerHeaderNameAccent: {
+    color: colors.primary,
+    fontSize: 30,
+    fontWeight: '900',
+    fontStyle: 'italic',
+    letterSpacing: -0.5
   },
   ownerHeaderCopy: {
     color: colors.textSecondary,
@@ -7199,7 +8743,7 @@ const styles = StyleSheet.create({
   },
   ownerVehiclesContent: {
     gap: spacing.lg,
-    paddingBottom: spacing.xxl
+    paddingBottom: 128
   },
   ownerVehiclesHero: {
     alignItems: 'center',
@@ -7483,7 +9027,7 @@ const styles = StyleSheet.create({
   },
   ownerOffersContent: {
     gap: spacing.lg,
-    paddingBottom: spacing.xxl
+    paddingBottom: 128
   },
   ownerOffersHero: {
     alignItems: 'flex-start',
@@ -7832,7 +9376,7 @@ const styles = StyleSheet.create({
   },
   activityContent: {
     gap: spacing.lg,
-    paddingBottom: spacing.xxl
+    paddingBottom: 128
   },
   activityHero: {
     backgroundColor: colors.black,
@@ -8172,7 +9716,7 @@ const styles = StyleSheet.create({
   },
   earningsContent: {
     gap: spacing.lg,
-    paddingBottom: spacing.xxl
+    paddingBottom: 128
   },
   earningsHero: {
     backgroundColor: colors.black,
@@ -8346,6 +9890,120 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.55
   },
+  // File picker single-button + action sheet styles
+  filePickerRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  filePickerAttachBtn: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flex: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'center',
+    minHeight: 48,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md
+  },
+  filePickerAttachText: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '700'
+  },
+  filePickerRemoveBtn: {
+    alignItems: 'center',
+    backgroundColor: colors.errorTint,
+    borderColor: colors.error,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    height: 48,
+    justifyContent: 'center',
+    width: 48
+  },
+  sheetBackdrop: {
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    flex: 1,
+    justifyContent: 'flex-end'
+  },
+  sheetPanel: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+    gap: spacing.xs,
+    paddingBottom: 40,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    backgroundColor: colors.border,
+    borderRadius: 3,
+    height: 4,
+    marginBottom: spacing.md,
+    width: 40
+  },
+  sheetTitle: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '800',
+    marginBottom: spacing.sm
+  },
+  sheetOption: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginVertical: spacing.xs,
+    minHeight: 56,
+    paddingHorizontal: spacing.lg
+  },
+  sheetOptionText: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '700'
+  },
+  sheetCancel: {
+    backgroundColor: colors.errorTint,
+    justifyContent: 'center',
+    marginTop: spacing.sm
+  },
+  sheetCancelText: {
+    color: colors.error,
+    fontSize: 16,
+    fontWeight: '800',
+    textAlign: 'center'
+  },
+  // Rating modal header with X button
+  ratingModalHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg
+  },
+  ratingModalClose: {
+    alignItems: 'center',
+    backgroundColor: colors.subtle,
+    borderRadius: radii.sm,
+    height: 36,
+    justifyContent: 'center',
+    width: 36
+  },
+  // Document card title row with required/optional pill
+  docTitleRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginBottom: spacing.xs
+  },
   card: {
     backgroundColor: colors.panel,
     borderColor: colors.line,
@@ -8407,6 +10065,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     minHeight: 52,
     paddingHorizontal: spacing.lg
+  },
+  inputShell: {
+    position: 'relative'
+  },
+  inputWithIcon: {
+    paddingRight: 56
+  },
+  inputEyeButton: {
+    alignItems: 'center',
+    borderRadius: radii.md,
+    height: 44,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 6,
+    top: 4,
+    width: 44
   },
   inlineFields: {
     flexDirection: 'row',
@@ -8569,6 +10243,35 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 'auto'
   },
+  mapActiveModeRow: {
+    flexDirection: 'row',
+    position: 'absolute',
+    top: spacing.sm,
+    left: spacing.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: radii.sm,
+    padding: 3,
+    gap: spacing.xs,
+    zIndex: 10,
+    borderWidth: 1,
+    borderColor: colors.border
+  },
+  mapModeButton: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.sm
+  },
+  mapModeButtonActive: {
+    backgroundColor: colors.primary
+  },
+  mapModeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text
+  },
+  mapModeTextActive: {
+    color: colors.white
+  },
   fullscreenMapShell: {
     backgroundColor: colors.background,
     flex: 1
@@ -8672,6 +10375,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radii.sm,
     borderWidth: 1,
+    flexDirection: 'row',
+    gap: 4,
     minHeight: 34,
     justifyContent: 'center',
     paddingHorizontal: spacing.sm
@@ -8972,7 +10677,7 @@ const styles = StyleSheet.create({
   },
   notificationsContent: {
     gap: spacing.lg,
-    paddingBottom: spacing.xxl
+    paddingBottom: 128
   },
   notificationsHeader: {
     backgroundColor: colors.black,

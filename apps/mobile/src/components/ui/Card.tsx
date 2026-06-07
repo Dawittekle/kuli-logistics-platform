@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 
-import { colors, radii, spacing } from '../../theme';
+import { colors, radii, spacing, shadows } from '../../theme';
 
 type CardProps = {
   children: ReactNode;
@@ -22,7 +22,8 @@ const styles = StyleSheet.create({
     borderRadius: radii.lg,
     borderWidth: 1,
     gap: spacing.md,
-    padding: spacing.lg
+    padding: spacing.lg,
+    ...shadows.soft
   },
   compact: {
     borderRadius: radii.md,
@@ -30,8 +31,7 @@ const styles = StyleSheet.create({
     padding: spacing.md
   },
   selected: {
-    borderColor: colors.black,
+    borderColor: colors.primary,
     borderWidth: 2
   }
 });
-

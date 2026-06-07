@@ -7,6 +7,8 @@ import {
   CircleDollarSign,
   ClipboardList,
   CreditCard,
+  Eye,
+  EyeOff,
   ExternalLink,
   FileCheck2,
   FileClock,
@@ -30,7 +32,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { runtimeConfig, runtimeReadiness } from './config/runtime';
-import { clearDemoAccessToken, kuliApi, setDemoAccessToken } from './lib/api';
+import { clearSessionAccessToken, getKuliAccessToken, kuliApi, setSessionAccessToken } from './lib/api';
 import { supabase } from './lib/supabase';
 
 type Role = 'client' | 'truck_owner' | 'assistant' | 'admin';
@@ -54,6 +56,9 @@ type FileMetadata = {
   uploadedSizeBytes?: number;
   status?: string;
   storageProvider?: string;
+  storageKey?: string;
+  gridFsBucket?: string;
+  gridFsFileId?: string;
   visibility?: string;
   completedAt?: string;
 };
@@ -70,7 +75,8 @@ type DocumentPreview = {
   vehicleId: string;
   documentId: string;
   fileId: string;
-  url: string;
+  objectUrl: string;
+  downloadUrl: string;
   expiresInSeconds: number;
   file: FileMetadata;
 };
@@ -415,6 +421,217 @@ type AssistantRouteItem = RouteItem & {
   page: AssistantPageKey;
 };
 
+interface AddisLocationOption {
+  key: string;
+  label: string;
+  area: string;
+  detail: string;
+  lon: string;
+  lat: string;
+}
+
+const addisLocationOptions: AddisLocationOption[] = [
+  { key: 'bole-medhanialem', label: 'Bole Medhanialem', area: 'Bole', detail: 'Airport, hotels, offices', lon: '38.7903', lat: '8.9806' },
+  { key: 'bole-atlas', label: 'Atlas', area: 'Bole', detail: 'Restaurants and apartments', lon: '38.7848', lat: '9.0002' },
+  { key: 'piassa', label: 'Piassa', area: 'Arada', detail: 'Central market streets', lon: '38.7578', lat: '9.0350' },
+  { key: 'merkato', label: 'Merkato', area: 'Addis Ketema', detail: 'Bulk goods and retail', lon: '38.7352', lat: '9.0347' },
+  { key: 'mexico-square', label: 'Mexico Square', area: 'Kirkos', detail: 'Offices and main roads', lon: '38.7468', lat: '9.0109' },
+  { key: 'kazanchis', label: 'Kazanchis', area: 'Kirkos', detail: 'Hotels and apartments', lon: '38.7670', lat: '9.0182' },
+  { key: 'megenagna', label: 'Megenagna', area: 'Yeka', detail: 'Transit and business area', lon: '38.8025', lat: '9.0247' },
+  { key: 'cmc', label: 'CMC', area: 'Yeka', detail: 'Residential compounds', lon: '38.8401', lat: '9.0188' },
+  { key: 'saris', label: 'Saris', area: 'Akaky Kaliti', detail: 'Industrial and warehouses', lon: '38.7689', lat: '8.9408' },
+  { key: 'kality', label: 'Kality', area: 'Akaky Kaliti', detail: 'Warehouses and logistics', lon: '38.7824', lat: '8.8945' },
+  { key: 'lafto', label: 'Lafto', area: 'Nifas Silk-Lafto', detail: 'Residential moves', lon: '38.7205', lat: '8.9671' },
+  { key: 'jemo', label: 'Jemo', area: 'Nifas Silk-Lafto', detail: 'Condos and homes', lon: '38.6867', lat: '8.9417' },
+  { key: 'kolfe', label: 'Kolfe', area: 'Kolfe Keranio', detail: 'West-side neighborhoods', lon: '38.6907', lat: '9.0288' },
+  { key: 'ayat', label: 'Ayat', area: 'Bole', detail: 'East-side homes', lon: '38.8842', lat: '9.0165' },
+  { key: 'goro', label: 'Goro', area: 'Bole', detail: 'Residential and airport side', lon: '38.8211', lat: '8.9644' }
+];
+
+function LocationAutocomplete({
+  label,
+  value,
+  onChange,
+  onSelectCoords
+}: {
+  label: string;
+  value: string;
+  onChange: (address: string) => void;
+  onSelectCoords: (lon: string, lat: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const filteredOptions = useMemo(() => {
+    if (!value) return addisLocationOptions;
+    const query = value.toLowerCase();
+    return addisLocationOptions.filter(
+      (option) =>
+        option.label.toLowerCase().includes(query) ||
+        option.area.toLowerCase().includes(query) ||
+        option.detail.toLowerCase().includes(query)
+    );
+  }, [value]);
+
+  return (
+    <div style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
+      <label style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+        {label}
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => {
+            setTimeout(() => setOpen(false), 200);
+          }}
+          placeholder="Type to search Addis Ababa areas..."
+        />
+      </label>
+      {open && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            right: 0,
+            backgroundColor: '#ffffff',
+            border: '1px solid #ddd',
+            borderRadius: '4px',
+            maxHeight: '200px',
+            overflowY: 'auto',
+            zIndex: 1000,
+            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+          }}
+        >
+          {filteredOptions.map((option) => (
+            <div
+              key={option.key}
+              onClick={() => {
+                onChange(`${option.label}, ${option.area}, Addis Ababa`);
+                onSelectCoords(option.lon, option.lat);
+                setOpen(false);
+              }}
+              style={{
+                padding: '8px 12px',
+                cursor: 'pointer',
+                borderBottom: '1px solid #f0f0f0',
+                color: '#333'
+              }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+              }}
+            >
+              <div style={{ fontWeight: 'bold', fontSize: '14px' }}>{option.label}</div>
+              <div style={{ color: '#666', fontSize: '12px' }}>{option.area} / {option.detail}</div>
+            </div>
+          ))}
+          {filteredOptions.length === 0 && (
+            <div style={{ padding: '8px 12px', color: '#999', fontSize: '13px' }}>
+              No matching areas found
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminRouteMapPreview({
+  pickupLon,
+  pickupLat,
+  destinationLon,
+  destinationLat,
+  pickupLabel,
+  destinationLabel
+}: {
+  pickupLon: string;
+  pickupLat: string;
+  destinationLon: string;
+  destinationLat: string;
+  pickupLabel: string;
+  destinationLabel: string;
+}) {
+  const [routePoints, setRoutePoints] = useState<{ lon: number; lat: number }[]>([]);
+
+  const pLon = Number(pickupLon);
+  const pLat = Number(pickupLat);
+  const dLon = Number(destinationLon);
+  const dLat = Number(destinationLat);
+
+  useEffect(() => {
+    if (!pLon || !pLat || !dLon || !dLat) return;
+    let active = true;
+    const fetchRoute = async () => {
+      try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${pLon},${pLat};${dLon},${dLat}?overview=full&geometries=geojson`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('OSRM request failed');
+        const data = await response.json();
+        if (active && data.routes && data.routes[0]) {
+          const coords = data.routes[0].geometry.coordinates.map(([lon, lat]: [number, number]) => ({ lon, lat }));
+          setRoutePoints(coords);
+        }
+      } catch (err) {
+        console.warn('Admin OSRM routing failed:', err);
+        if (active) {
+          setRoutePoints([{ lon: pLon, lat: pLat }, { lon: dLon, lat: dLat }]);
+        }
+      }
+    };
+
+    fetchRoute();
+    return () => {
+      active = false;
+    };
+  }, [pLon, pLat, dLon, dLat]);
+
+  const coordsPath = useMemo(() => {
+    if (!routePoints.length) return '';
+    const step = Math.max(1, Math.round(routePoints.length / 25));
+    const decimated = routePoints.filter((_, idx) => idx % step === 0 || idx === routePoints.length - 1);
+    return decimated.map(p => `${p.lon},${p.lat}`).join(',');
+  }, [routePoints]);
+
+  const googlePath = useMemo(() => {
+    if (!routePoints.length) return '';
+    const step = Math.max(1, Math.round(routePoints.length / 25));
+    const decimated = routePoints.filter((_, idx) => idx % step === 0 || idx === routePoints.length - 1);
+    return decimated.map(p => `${p.lat},${p.lon}`).join('%7C');
+  }, [routePoints]);
+
+  const staticMapUrl = useMemo(() => {
+    if (!pLon || !pLat || !dLon || !dLat) return '';
+    
+    if (runtimeConfig.googleMapsApiKey) {
+      const markers = [
+        `markers=color:green%7Clabel:P%7C${pLat},${pLon}`,
+        `markers=color:orange%7Clabel:D%7C${dLat},${dLon}`
+      ].join('&');
+      const pathParam = googlePath ? `path=color:0x0000ffff%7Cweight:5%7C${googlePath}` : `path=color:0x0000ffff%7Cweight:5%7C${pLat},${pLon}%7C${dLat},${dLon}`;
+      return `https://maps.googleapis.com/maps/api/staticmap?center=${pLat},${pLon}&zoom=12&size=640x320&scale=2&maptype=roadmap&${markers}&${pathParam}&key=${encodeURIComponent(runtimeConfig.googleMapsApiKey)}`;
+    }
+
+    const ptParam = `${pLon},${pLat},pm2gnm~${dLon},${dLat},pm2rdm`;
+    const plParam = coordsPath ? `&pl=c:0000FFf0,w:5,${coordsPath}` : `&pl=c:0000FFf0,w:5,${pLon},${pLat},${dLon},${dLat}`;
+
+    return `https://static-maps.yandex.ru/1.x/?l=map&size=600,300&pt=${ptParam}${plParam}`;
+  }, [pLon, pLat, dLon, dLat, coordsPath, googlePath]);
+
+  if (!staticMapUrl) return null;
+
+  return (
+    <div style={{ marginTop: '16px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #ddd' }}>
+      <img src={staticMapUrl} alt="Route Map" style={{ width: '100%', height: '220px', objectFit: 'cover', display: 'block' }} />
+      <div style={{ padding: '8px 12px', backgroundColor: '#f9f9f9', fontSize: '12px', color: '#666', borderTop: '1px solid #ddd' }}>
+        <strong>Route Preview:</strong> {pickupLabel || 'Pickup'} to {destinationLabel || 'Drop-off'}
+      </div>
+    </div>
+  );
+}
+
 const roleLabels: Record<Role, string> = {
   client: 'Client',
   truck_owner: 'Truck owner',
@@ -568,8 +785,6 @@ const formatFileSize = (bytes?: number) => {
 
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
-const canRenderSignedUrl = (url?: string) => Boolean(url && /^(https?:|blob:|data:|file:)/.test(url));
-
 const getErrorMessage = (error: unknown) => {
   if (error instanceof Error) {
     return error.message;
@@ -578,22 +793,29 @@ const getErrorMessage = (error: unknown) => {
   return 'Something went wrong. Please try again.';
 };
 
-const createDemoSession = ({ accessToken, email }: { accessToken: string; email?: string }) =>
-  ({
-    access_token: accessToken,
-    refresh_token: 'local-demo-refresh-token',
-    token_type: 'bearer',
-    expires_in: 3600,
-    expires_at: Math.floor(Date.now() / 1000) + 3600,
-    user: {
-      id: accessToken.replace(/^dev:/, ''),
-      app_metadata: {},
-      user_metadata: {},
-      aud: 'authenticated',
-      created_at: new Date().toISOString(),
-      email
+const fetchProfileForSession = async (session: Session) => {
+  setSessionAccessToken(session.access_token);
+
+  try {
+    const profile = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
+    return profile.data;
+  } catch (error) {
+    if ((error as { status?: number }).status !== 401) {
+      throw error;
     }
-  }) as Session;
+
+    const { data } = await supabase.auth.getSession();
+    const refreshedSession = data.session;
+
+    if (!refreshedSession?.access_token) {
+      throw error;
+    }
+
+    setSessionAccessToken(refreshedSession.access_token);
+    const retry = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
+    return retry.data;
+  }
+};
 
 function StatusBadge({ tone, children }: { tone: 'ready' | 'warn' | 'blocked' | 'muted'; children: ReactNode }) {
   return <span className={`status-badge status-badge--${tone}`}>{children}</span>;
@@ -697,7 +919,6 @@ function DocumentPreviewModal({ preview, onClose }: { preview: DocumentPreview; 
   const fileName = preview.file.originalFileName ?? preview.fileId;
   const isImage = mimeType.startsWith('image/');
   const isPdf = mimeType === 'application/pdf';
-  const renderableUrl = canRenderSignedUrl(preview.url);
 
   return (
     <div className="preview-modal" role="dialog" aria-modal="true" aria-label="Document preview">
@@ -706,24 +927,20 @@ function DocumentPreviewModal({ preview, onClose }: { preview: DocumentPreview; 
           <div>
             <p className="eyebrow">Secure preview</p>
             <h3>{fileName}</h3>
-            <p className="muted">{mimeType || 'Unknown file type'} / expires in {preview.expiresInSeconds}s</p>
+            <p className="muted">{mimeType || 'Unknown file type'} / protected admin stream</p>
           </div>
           <button className="preview-modal__close" onClick={onClose} type="button" aria-label="Close preview">
             <X aria-hidden="true" size={18} />
           </button>
         </div>
         <div className="preview-modal__body">
-          {isImage && renderableUrl ? <img alt={fileName} src={preview.url} /> : null}
-          {isPdf && renderableUrl ? <iframe src={preview.url} title={fileName} /> : null}
-          {!((isImage || isPdf) && renderableUrl) ? (
+          {isImage ? <img alt={fileName} src={preview.objectUrl} /> : null}
+          {isPdf ? <iframe src={preview.objectUrl} title={fileName} /> : null}
+          {!(isImage || isPdf) ? (
             <div className="preview-modal__fallback">
               <FileText aria-hidden="true" size={32} />
-              <strong>{preview.file.storageProvider === 'local_dev' ? 'Local development preview' : 'Open document'}</strong>
-              <p>
-                {preview.file.storageProvider === 'local_dev'
-                  ? 'The backend returned protected local-dev metadata. Configure Supabase Storage or S3-compatible object storage to render binary previews in the browser.'
-                  : 'This file type cannot be rendered inline. Open it with the signed URL.'}
-              </p>
+              <strong>Open document</strong>
+              <p>This file type cannot be rendered inline. Open it in a browser tab or download it for review.</p>
             </div>
           ) : null}
         </div>
@@ -731,11 +948,11 @@ function DocumentPreviewModal({ preview, onClose }: { preview: DocumentPreview; 
           <span>{preview.file.storageProvider || 'storage'} / {formatFileSize(preview.file.uploadedSizeBytes ?? preview.file.sizeBytes)}</span>
           <button
             className="icon-button"
-            onClick={() => window.open(preview.url, '_blank', 'noopener,noreferrer')}
+            onClick={() => window.open(preview.objectUrl, '_blank', 'noopener,noreferrer')}
             type="button"
           >
             <ExternalLink aria-hidden="true" size={16} />
-            Open signed URL
+            Open preview
           </button>
         </div>
       </div>
@@ -773,46 +990,13 @@ function Panel({ title, eyebrow, children }: { title: string; eyebrow?: string; 
 function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfile, session: Session) => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  const canSubmit = runtimeConfig.demoAuthEnabled ? Boolean(email.trim()) : Boolean(email.trim()) && password.length >= 6;
-
-  const startDemoProfile = async (role: Extract<Role, 'admin' | 'assistant'>, options: { preserveExistingRole?: boolean } = {}) => {
-    if (!runtimeConfig.demoAuthEnabled || pending) {
-      return;
-    }
-
-    setPending(true);
-    setError('');
-
-    try {
-      const normalizedEmail = email.trim().toLowerCase();
-      const suffix = normalizedEmail
-        ? normalizedEmail.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 42)
-        : Date.now().toString(36);
-      const result = (await kuliApi.request('/dev/demo-profile', {
-        method: 'POST',
-        body: {
-          role,
-          suffix,
-          fullName: options.preserveExistingRole ? undefined : role === 'admin' ? `Demo Admin ${suffix}` : `Demo Assistant ${suffix}`,
-          email: normalizedEmail || `${role}-${suffix}@demo.kuli.local`,
-          phone: undefined,
-          preserveExistingRole: Boolean(options.preserveExistingRole)
-        }
-      })) as ApiEnvelope<{ user: UserProfile; accessToken: string }>;
-
-      setDemoAccessToken(result.data.accessToken);
-      onAuthenticated(result.data.user, createDemoSession({
-        accessToken: result.data.accessToken,
-        email: result.data.user.email
-      }));
-    } catch (demoError) {
-      setError(getErrorMessage(demoError));
-    } finally {
-      setPending(false);
-    }
-  };
+  const normalizedEmail = email.trim().toLowerCase();
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+  const isDevBypass = runtimeConfig.demoAuthEnabled && email.trim().startsWith('dev:');
+  const canSubmit = isDevBypass || (emailValid && password.length > 0);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -821,17 +1005,29 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
       return;
     }
 
-    if (runtimeConfig.demoAuthEnabled) {
-      await startDemoProfile('admin', { preserveExistingRole: true });
-      return;
-    }
-
     setPending(true);
     setError('');
 
+    if (isDevBypass) {
+      const mockSession = {
+        access_token: email.trim(),
+        user: { id: email.trim().replace('dev:', '') }
+      } as unknown as Session;
+
+      try {
+        const profile = await fetchProfileForSession(mockSession);
+        onAuthenticated(profile, mockSession);
+      } catch (loginError) {
+        setError(getErrorMessage(loginError));
+      } finally {
+        setPending(false);
+      }
+      return;
+    }
+
     try {
       const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         password
       });
 
@@ -843,8 +1039,8 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
         throw new Error('No staff session was returned. Check Supabase email confirmation settings.');
       }
 
-      const profile = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
-      onAuthenticated(profile.data, data.session);
+      const profile = await fetchProfileForSession(data.session);
+      onAuthenticated(profile, data.session);
     } catch (loginError) {
       setError(getErrorMessage(loginError));
     } finally {
@@ -870,19 +1066,29 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (profile: UserProfi
         </label>
         <label>
           Password
-          <input autoComplete="current-password" onChange={(event) => setPassword(event.target.value)} placeholder="Minimum 6 characters" type="password" value={password} />
+          <span className="password-field">
+            <input
+              autoComplete="current-password"
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Minimum 6 characters"
+              type={passwordVisible ? 'text' : 'password'}
+              value={password}
+            />
+            <button
+              aria-label={passwordVisible ? 'Hide password' : 'Show password'}
+              className="password-field__toggle"
+              onClick={() => setPasswordVisible((visible) => !visible)}
+              type="button"
+            >
+              {passwordVisible ? <EyeOff aria-hidden="true" size={18} /> : <Eye aria-hidden="true" size={18} />}
+            </button>
+          </span>
         </label>
         {error ? <p className="field-error" role="alert">{error}</p> : null}
         <button className="icon-button" disabled={!canSubmit || pending} type="submit">
           <LockKeyhole aria-hidden="true" size={18} />
           {pending ? 'Signing in...' : 'Sign in'}
         </button>
-        {runtimeConfig.demoAuthEnabled ? (
-          <div className="button-row">
-            <button className="secondary-action" disabled={pending} onClick={() => startDemoProfile('admin')} type="button">Demo admin</button>
-            <button className="secondary-action" disabled={pending} onClick={() => startDemoProfile('assistant')} type="button">Demo assistant</button>
-          </div>
-        ) : null}
         <p className="muted">Staff accounts are provisioned by an administrator. Clients and truck owners use the mobile app.</p>
       </form>
     </main>
@@ -894,8 +1100,7 @@ function RuntimePanel() {
     () => [
       { label: 'API base URL', ready: runtimeReadiness.hasApiBaseUrl },
       { label: 'Supabase URL', ready: runtimeReadiness.hasSupabaseUrl },
-      { label: 'Supabase anon key', ready: runtimeReadiness.hasSupabaseAnonKey },
-      { label: 'Local demo auth', ready: runtimeReadiness.demoAuthEnabled }
+      { label: 'Supabase anon key', ready: runtimeReadiness.hasSupabaseAnonKey }
     ],
     []
   );
@@ -1351,6 +1556,14 @@ function AdminVerificationPanel({ enabled }: { enabled: boolean }) {
     queryFn: async () => ((await kuliApi.request('/admin/vehicles')) as ApiEnvelope<Vehicle[]>).data
   });
 
+  useEffect(() => {
+    return () => {
+      if (preview?.objectUrl) {
+        URL.revokeObjectURL(preview.objectUrl);
+      }
+    };
+  }, [preview?.objectUrl]);
+
   const visibleVehicles = vehiclesQuery.data ?? [];
   const selectedVehicle = selectedVehicleId || visibleVehicles[0]?.id || '';
 
@@ -1412,8 +1625,44 @@ function AdminVerificationPanel({ enabled }: { enabled: boolean }) {
     setPreviewError('');
 
     try {
-      const result = (await kuliApi.request(`/admin/vehicles/${detail.id}/documents/${document.id}/preview-url`)) as ApiEnvelope<DocumentPreview>;
-      setPreview(result.data);
+      const accessToken = await getKuliAccessToken();
+      const previewResponse = await fetch(`${kuliApi.baseUrl}/admin/vehicles/${detail.id}/documents/${document.id}/preview`, {
+        headers: {
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
+        }
+      });
+
+      if (!previewResponse.ok) {
+        let message = 'Document preview could not be opened.';
+
+        try {
+          const payload = await previewResponse.json();
+          message = payload?.error?.message ?? message;
+        } catch {
+          // Keep the generic message when the API returns a non-JSON response.
+        }
+
+        throw new Error(message);
+      }
+
+      const blob = await previewResponse.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const mimeType = previewResponse.headers.get('content-type') || document.file?.mimeType || blob.type;
+      setPreview({
+        vehicleId: detail.id,
+        documentId: document.id,
+        fileId: document.fileId,
+        objectUrl,
+        downloadUrl: `${kuliApi.baseUrl}/admin/vehicles/${detail.id}/documents/${document.id}/download`,
+        expiresInSeconds: 0,
+        file: {
+          id: document.fileId,
+          ...(document.file ?? {}),
+          mimeType,
+          uploadedSizeBytes: blob.size || document.file?.uploadedSizeBytes,
+          storageProvider: document.file?.storageProvider ?? 'gridfs'
+        }
+      });
     } catch (error) {
       setPreviewError(getErrorMessage(error));
     } finally {
@@ -3314,10 +3563,15 @@ function AssistantSupportPanel({ enabled, profile }: { enabled: boolean; profile
               </button>
             </div>
             <div className="support-form-grid">
-              <label>
-                Pickup
-                <input onChange={(event) => setPickupAddress(event.target.value)} value={pickupAddress} />
-              </label>
+              <LocationAutocomplete
+                label="Pickup"
+                value={pickupAddress}
+                onChange={setPickupAddress}
+                onSelectCoords={(lon, lat) => {
+                  setPickupLon(lon);
+                  setPickupLat(lat);
+                }}
+              />
               <label>
                 Pickup lon
                 <input onChange={(event) => setPickupLon(event.target.value)} value={pickupLon} />
@@ -3326,10 +3580,15 @@ function AssistantSupportPanel({ enabled, profile }: { enabled: boolean; profile
                 Pickup lat
                 <input onChange={(event) => setPickupLat(event.target.value)} value={pickupLat} />
               </label>
-              <label>
-                Destination
-                <input onChange={(event) => setDestinationAddress(event.target.value)} value={destinationAddress} />
-              </label>
+              <LocationAutocomplete
+                label="Destination"
+                value={destinationAddress}
+                onChange={setDestinationAddress}
+                onSelectCoords={(lon, lat) => {
+                  setDestinationLon(lon);
+                  setDestinationLat(lat);
+                }}
+              />
               <label>
                 Destination lon
                 <input onChange={(event) => setDestinationLon(event.target.value)} value={destinationLon} />
@@ -3367,6 +3626,14 @@ function AssistantSupportPanel({ enabled, profile }: { enabled: boolean; profile
                 <input onChange={(event) => setEstimatedVolumeCubicMeters(event.target.value)} value={estimatedVolumeCubicMeters} />
               </label>
             </div>
+            <AdminRouteMapPreview
+              pickupLon={pickupLon}
+              pickupLat={pickupLat}
+              destinationLon={destinationLon}
+              destinationLat={destinationLat}
+              pickupLabel={pickupAddress}
+              destinationLabel={destinationAddress}
+            />
           </div>
 
           {quote ? (
@@ -4616,6 +4883,11 @@ function ProfileMissingScreen({ onSignOut }: { onSignOut: () => void }) {
   );
 }
 
+/**
+ * Root Controller and Orchestrator for the KULI Admin & Assistant Console.
+ * Validates staff authentication, synchronizes access tokens, checks roles,
+ * and renders either the administrative portal, the assistant console, or login view.
+ */
 export default function App() {
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(true);
@@ -4629,13 +4901,16 @@ export default function App() {
     setProfileMissing(false);
 
     if (!nextSession) {
+      setSessionAccessToken(null);
       setLoading(false);
       return;
     }
 
+    setSessionAccessToken(nextSession.access_token);
+
     try {
-      const result = (await kuliApi.me()) as ApiEnvelope<UserProfile>;
-      setProfile(result.data);
+      const profile = await fetchProfileForSession(nextSession);
+      setProfile(profile);
     } catch (error) {
       if ((error as { code?: string }).code === 'PROFILE_NOT_FOUND') {
         setProfileMissing(true);
@@ -4665,6 +4940,7 @@ export default function App() {
   }, [loadCurrentProfile]);
 
   const handleAuthenticated = (nextProfile: UserProfile, nextSession: Session) => {
+    setSessionAccessToken(nextSession.access_token);
     setSession(nextSession);
     setProfile(nextProfile);
     setProfileMissing(false);
@@ -4672,7 +4948,8 @@ export default function App() {
   };
 
   const handleSignOut = async () => {
-    clearDemoAccessToken();
+    clearSessionAccessToken();
+    setSessionAccessToken(null);
     await supabase.auth.signOut();
     queryClient.clear();
     setSession(null);

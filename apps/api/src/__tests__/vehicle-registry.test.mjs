@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { Readable } from 'node:stream';
 import { roles, vehicleAvailabilityStatuses, verificationStatuses } from '../../../../packages/shared/src/index.mjs';
 import { AppError } from '../common/errors/app-error.mjs';
 import { VehicleRegistryService } from '../modules/vehicle-registry/vehicle-registry-service.mjs';
@@ -128,19 +129,68 @@ class MemoryAuditLogRepository {
   }
 }
 
+class MemoryFileStorage {
+  constructor() {
+    this.bucketName = 'vehicle_documents';
+    this.files = new Map();
+  }
+
+  async upload({ file, stream, contentType }) {
+    const chunks = [];
+
+    for await (const chunk of stream) {
+      chunks.push(Buffer.from(chunk));
+    }
+
+    const body = Buffer.concat(chunks);
+    this.files.set(file.id, {
+      body,
+      contentType,
+      filename: file.originalFileName
+    });
+
+    return {
+      bucketName: this.bucketName,
+      gridFsFileId: file.id,
+      uploadedSizeBytes: body.length
+    };
+  }
+
+  async openDownloadStream(file) {
+    const stored = this.files.get(file.gridFsFileId ?? file.id);
+
+    if (!stored) {
+      throw new AppError(404, 'GRIDFS_FILE_NOT_FOUND', 'Stored verification file was not found.');
+    }
+
+    return {
+      gridFile: {
+        _id: file.gridFsFileId ?? file.id,
+        filename: stored.filename,
+        length: stored.body.length,
+        contentType: stored.contentType
+      },
+      stream: Readable.from(stored.body)
+    };
+  }
+}
+
 const createService = ({ vehicleClassRepository = new MemoryVehicleClassRepository() } = {}) => {
   const auditLogRepository = new MemoryAuditLogRepository();
+  const fileStorage = new MemoryFileStorage();
   const service = new VehicleRegistryService({
     vehicleClassRepository,
     vehicleRepository: new MemoryVehicleRepository(),
     vehicleDocumentRepository: new MemoryVehicleDocumentRepository(),
     fileRepository: new MemoryRepository(),
+    fileStorage,
     auditLogRepository
   });
 
   return {
     service,
-    auditLogRepository
+    auditLogRepository,
+    fileStorage
   };
 };
 
@@ -394,7 +444,10 @@ test('vehicle document upload intent validates type and size', async () => {
   });
 
   assert.equal(intent.file.mimeType, 'application/pdf');
-  assert.equal(intent.upload.method, 'PUT');
+  assert.equal(intent.file.storageProvider, 'gridfs');
+  assert.equal(intent.file.storageKey, `gridfs://vehicle_documents/${intent.file.id}`);
+  assert.equal(intent.upload.method, 'POST');
+  assert.equal(intent.upload.url, `/api/v1/files/${intent.file.id}/upload`);
 });
 
 test('admin file preview creates signed url and audit log', async () => {
@@ -416,7 +469,7 @@ test('admin file preview creates signed url and audit log', async () => {
   });
 
   assert.equal(signedUrl.fileId, intent.file.id);
-  assert.match(signedUrl.url, /^local-dev:\/\/signed-read\//);
+  assert.equal(signedUrl.url, `/api/v1/files/${intent.file.id}/download`);
   assert.equal(auditLogRepository.entries[0].action, 'file.signed_url.created');
 });
 
@@ -466,9 +519,71 @@ test('admin vehicle document preview verifies vehicle-document-file linkage and 
   assert.equal(preview.documentId, document.id);
   assert.equal(preview.file.originalFileName, 'identity.jpg');
   assert.equal(preview.file.mimeType, 'image/jpeg');
+  assert.equal(preview.file.storageProvider, 'gridfs');
   assert.equal(preview.expiresInSeconds, 300);
-  assert.match(preview.url, /^local-dev:\/\/signed-read\//);
+  assert.equal(preview.url, `/api/v1/admin/vehicles/${vehicle.id}/documents/${document.id}/preview`);
   assert.equal(auditLogRepository.entries.at(-1).action, 'vehicle.document.preview_url.created');
+});
+
+test('admin vehicle document preview streams stored GridFS file', async () => {
+  const { service, auditLogRepository } = createService();
+  const [vehicleClass] = await service.seedDefaultVehicleClasses();
+  const vehicle = await service.createVehicle({
+    actor: truckOwner,
+    input: {
+      vehicleClassId: vehicleClass.id,
+      licensePlate: 'AA-STREAM-1'
+    }
+  });
+  const intent = await service.createUploadIntent({
+    actor: truckOwner,
+    input: {
+      vehicleId: vehicle.id,
+      type: 'vehicle_registration',
+      mimeType: 'application/pdf',
+      sizeBytes: 16,
+      originalFileName: 'registration.pdf'
+    }
+  });
+  const uploaded = await service.uploadFileContent({
+    actor: truckOwner,
+    fileId: intent.file.id,
+    stream: Readable.from(Buffer.from('%PDF-test-stream')),
+    contentType: 'application/pdf',
+    contentLength: 16
+  });
+  const document = await service.attachVehicleDocument({
+    actor: truckOwner,
+    vehicleId: vehicle.id,
+    input: {
+      type: 'vehicle_registration',
+      fileId: uploaded.id
+    }
+  });
+
+  const preview = await service.openAdminVehicleDocumentPreview({
+    actor: admin,
+    vehicleId: vehicle.id,
+    documentId: document.id
+  });
+  const chunks = [];
+
+  for await (const chunk of preview.stream) {
+    chunks.push(Buffer.from(chunk));
+  }
+
+  assert.equal(preview.file.mimeType, 'application/pdf');
+  assert.equal(preview.gridFile.length, 16);
+  assert.equal(Buffer.concat(chunks).toString(), '%PDF-test-stream');
+  assert.equal(auditLogRepository.entries.at(-1).action, 'vehicle.document.preview.streamed');
+
+  const download = await service.openFileDownload({
+    actor: admin,
+    fileId: uploaded.id
+  });
+
+  assert.equal(download.gridFile.length, 16);
+  assert.equal(auditLogRepository.entries.at(-1).action, 'file.download.streamed');
 });
 
 test('admin vehicle document preview rejects documents from another vehicle', async () => {

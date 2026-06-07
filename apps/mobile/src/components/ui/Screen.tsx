@@ -33,7 +33,8 @@ const styles = StyleSheet.create({
     flex: 1
   },
   scrollContent: {
-    flexGrow: 1
+    flexGrow: 1,
+    paddingBottom: 112 // Clears the absolute floating bottom navigation bar
   },
   content: {
     flex: 1,

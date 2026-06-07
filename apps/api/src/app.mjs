@@ -23,6 +23,7 @@ import { EngagementService } from './modules/engagement/engagement-service.mjs';
 import { MongoPaymentRepository } from './modules/engagement/mongo-payment-repository.mjs';
 import { MongoRatingRepository } from './modules/engagement/mongo-rating-repository.mjs';
 import { MongoReportRepository } from './modules/engagement/mongo-report-repository.mjs';
+import { GridFsFileStorage } from './modules/files/gridfs-file-storage.mjs';
 import { MongoFileRepository } from './modules/files/mongo-file-repository.mjs';
 import { MongoPricingRuleRepository } from './modules/logistics/mongo-pricing-rule-repository.mjs';
 import { MongoKuliRequestRepository } from './modules/logistics/mongo-kuli-request-repository.mjs';
@@ -45,12 +46,28 @@ import { VehicleRegistryService } from './modules/vehicle-registry/vehicle-regis
 
 const createRequestId = () => `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
+const sanitizeFileName = (value) =>
+  String(value ?? 'document')
+    .replace(/[^\w.\- ]+/g, '_')
+    .trim() || 'document';
+
 const send = (response, result, requestId = createRequestId(), extraHeaders = {}) => {
   response.writeHead(result.statusCode, withSecurityHeaders({
     ...extraHeaders,
     ...result.headers,
     'x-request-id': requestId
   }));
+
+  if (result.stream) {
+    result.stream.on('error', () => {
+      if (!response.destroyed) {
+        response.destroy();
+      }
+    });
+    result.stream.pipe(response);
+    return;
+  }
+
   response.end(result.body);
 };
 
@@ -62,7 +79,7 @@ const createRouteRequest = (context) => async (request) => {
   const url = parse(request.url ?? '/', true);
   const path = url.pathname ?? '/';
 
-  const resolveAuth = async ({ required = true } = {}) => {
+  const resolveAuth = async ({ required = true, loadUser = true } = {}) => {
     const authorization = request.headers.authorization;
 
     if (!authorization && !required) {
@@ -73,7 +90,7 @@ const createRouteRequest = (context) => async (request) => {
     }
 
     const authUser = await context.tokenVerifier.verifyAuthorizationHeader(authorization);
-    const currentUser = await context.userRepository.findBySupabaseUserId(authUser.sub);
+    const currentUser = loadUser ? await context.accountService.getCurrentUser(authUser) : null;
 
     return {
       authUser,
@@ -334,7 +351,7 @@ const createRouteRequest = (context) => async (request) => {
   }
 
   if (method === 'POST' && path === '/api/v1/auth/sync-profile') {
-    const { authUser } = await resolveAuth();
+    const { authUser } = await resolveAuth({ loadUser: false });
     const body = await parseJsonBody(request);
     const requestedRole = normalizeRequestedRole(body.role);
     assertPublicRegistrationRole(requestedRole);
@@ -351,10 +368,10 @@ const createRouteRequest = (context) => async (request) => {
   }
 
   if (method === 'GET' && path === '/api/v1/me') {
-    const { authUser, currentUser } = await resolveAuth();
+    const { currentUser } = await resolveAuth();
     assertActiveAccount(currentUser);
 
-    return success(await context.accountService.getCurrentUser(authUser));
+    return success(currentUser);
   }
 
   if (method === 'PATCH' && path === '/api/v1/me') {
@@ -1071,6 +1088,24 @@ const createRouteRequest = (context) => async (request) => {
     );
   }
 
+  if (method === 'POST' && path.startsWith('/api/v1/files/') && path.endsWith('/upload')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.truckOwner, roles.admin]);
+
+    const fileId = path.split('/')[4];
+
+    return success(
+      await context.vehicleRegistryService.uploadFileContent({
+        actor: currentUser,
+        fileId,
+        stream: request,
+        contentType: request.headers['content-type'],
+        contentLength: Number(request.headers['content-length'] ?? 0)
+      })
+    );
+  }
+
   if (method === 'GET' && path.startsWith('/api/v1/files/') && path.endsWith('/signed-url')) {
     const { currentUser } = await resolveAuth();
     assertActiveAccount(currentUser);
@@ -1084,6 +1119,30 @@ const createRouteRequest = (context) => async (request) => {
         fileId
       })
     );
+  }
+
+  if (method === 'GET' && path.startsWith('/api/v1/files/') && path.endsWith('/download')) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.truckOwner, roles.admin]);
+
+    const fileId = path.split('/')[4];
+    const download = await context.vehicleRegistryService.openFileDownload({
+      actor: currentUser,
+      fileId
+    });
+    const fileName = sanitizeFileName(download.file.originalFileName ?? download.file.id);
+
+    return {
+      statusCode: 200,
+      headers: {
+        'Content-Type': download.file.mimeType || download.gridFile.contentType || 'application/octet-stream',
+        'Content-Disposition': `inline; filename="${fileName}"`,
+        'Content-Length': String(download.gridFile.length),
+        'Cache-Control': 'private, no-store, max-age=0'
+      },
+      stream: download.stream
+    };
   }
 
   if (method === 'POST' && path.startsWith('/api/v1/files/') && path.endsWith('/complete')) {
@@ -1225,6 +1284,34 @@ const createRouteRequest = (context) => async (request) => {
     );
   }
 
+  if (method === 'GET' && path.startsWith('/api/v1/admin/vehicles/') && path.includes('/documents/') && (path.endsWith('/preview') || path.endsWith('/download'))) {
+    const { currentUser } = await resolveAuth();
+    assertActiveAccount(currentUser);
+    assertRole(currentUser, [roles.admin]);
+
+    const parts = path.split('/');
+    const vehicleId = parts[5];
+    const documentId = parts[7];
+    const preview = await context.vehicleRegistryService.openAdminVehicleDocumentPreview({
+      actor: currentUser,
+      vehicleId,
+      documentId
+    });
+    const fileName = sanitizeFileName(preview.file.originalFileName ?? preview.file.id);
+    const disposition = path.endsWith('/download') ? 'attachment' : 'inline';
+
+    return {
+      statusCode: 200,
+      headers: {
+        'Content-Type': preview.file.mimeType || preview.gridFile.contentType || 'application/octet-stream',
+        'Content-Disposition': `${disposition}; filename="${fileName}"`,
+        'Content-Length': String(preview.gridFile.length),
+        'Cache-Control': 'private, no-store, max-age=0'
+      },
+      stream: preview.stream
+    };
+  }
+
   if (method === 'GET' && path.startsWith('/api/v1/admin/vehicles/') && !path.endsWith('/verification')) {
     const { currentUser } = await resolveAuth();
     assertActiveAccount(currentUser);
@@ -1292,6 +1379,7 @@ export const createAppContext = async (config = env) => {
   const vehicleRepository = new MongoVehicleRepository({ db });
   const vehicleDocumentRepository = new MongoVehicleDocumentRepository({ db });
   const fileRepository = new MongoFileRepository({ db });
+  const fileStorage = new GridFsFileStorage({ db });
   const auditLogRepository = new MongoAuditLogRepository({ db });
   const paymentRepository = new MongoPaymentRepository({ db });
   const ratingRepository = new MongoRatingRepository({ db });
@@ -1336,6 +1424,7 @@ export const createAppContext = async (config = env) => {
     vehicleRepository,
     vehicleDocumentRepository,
     fileRepository,
+    fileStorage,
     auditLogRepository,
     userRepository
   });

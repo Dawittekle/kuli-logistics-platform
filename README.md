@@ -1,265 +1,317 @@
 # KULI Logistics Platform
 
-KULI is a peer-to-peer trucking and logistics marketplace designed for Addis Ababa operations. This repository is the implementation workspace for the platform and the persistent handoff surface for multiple AI coding agents.
+KULI is a private logistics marketplace platform for coordinating truck-based transport in Addis Ababa, Ethiopia. It connects clients who need to move goods with verified truck owners, while giving operations staff the tools to support assisted booking, vehicle verification, pricing, disputes, and audit trails.
 
-## Repository Status
+This repository is a JavaScript/TypeScript monorepo containing the API, admin web app, mobile app, shared contracts, tests, verification tools, and Docker configuration needed to run and validate the system.
 
-The repository now contains:
+## Product Scope
 
-- A full project documentation package in [`docs/`](docs).
-- A monorepo for API, mobile, admin, and shared domain contracts.
-- A MongoDB-backed API covering the MVP backend workflows.
-- A real Expo React Native mobile foundation for client and truck-owner workflows.
-- A real React/Vite admin foundation for admin and call-center assistant workflows.
+KULI supports four operational roles:
 
-## Monorepo Layout
+- Clients create logistics requests, receive route and price estimates, choose available truck offers, track trip status, message trip participants, dispute payments, and rate completed trips.
+- Truck owners register vehicles, upload verification documents and photos, manage availability, receive offers, accept work through a first-accept-wins flow, advance trip status, and confirm cash payment.
+- Call-center assistants manage hotline tickets, look up client profiles, create assisted requests, assign trucks, and close support workflows.
+- Administrators review vehicle documents, approve or reject vehicles, manage pricing rules, inspect operations, handle account status changes, and resolve disputes with audit logging.
+
+Core workflows covered by the test suite include identity/profile sync, account status and role guards, vehicle verification, quotes, matching, offer acceptance races, manual trip execution, assisted booking, notifications, payments, ratings, reporting, admin previews, and file metadata handling.
+
+## Repository Layout
 
 ```text
 apps/
-  api/
-  admin/
-  mobile/
+  api/       Node.js HTTP API and domain modules
+  admin/     Vite/React admin and assistant console
+  mobile/    Expo/React Native client and owner app
 packages/
-  shared/
-tools/
-docs/
+  shared/    Shared roles, constants, and API client contracts
+tests/       Cross-app contract and behavior tests
+tools/       Lint, typecheck, startup, seed, and smoke scripts
+scripts/     Repository maintenance and packaging scripts
 ```
 
-## Quick Start
+## Architecture
 
-### 1. Review the source-of-truth docs
+The backend is a modular monolith. Domain boundaries are kept in separate modules, but deployment remains simple: one API process talks to MongoDB, Redis-compatible infrastructure, Supabase Auth, and file storage abstractions.
 
-Start with:
+The frontend layer is split by audience:
 
-- [`docs/project_overview.md`](docs/project_overview.md)
-- [`docs/system_architecture.md`](docs/system_architecture.md)
-- [`docs/development_phases.md`](docs/development_phases.md)
-- [`docs/progress_tracking.md`](docs/progress_tracking.md)
-- [`docs/frontend_progress.md`](docs/frontend_progress.md)
+- The mobile app is the primary public workflow for clients and truck owners.
+- The admin app is the operational workflow for administrators and call-center assistants.
 
-### 2. Run repository validation
+The API owns server-side enforcement for roles, account status, vehicle state, request transitions, offer acceptance, audit logging, and profile sync. Client-provided role or status values are not trusted as authority.
+
+## Technical Decisions
+
+- Node.js 20 is the runtime baseline.
+- Native `node --test` is used for dependency-light API, contract, and workflow tests.
+- MongoDB is the primary persistence layer for accounts, logistics requests, vehicles, documents, notifications, support tickets, payments, ratings, reports, and audits.
+- Redis is configured as local infrastructure for queue/cache-style workflows.
+- Supabase provides external authentication; the API verifies Supabase tokens through configured issuer, audience, and JWKS settings outside demo mode.
+- Demo auth exists for local development only and is explicitly disabled by default.
+- The mobile registration flow requires email/OTP confirmation before syncing the Mongo profile and routing users into a role home screen.
+- Email delivery in local/test contexts writes to `EMAIL_LOG_PATH`, defaulting to `/tmp/kuli-sent-emails.log`, so the repository never depends on a developer-local path.
+- Docker Compose is used for local dependencies. The root Dockerfile is a verification image, not the production runtime image: it copies the repository, installs dependencies, and runs lint, typecheck, and tests.
+
+## Prerequisites
+
+- Node.js 20 or newer
+- npm with workspace support
+- Docker Engine with Compose v2
+- A Supabase project for non-demo authentication flows
+
+## Environment Configuration
+
+Copy the examples before running local apps:
 
 ```bash
-npm run lint
-npm run typecheck
-npm test
-npm run smoke:critical
-npm run verify:startup
+cp apps/api/.env.example apps/api/.env
+cp apps/admin/.env.example apps/admin/.env
+cp apps/mobile/.env.example apps/mobile/.env
 ```
 
-These scripts validate the current scaffold and execute foundational policy tests.
+Important API settings:
 
-### 3. Start local services
+```text
+PORT=4000
+HOST=127.0.0.1
+NODE_ENV=development
+MONGODB_URI=mongodb://localhost:27018/kuli
+REDIS_URL=redis://localhost:6380
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_ANON_KEY=replace-me
+SUPABASE_JWT_MODE=supabase
+SUPABASE_JWKS_URL=https://your-project-ref.supabase.co/auth/v1/.well-known/jwks.json
+DEMO_AUTH_ENABLED=false
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:8081,http://127.0.0.1:8081,http://localhost:19006,http://127.0.0.1:19006
+```
+
+Important admin and mobile settings:
+
+```text
+ADMIN_APP_API_BASE_URL=http://localhost:4000/api/v1
+ADMIN_APP_SUPABASE_URL=https://your-project-ref.supabase.co
+ADMIN_APP_SUPABASE_ANON_KEY=replace-me
+
+MOBILE_APP_API_BASE_URL=http://localhost:4000/api/v1
+MOBILE_APP_SUPABASE_URL=https://your-project-ref.supabase.co
+MOBILE_APP_SUPABASE_ANON_KEY=replace-me
+MOBILE_APP_AUTH_REDIRECT_URL=kuli://auth/callback
+MOBILE_APP_PASSWORD_RESET_REDIRECT_URL=kuli://auth/reset-password
+```
+
+Do not commit real `.env` files or real secrets. Only `.env.example` files belong in source control.
+
+## Local Infrastructure With Docker
+
+Start MongoDB and Redis:
 
 ```bash
 docker compose up -d
 ```
 
-MongoDB listens on `localhost:27018` and Redis listens on `localhost:6380` by default.
+Default local ports:
 
-### 4. Verify local startup
-
-```bash
-npm run verify:startup
+```text
+MongoDB: localhost:27018
+Redis:   localhost:6380
 ```
 
-This checks the admin React/Vite foundation, mobile Expo foundation, admin production build, and API startup against MongoDB.
-
-### 5. Run the API server
+Check service status:
 
 ```bash
-npm run dev --workspace @kuli/api
+docker compose ps
 ```
 
-The server exposes:
+View logs:
 
-- `GET /api/v1/health`
-- `POST /api/v1/auth/sync-profile`
-- `GET /api/v1/me`
-- `PATCH /api/v1/me`
-- `GET /api/v1/admin/users`
-- `GET /api/v1/admin/users/:id`
-- `POST /api/v1/admin/users`
-- `POST /api/v1/admin/staff-users`
-- `PATCH /api/v1/admin/users/:userId/status`
-- `GET /api/v1/vehicle-classes`
-- `POST /api/v1/vehicles`
-- `GET /api/v1/vehicles/mine`
-- `GET /api/v1/vehicles/:id`
-- `PATCH /api/v1/vehicles/:id`
-- `POST /api/v1/files/upload-intent`
-- `GET /api/v1/files/:id/signed-url`
-- `POST /api/v1/vehicles/:id/documents`
-- `PATCH /api/v1/vehicles/:id/availability`
-- `GET /api/v1/admin/vehicles/pending`
-- `GET /api/v1/admin/vehicles/:id`
-- `PATCH /api/v1/admin/vehicles/:id/verification`
-- `POST /api/v1/quotes`
-- `GET /api/v1/admin/pricing-rules`
-- `POST /api/v1/admin/pricing-rules`
-- `PATCH /api/v1/admin/pricing-rules/:id/activate`
-- `POST /api/v1/kuli-requests`
-- `GET /api/v1/kuli-requests/mine`
-- `GET /api/v1/kuli-requests/:id`
-- `POST /api/v1/kuli-requests/:id/cancel`
-- `PATCH /api/v1/kuli-requests/:id/status`
-- `GET /api/v1/kuli-requests/:id/events`
-- `GET /api/v1/kuli-requests/:id/messages`
-- `POST /api/v1/kuli-requests/:id/messages`
-- `POST /api/v1/kuli-requests/:id/rating`
-- `POST /api/v1/kuli-requests/:id/payment/confirm`
-- `POST /api/v1/kuli-requests/:id/payment/dispute`
-- `GET /api/v1/owner/offers`
-- `GET /api/v1/owners/:id/ratings`
-- `POST /api/v1/offers/:id/viewed`
-- `POST /api/v1/offers/:id/accept`
-- `POST /api/v1/offers/:id/decline`
-- `POST /api/v1/reports`
-- `POST /api/v1/reports/:id/evidence/upload-intent`
-- `POST /api/v1/reports/:id/evidence`
-- `GET /api/v1/notifications`
-- `PATCH /api/v1/notifications/:id/read`
-- `PATCH /api/v1/me/notification-preferences`
-- `POST /api/v1/admin/jobs/expire-offers`
-- `GET /api/v1/assistant/tickets`
-- `POST /api/v1/assistant/tickets`
-- `GET /api/v1/assistant/tickets/:id`
-- `PATCH /api/v1/assistant/tickets/:id/status`
-- `POST /api/v1/assistant/bookings`
-- `GET /api/v1/assistant/clients/search`
-- `POST /api/v1/admin/jobs/expire-pending-client-tickets`
-- `GET /api/v1/admin/reports`
-- `PATCH /api/v1/admin/reports/:id`
-- `GET /api/v1/admin/payments`
-- `PATCH /api/v1/admin/payments/:id`
-- `GET /api/v1/admin/dashboard`
-- `GET /api/v1/admin/audit-logs`
-- `GET /api/v1/admin/release-readiness`
+```bash
+docker compose logs -f mongodb
+docker compose logs -f redis
+```
 
-### 6. Run the admin web app
+Stop services:
+
+```bash
+docker compose down
+```
+
+Stop services and remove local volumes:
+
+```bash
+docker compose down -v
+```
+
+## Install Dependencies
+
+Use `npm ci` for reproducible installs:
+
+```bash
+npm ci
+```
+
+Use `npm install` only when intentionally updating dependencies and `package-lock.json`.
+
+## Run The Applications
+
+Start infrastructure first:
+
+```bash
+docker compose up -d
+```
+
+Start the API:
+
+```bash
+npm run dev:api
+```
+
+The API listens on `http://localhost:4000` by default.
+
+Start the admin app:
 
 ```bash
 npm run dev:admin
 ```
 
-The admin app runs on Vite's local server, usually `http://localhost:5174`.
+The admin Vite dev server listens on the port Vite selects, typically `http://localhost:5173` or `http://localhost:5174`.
 
-### 7. Run the mobile app
+Start the mobile app:
 
 ```bash
 npm run dev:mobile
 ```
 
-The preferred command above runs Expo from `apps/mobile`. If Expo is accidentally started from the repository root, the root Expo entrypoint delegates to the same mobile app so Metro does not fall back to looking for a missing root `App` file.
+Expo will provide options for Android, iOS, and web depending on the local environment.
 
-For Android emulator testing, use this API base URL in `apps/mobile/.env`:
+## Demo Data
 
-```env
-MOBILE_APP_API_BASE_URL=http://10.0.2.2:4000/api/v1
-```
-
-`10.0.2.2` is the Android emulator bridge back to the host machine. Keep `apps/admin/.env` on `http://localhost:4000/api/v1` for browser testing on the same machine.
-
-The first `npm run android --workspace @kuli/mobile` run may download Expo Go into the emulator. If that download is slow, the Android bundle can still be checked with:
+Seed representative local data:
 
 ```bash
-cd apps/mobile
-npx expo export --platform android --output-dir /tmp/kuli-mobile-export
-```
-
-## Local Demo Auth and Fake Users
-
-For local UI exploration, enable demo auth in your ignored `.env` files:
-
-```env
-# apps/api/.env
-DEMO_AUTH_ENABLED=true
-
-# apps/mobile/.env
-MOBILE_APP_DEMO_AUTH_ENABLED=true
-
-# apps/admin/.env
-ADMIN_APP_DEMO_AUTH_ENABLED=true
-```
-
-When demo auth is enabled outside production, the mobile login/register form and demo client/owner buttons create or refresh MongoDB profiles with local development tokens instead of calling Supabase. The admin login form and demo admin/assistant buttons do the same for staff. This lets you explore the UI without creating Supabase users or sending email OTPs.
-
-You can also seed many fake local users and vehicles:
-
-```bash
+npm run seed:demo
 npm run seed:fake-users
 ```
 
-The seed is idempotent by record id and creates demo clients, truck owners, vehicles, staff users, and hotline tickets. Override counts with `FAKE_CLIENTS` and `FAKE_OWNERS` if needed.
-
-Demo mobile web flow:
-
-1. Start Docker services with `docker compose up -d`.
-2. Start the API with `npm run dev:api`.
-3. Start mobile web from `apps/mobile` with `npx expo start --web --clear`.
-4. Confirm the login screen shows `Local demo auth` as set.
-5. Register as `Client` or `Truck owner` with any email and any short password. Blank phone is allowed in demo mode.
-6. Sign out and log in again with the same email to return to the same local demo profile.
-
-If you open admin or mobile web through your machine's LAN address, for example `http://192.168.x.x:5174`, keep `CORS_ALLOW_PRIVATE_NETWORK=true` in `apps/api/.env` during development. Production should leave private-network CORS disabled and use explicit hosted origins.
-
-Local development tokens use:
-
-Use:
-
-```text
-Authorization: Bearer dev:<supabaseUserId>
-```
-
-Example:
-
-```text
-Authorization: Bearer dev:client-demo-001
-```
-
-Examples created by `npm run seed:fake-users` include `dev:demo-client-001`, `dev:demo-owner-001`, `dev:demo-admin-001`, and `dev:demo-assistant-001`.
-
-Keep all demo auth flags disabled in production. Production must use `SUPABASE_JWT_MODE=supabase` with real Supabase project values in `apps/api/.env`.
-
-## Admin Bootstrap
-
-The API can bootstrap a first admin profile at startup using environment variables:
-
-```env
-BOOTSTRAP_ADMIN_SUPABASE_USER_ID=admin-seed-001
-BOOTSTRAP_ADMIN_EMAIL=admin@kuli.local
-BOOTSTRAP_ADMIN_FULL_NAME=Seed Admin
-```
-
-That bootstrap path is included because staff accounts are not allowed to self-register publicly.
-
-## Local Infrastructure
-
-Use Docker Compose for local MongoDB and Redis:
+Reset temporary auth/demo data:
 
 ```bash
-docker compose up -d
+npm run reset:auth-data
 ```
 
-See [`docker-compose.yml`](docker-compose.yml).
+Demo mode is local-only. Enable it only in local `.env` files:
 
-## Supabase Project Values
+```text
+DEMO_AUTH_ENABLED=true
+ADMIN_APP_DEMO_AUTH_ENABLED=true
+```
 
-For local Supabase verification, create `apps/api/.env`, `apps/mobile/.env`, and `apps/admin/.env` from the example files. The API can derive issuer and JWKS URLs from `SUPABASE_URL`, but the examples show the explicit values too.
+Keep demo auth disabled for staging and production.
 
-The backend follows Supabase's current JWT guidance:
+## Verification Commands
 
-- Asymmetric user access tokens are verified against `SUPABASE_JWKS_URL`.
-- Legacy/shared-secret `HS256` user access tokens are verified through `GET /auth/v1/user` with `SUPABASE_ANON_KEY`.
+Run the full local verification set before merging or deploying:
 
-Do not put the Supabase service-role key in frontend env files or commit it anywhere. Phase 1 does not need the service-role key or JWT secret for normal user-token verification.
+```bash
+npm ci
+npm run lint
+npm run typecheck
+npm test
+npm run smoke:critical
+```
 
-## Current Limitations
+Optional startup verification:
 
-- The API currently covers identity/profile/RBAC, vehicle verification, quote/pricing/search, request/offer acceptance, manual trip execution, request-scoped messages, in-app notification records, assisted booking tickets, ratings, reports, and cash/manual payment records.
-- Frontend phases are implemented for mobile web/Expo and admin web, including role-aware auth, marketplace workflows, trust/payment screens, and admin/assistant operations.
-- Supabase JWKS verification is wired in the API, and the mobile/admin apps have Supabase clients configured through local env files.
-- No file storage, telephony integration, digital payment gateway, automated commission collection, or production notification delivery flows yet.
-- Production deployment still requires real provider credentials, backups, monitoring, and a hosted environment even though release-readiness checks and smoke scripts are now scaffolded.
+```bash
+npm run verify:startup
+```
 
-Those remaining items are tracked in [`docs/progress_tracking.md`](docs/progress_tracking.md).
+`verify:startup` builds/verifies frontend foundations and starts the API long enough to confirm it reports readiness.
+
+## Docker Verification Image
+
+The root Dockerfile is designed to prove the repository can build in a clean container and that the test suite passes with repository history available inside the image.
+
+Build the verification image:
+
+```bash
+docker build -t kuli-verification-check .
+```
+
+Verify Git history is present inside the image:
+
+```bash
+docker run --rm kuli-verification-check git -C /workspace log -1 --oneline
+```
+
+Run tests inside the image:
+
+```bash
+docker run --rm kuli-verification-check npm test
+```
+
+The Dockerfile:
+
+- Uses `node:20-bookworm`.
+- Installs `git` and `ca-certificates`.
+- Installs dependencies from package manifests in a cacheable layer.
+- Uses npm fetch retries to reduce transient registry failures.
+- Copies the full repository afterward, including `.git`.
+- Runs `npm ci`, `npm run lint`, `npm run typecheck`, and `npm test`.
+- Includes a simple healthcheck suitable for static verification environments.
+
+`.dockerignore` intentionally excludes dependency folders, real env files, build outputs, coverage, logs, temp files, and local agent metadata. It must not exclude `.git`.
+
+## Repository Archive
+
+After running local verification, regenerate the repository archive:
+
+```bash
+bash scripts/create-silver-zip.sh
+```
+
+The archive script can be run after `npm ci`. It warns about local dependency folders, creates the staged archive from a clean single-branch clone of the current branch, removes clone remote metadata, verifies a single `kuli-logistics-platform/` top-level folder, and checks that `.git/HEAD` is included while unsafe files are absent.
+
+## Testing Strategy
+
+The current tests are intentionally dependency-light so they can run in local shells and Docker without external managed services.
+
+Test coverage includes:
+
+- Identity profile sync and public registration role rules
+- Supabase token verifier behavior
+- Account status and role guards
+- Quote pricing and matching
+- Atomic offer acceptance behavior
+- Trip lifecycle transitions and message permissions
+- Vehicle class, vehicle, document, and file preview workflows
+- Support ticket and assisted booking workflows
+- Payment, rating, and report workflows
+- Notification and local email log behavior
+- Shared API client behavior
+- Mobile registration confirmation decision logic
+
+There is no committed coverage-report script. Do not claim a coverage percentage unless a coverage tool is added and run.
+
+## Production Readiness Checklist
+
+Before production deployment:
+
+- Set `NODE_ENV=production`.
+- Use `SUPABASE_JWT_MODE=supabase`.
+- Configure real Supabase issuer, audience, JWKS URL, and anon key.
+- Disable all demo auth flags.
+- Restrict `CORS_ORIGINS` to deployed frontend origins.
+- Keep `CORS_ALLOW_PRIVATE_NETWORK=false` unless there is a deliberate internal-network requirement.
+- Use managed MongoDB and Redis-compatible services with backups, monitoring, and access controls.
+- Route logs to the deployment logging platform instead of local files.
+- Use production object storage for uploaded files and enforce MIME, size, and ownership checks.
+- Protect admin bootstrap variables and rotate them after initial provisioning.
+- Keep `.env`, secrets, dependency folders, build outputs, coverage reports, and logs out of source control.
+
+## Operational Notes
+
+- The admin and mobile apps depend on the API base URL and Supabase settings at build/runtime.
+- Vehicle and document moderation decisions should include reasons so audit logs remain useful.
+- Offer acceptance relies on conditional updates to prevent multiple owners from winning the same request.
+- Registration must complete email confirmation before a new user profile is synced and routed to the client or truck-owner home screen.
+- If a Docker command cannot reach the daemon, check `docker context show`, `docker context ls`, and the Docker service status before debugging the application.

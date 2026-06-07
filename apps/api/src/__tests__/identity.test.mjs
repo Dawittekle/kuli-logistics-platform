@@ -74,6 +74,29 @@ test('account service syncs and updates a public profile', async () => {
   assert.equal(second.user.email, 'client-updated@example.com');
 });
 
+test('account service relinks stale profiles by verified Supabase email', async () => {
+  const service = new AccountService({
+    userRepository: new InMemoryUserRepository()
+  });
+
+  await service.syncProfile({
+    authUser: { sub: 'old-supabase-id', email: 'client4@gmail.com' },
+    role: roles.client,
+    fullName: 'Client Four',
+    email: 'client4@gmail.com',
+    phone: '+251911111111'
+  });
+
+  const current = await service.getCurrentUser({
+    sub: 'new-supabase-id',
+    email: 'CLIENT4@gmail.com'
+  });
+
+  assert.equal(current.role, roles.client);
+  assert.equal(current.supabaseUserId, 'new-supabase-id');
+  assert.equal(current.email, 'client4@gmail.com');
+});
+
 test('staff accounts are provisioned by admin flow, not public self-registration', async () => {
   const service = new AccountService({
     userRepository: new InMemoryUserRepository()
