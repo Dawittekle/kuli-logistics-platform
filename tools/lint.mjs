@@ -71,23 +71,7 @@ const requiredPaths = [
   'tools/smoke-critical-workflows.mjs',
   'tools/seed-demo-data.mjs',
   'tools/seed-fake-users.mjs',
-  'docss/project_overview.md',
-  'docss/system_architecture.md',
-  'docss/feature_specifications.md',
-  'docss/database_design.md',
-  'docss/api_architecture.md',
-  'docss/frontend_architecture.md',
-  'docss/frontend_progress.md',
-  'docss/backend_architecture.md',
-  'docss/development_phases.md',
-  'docss/progress_tracking.md',
-  'docss/engineering_decisions.md',
-  'docss/risks_and_unknowns.md',
-  'docss/testing_strategy.md',
-  'docss/deployment_and_devops.md',
-  'docss/security_considerations.md',
-  'docss/references.md',
-  'docss/glossary.md'
+  'docs/KULI_DEVELOPER_GUIDE.md'
 ];
 
 for (const filePath of requiredPaths) {

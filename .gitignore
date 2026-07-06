@@ -13,5 +13,6 @@ dist
 skills-lock.json
 
 # Documentation and Reference
-docs/
+docs/*
+!docs/KULI_DEVELOPER_GUIDE.md
 references/
