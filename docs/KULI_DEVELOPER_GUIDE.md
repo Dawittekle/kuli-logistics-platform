@@ -1182,9 +1182,9 @@ NODE_ENV
 PORT
 MONGODB_URI
 SUPABASE_URL
-SUPABASE_ANON_KEY
-SUPABASE_SERVICE_ROLE_KEY      # backend only; never expose to mobile/web clients
-JWT/AUTH verification settings
+SUPABASE_PUBLISHABLE_KEY       # safe for public clients when RLS is enabled
+SUPABASE_JWKS_URL              # Supabase Auth JWT verification
+SUPABASE_SECRET_KEY            # optional backend-only key; never expose to mobile/web clients
 MAPS_API_KEY
 FILE_STORAGE settings
 NOTIFICATION provider settings (future)
@@ -1486,8 +1486,8 @@ NODE_ENV=development
 PORT=4000
 MONGODB_URI=mongodb://localhost:27017/kuli
 SUPABASE_URL=https://example.supabase.co
-SUPABASE_ANON_KEY=replace_me
-SUPABASE_SERVICE_ROLE_KEY=replace_me_backend_only
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_replace_me
+SUPABASE_JWKS_URL=https://example.supabase.co/auth/v1/.well-known/jwks.json
 MAPS_API_KEY=replace_me
 ```
 
