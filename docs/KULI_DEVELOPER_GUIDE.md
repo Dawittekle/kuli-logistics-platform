@@ -1491,6 +1491,299 @@ SUPABASE_JWKS_URL=https://example.supabase.co/auth/v1/.well-known/jwks.json
 MAPS_API_KEY=replace_me
 ```
 
+### 23.4 Render deployment guide
+
+Render is a good fit for KULI because the project has one public Node API, one static admin dashboard, and external identity/database dependencies. Treat the mobile app as a client release, not as a Render backend service.
+
+Recommended production layout:
+
+| Component | Render resource | Notes |
+|---|---|---|
+| API | Web Service, Node runtime | Public HTTPS API. Use health check `/api/v1/health`. |
+| Admin dashboard | Static Site | Vite build published from `apps/admin/dist`. |
+| MongoDB | MongoDB Atlas, or private MongoDB service on Render | Prefer Atlas for production operations/backups. Use Render private MongoDB only if the team accepts self-hosting responsibility. |
+| Redis-compatible cache/queue | Render Key Value | Optional today; use internal URL when API and Key Value are in the same region. |
+| Supabase Auth | External Supabase project | Use publishable API keys and JWKS; never deploy retired JWT-based API keys. |
+| Mobile app | Expo/EAS, app stores, or APK/IPA distribution | Configure it to call the deployed API URL. Render can host a mobile web build later only if mobile web is intentionally supported. |
+
+#### 23.4.1 Pre-deployment checklist
+
+Before creating Render services:
+
+- Push the repo to GitHub/GitLab/Bitbucket.
+- Confirm `npm run lint`, `npm run typecheck`, `npm test`, `npm run smoke:critical`, and `npm run verify:startup` pass locally.
+- Create or choose the Supabase production project.
+- Create Supabase staff users for admin/assistant accounts before setting `BOOTSTRAP_ADMIN_SUPABASE_USER_ID`.
+- Choose a MongoDB production target.
+- Decide final public URLs, for example:
+  - API: `https://kuli-api.onrender.com/api/v1`
+  - Admin: `https://kuli-admin.onrender.com`
+  - Future custom domains: `https://api.kuli.example` and `https://admin.kuli.example`
+- Configure Supabase Auth redirect URLs for admin and mobile:
+  - Admin: `https://kuli-admin.onrender.com`
+  - Mobile deep links: `kuli://auth/callback`, `kuli://auth/reset-password`
+  - Any production app-store universal/app links if added later.
+
+#### 23.4.2 API deployment from the Render Dashboard
+
+Create a new Render **Web Service** connected to the monorepo.
+
+Use these settings:
+
+| Setting | Value |
+|---|---|
+| Runtime | Node |
+| Root directory | Leave empty / repo root |
+| Build command | `npm ci` |
+| Start command | `npm run start --workspace @kuli/api` |
+| Health check path | `/api/v1/health` |
+| Auto-deploy | Enabled for staging; production depends on team release policy |
+
+Do not set the root directory to `apps/api`. The API imports workspace packages from the repo root, so Render should install dependencies from the monorepo root.
+
+API environment variables:
+
+```text
+NODE_VERSION=20.20.2
+NODE_ENV=production
+HOST=0.0.0.0
+
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_replace_me
+SUPABASE_JWT_MODE=supabase
+SUPABASE_JWT_ISSUER=https://your-project-ref.supabase.co/auth/v1
+SUPABASE_JWT_AUDIENCE=authenticated
+SUPABASE_JWKS_URL=https://your-project-ref.supabase.co/auth/v1/.well-known/jwks.json
+
+DEMO_AUTH_ENABLED=false
+
+MONGODB_URI=mongodb+srv://...
+MONGODB_SERVER_SELECTION_TIMEOUT_MS=10000
+REDIS_URL=redis://...   # optional until a queue/cache path uses it
+
+CORS_ORIGINS=https://kuli-admin.onrender.com
+CORS_ALLOW_PRIVATE_NETWORK=false
+
+BOOTSTRAP_ADMIN_SUPABASE_USER_ID=<supabase-auth-user-id>
+BOOTSTRAP_ADMIN_EMAIL=admin@example.com
+BOOTSTRAP_ADMIN_FULL_NAME=KULI Admin
+```
+
+Important API notes:
+
+- Render provides `PORT`; do not hardcode it unless Render asks for it.
+- Set `HOST=0.0.0.0`; `127.0.0.1` can make a service unreachable from Render's router.
+- Keep `DEMO_AUTH_ENABLED=false` for staging/production.
+- Keep `SUPABASE_JWT_MODE=supabase`; production must never use `development_stub`.
+- Add every browser origin that will call the API to `CORS_ORIGINS`. For the deployed admin dashboard, use its exact HTTPS origin. React Native apps are not browser-CORS constrained, but mobile web and admin are.
+- Use Render logs and `/api/v1/admin/release-readiness` after login to confirm production readiness.
+
+#### 23.4.3 Admin dashboard deployment from the Render Dashboard
+
+Create a new Render **Static Site** connected to the same monorepo.
+
+Use these settings:
+
+| Setting | Value |
+|---|---|
+| Root directory | Leave empty / repo root |
+| Build command | `npm ci && npm run build --workspace @kuli/admin` |
+| Publish directory | `apps/admin/dist` |
+| Redirect/rewrite | Rewrite `/*` to `/index.html` for SPA routes |
+
+Admin environment variables are build-time values for Vite:
+
+```text
+ADMIN_APP_API_BASE_URL=https://kuli-api.onrender.com/api/v1
+ADMIN_APP_SUPABASE_URL=https://your-project-ref.supabase.co
+ADMIN_APP_SUPABASE_PUBLISHABLE_KEY=sb_publishable_replace_me
+ADMIN_APP_DEMO_AUTH_ENABLED=false
+```
+
+Important admin notes:
+
+- Vite embeds these values into the static bundle. Redeploy the static site after changing them.
+- Never put `sb_secret_...` or any elevated key in admin env.
+- Add the admin domain to API `CORS_ORIGINS`.
+- Add the admin domain to Supabase Auth redirect allowlist.
+
+#### 23.4.4 MongoDB options
+
+Production-preferred option: **MongoDB Atlas**.
+
+- Create an Atlas cluster in the region closest to the Render API.
+- Put the connection string in `MONGODB_URI`.
+- Use TLS-enabled `mongodb+srv://...` connection strings.
+- If Atlas IP allowlisting is strict, use Render Dedicated IPs for outbound API traffic and allowlist those IPs in Atlas. A temporary `0.0.0.0/0` Atlas allowlist is acceptable only for early testing with strong database credentials.
+- Enable automated backups and monitoring in Atlas.
+
+Render-only option: **private MongoDB service with persistent disk**.
+
+- Use only when the team is ready to operate MongoDB itself.
+- Create it as a private service, not a public web service.
+- Attach a persistent disk mounted to MongoDB's data directory.
+- Keep API, MongoDB, and Key Value in the same Render region.
+- Plan backups, disk growth, version upgrades, and restore drills explicitly.
+
+Do not use Render's ephemeral service filesystem for MongoDB data. Data outside a persistent disk is lost across redeploys/restarts.
+
+#### 23.4.5 Redis / Render Key Value
+
+The current backend keeps core state in MongoDB. If Redis-backed queue/cache behavior is enabled later:
+
+- Create a Render **Key Value** instance.
+- Prefer the internal URL for `REDIS_URL` when the API service and Key Value instance run in the same region.
+- Keep external Redis access disabled unless a specific operational tool needs it.
+- Remember that new Render Key Value instances are Valkey/Redis-compatible, so use normal Redis client URLs.
+
+#### 23.4.6 Mobile app production configuration
+
+Render does not publish iOS/Android binaries. Use Expo/EAS or store tooling for mobile releases.
+
+Set mobile production env before building:
+
+```text
+MOBILE_APP_API_BASE_URL=https://kuli-api.onrender.com/api/v1
+MOBILE_APP_SUPABASE_URL=https://your-project-ref.supabase.co
+MOBILE_APP_SUPABASE_PUBLISHABLE_KEY=sb_publishable_replace_me
+MOBILE_APP_GOOGLE_MAPS_API_KEY=<restricted-mobile-maps-key>
+MOBILE_APP_AUTH_REDIRECT_URL=kuli://auth/callback
+MOBILE_APP_PASSWORD_RESET_REDIRECT_URL=kuli://auth/reset-password
+MOBILE_APP_DEMO_AUTH_ENABLED=false
+```
+
+Production mobile checks:
+
+- Build with production env values, not local `.env` defaults.
+- Test client and truck-owner login against the production Supabase project.
+- Test password reset deep links on real devices.
+- Test API access from a cellular network, not only local Wi-Fi.
+- If a mobile web build is intentionally deployed later, add that web origin to `CORS_ORIGINS`.
+
+#### 23.4.7 Optional `render.yaml` blueprint
+
+Use Dashboard setup first if the team is new to Render. Once stable, move to a Blueprint so staging and production are reproducible.
+
+Example starting point:
+
+```yaml
+services:
+  - type: web
+    name: kuli-api
+    runtime: node
+    buildCommand: npm ci
+    startCommand: npm run start --workspace @kuli/api
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20.20.2
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_JWT_MODE
+        value: supabase
+      - key: SUPABASE_JWT_ISSUER
+        sync: false
+      - key: SUPABASE_JWT_AUDIENCE
+        value: authenticated
+      - key: SUPABASE_JWKS_URL
+        sync: false
+      - key: DEMO_AUTH_ENABLED
+        value: false
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_SERVER_SELECTION_TIMEOUT_MS
+        value: 10000
+      - key: REDIS_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: CORS_ALLOW_PRIVATE_NETWORK
+        value: false
+      - key: BOOTSTRAP_ADMIN_SUPABASE_USER_ID
+        sync: false
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        sync: false
+      - key: BOOTSTRAP_ADMIN_FULL_NAME
+        sync: false
+
+  - type: web
+    name: kuli-admin
+    runtime: static
+    buildCommand: npm ci && npm run build --workspace @kuli/admin
+    staticPublishPath: apps/admin/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: ADMIN_APP_API_BASE_URL
+        sync: false
+      - key: ADMIN_APP_SUPABASE_URL
+        sync: false
+      - key: ADMIN_APP_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: ADMIN_APP_DEMO_AUTH_ENABLED
+        value: false
+```
+
+Blueprint notes:
+
+- Keep secrets as `sync: false`; enter values in Render during creation.
+- Create separate services or separate Render environments for staging and production.
+- Use preview environments only with isolated databases and non-production Supabase projects.
+- Add build filters later if deploys become noisy in the monorepo.
+
+#### 23.4.8 Post-deploy verification
+
+After the API deploys:
+
+```bash
+curl https://kuli-api.onrender.com/api/v1/health
+```
+
+Expected response envelope includes:
+
+```json
+{
+  "data": {
+    "status": "ok",
+    "service": "@kuli/api",
+    "authMode": "supabase",
+    "persistence": "mongodb"
+  }
+}
+```
+
+Then verify:
+
+- Admin sign-in works with a provisioned Supabase staff user.
+- `GET /api/v1/config/public` returns expected production feature flags.
+- Admin release-readiness screen does not show production blockers.
+- Client mobile login works against the same Supabase project.
+- Vehicle registration, quote, request creation, offer acceptance, status updates, payment confirmation, rating, and report flows work in staging before production launch.
+
+#### 23.4.9 Operational concerns
+
+- Use paid Render instances for production. Free services are acceptable only for demos/testing because they have platform limitations.
+- Put API, Key Value, and private services in the same region to use Render private networking.
+- Use custom domains before public launch; Render manages TLS for web services and static sites.
+- Turn on health checks so bad deploys fail before taking traffic.
+- Use Render logs and metrics for first-line troubleshooting.
+- Use manual deploy approval or a protected branch for production.
+- Keep staging and production in separate Render environments/projects with separate MongoDB and Supabase projects.
+- Rotate Supabase and database credentials immediately if they are exposed.
+- Do not attach a persistent disk to the API unless a future file-storage adapter truly writes local durable data. Current document storage should stay in MongoDB/GridFS or an external object store.
+- Do not scale a stateful service that owns a single persistent disk horizontally. Scale the stateless API instead.
+- If MongoDB Atlas requires IP allowlists, use Render Dedicated IPs for the API service.
+- If using self-hosted MongoDB on Render, document backup/restore commands before launch.
+- If a deploy fails health checks, inspect the service Events log first, then confirm env var names and MongoDB connectivity.
+
 ---
 
 ## 24. Development Guardrails
