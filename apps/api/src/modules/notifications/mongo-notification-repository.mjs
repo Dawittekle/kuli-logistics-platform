@@ -1,6 +1,8 @@
 import fs from 'fs';
+import path from 'path';
 
 const collectionName = 'notifications';
+const sentEmailsLogPath = () => process.env.SENT_EMAILS_LOG_PATH || path.resolve(process.cwd(), 'sent_emails.log');
 
 const normalize = (document) => {
   if (!document) {
@@ -77,7 +79,9 @@ Data: ${JSON.stringify(notification.data ?? {})}
 ================================================================================\n\n`;
 
         try {
-          fs.appendFileSync('/home/dawit/Documents/Projects/mobile-app/kuli-logistics-platform/sent_emails.log', logEntry, 'utf8');
+          const logPath = sentEmailsLogPath();
+          fs.mkdirSync(path.dirname(logPath), { recursive: true });
+          fs.appendFileSync(logPath, logEntry, 'utf8');
         } catch (err) {
           console.error('Failed to write to sent_emails.log:', err);
         }
