@@ -21,30 +21,30 @@ const parseDevelopmentToken = (token) => {
 };
 
 export class SupabaseTokenVerifier {
-  constructor({ mode, issuer, audience, jwksUrl, supabaseUrl, anonKey, allowDevelopmentTokens = false, fetchImpl = fetch }) {
+  constructor({ mode, issuer, audience, jwksUrl, supabaseUrl, publishableKey, allowDevelopmentTokens = false, fetchImpl = fetch }) {
     this.mode = mode;
     this.issuer = issuer;
     this.audience = audience;
     this.jwksUrl = jwksUrl;
     this.supabaseUrl = supabaseUrl;
-    this.anonKey = anonKey;
+    this.publishableKey = publishableKey;
     this.allowDevelopmentTokens = allowDevelopmentTokens;
     this.fetchImpl = fetchImpl;
     this.jwks = null;
   }
 
   async verifyWithAuthServer(token) {
-    if (!this.supabaseUrl || !this.anonKey || this.anonKey === 'replace-me') {
+    if (!this.supabaseUrl || !this.publishableKey || this.publishableKey === 'replace-me') {
       throw new AppError(
         500,
         'SUPABASE_CONFIG_MISSING',
-        'Supabase shared-secret verification requires SUPABASE_URL and SUPABASE_ANON_KEY.'
+        'Supabase Auth server verification requires SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY.'
       );
     }
 
     const response = await this.fetchImpl(`${this.supabaseUrl}/auth/v1/user`, {
       headers: {
-        apikey: this.anonKey,
+        apikey: this.publishableKey,
         authorization: `Bearer ${token}`
       }
     });

@@ -15,10 +15,10 @@ export const validateRuntimeConfig = (config) => {
       message: 'Supabase project URL is configured.'
     },
     {
-      id: 'supabase_anon_key',
-      ok: Boolean(config.supabaseAnonKey) && config.supabaseAnonKey !== 'replace-me',
+      id: 'supabase_publishable_key',
+      ok: Boolean(config.supabasePublishableKey) && config.supabasePublishableKey !== 'replace-me',
       severity: config.nodeEnv === 'production' ? 'error' : 'warning',
-      message: 'Supabase anon key is configured.'
+      message: 'Supabase publishable key is configured.'
     },
     {
       id: 'jwt_mode',

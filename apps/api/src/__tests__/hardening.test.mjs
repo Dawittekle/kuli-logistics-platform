@@ -96,7 +96,7 @@ test('production runtime config fails closed for stub auth', () => {
     nodeEnv: 'production',
     mongodbUri: 'mongodb://localhost:27018/kuli',
     supabaseUrl: 'https://example.supabase.co',
-    supabaseAnonKey: 'replace-me',
+    supabasePublishableKey: 'replace-me',
     supabaseJwtMode: 'development_stub',
     bootstrapAdminSupabaseUserId: '',
     bootstrapAdminEmail: ''
@@ -112,7 +112,7 @@ test('production runtime config fails closed for local demo auth', () => {
     nodeEnv: 'production',
     mongodbUri: 'mongodb://localhost:27018/kuli',
     supabaseUrl: 'https://kuli.supabase.co',
-    supabaseAnonKey: 'anon-key',
+    supabasePublishableKey: 'sb_publishable_test_key',
     supabaseJwtMode: 'supabase',
     demoAuthEnabled: true,
     bootstrapAdminSupabaseUserId: 'admin-001',

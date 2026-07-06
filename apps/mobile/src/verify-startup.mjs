@@ -16,7 +16,7 @@ for (const file of requiredFiles) {
 
 const appConfig = await readFile(new URL('../app.config.js', import.meta.url), 'utf8');
 
-for (const expectedKey of ['MOBILE_APP_API_BASE_URL', 'MOBILE_APP_SUPABASE_URL', 'MOBILE_APP_SUPABASE_ANON_KEY']) {
+for (const expectedKey of ['MOBILE_APP_API_BASE_URL', 'MOBILE_APP_SUPABASE_URL', 'MOBILE_APP_SUPABASE_PUBLISHABLE_KEY']) {
   if (!appConfig.includes(expectedKey)) {
     throw new Error(`mobile runtime config must map ${expectedKey}`);
   }

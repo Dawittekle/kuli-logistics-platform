@@ -1473,7 +1473,7 @@ export const createAppContext = async (config = env) => {
     audience: config.supabaseJwtAudience,
     jwksUrl: config.supabaseJwksUrl,
     supabaseUrl: config.supabaseUrl,
-    anonKey: config.supabaseAnonKey,
+    publishableKey: config.supabasePublishableKey,
     allowDevelopmentTokens: config.nodeEnv !== 'production' && config.demoAuthEnabled
   });
 

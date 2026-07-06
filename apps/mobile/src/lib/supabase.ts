@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 
 import { runtimeConfig } from '../config/runtime';
 
-export const supabase = createClient(runtimeConfig.supabaseUrl, runtimeConfig.supabaseAnonKey, {
+export const supabase = createClient(runtimeConfig.supabaseUrl, runtimeConfig.supabasePublishableKey, {
   auth: {
     storage: AsyncStorage,
     autoRefreshToken: true,

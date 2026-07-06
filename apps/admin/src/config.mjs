@@ -37,5 +37,5 @@ loadEnvFile();
 export const adminAppConfig = {
   apiBaseUrl: process.env.ADMIN_APP_API_BASE_URL ?? 'http://localhost:4000/api/v1',
   supabaseUrl: process.env.ADMIN_APP_SUPABASE_URL ?? 'https://example.supabase.co',
-  supabaseAnonKeyConfigured: Boolean(process.env.ADMIN_APP_SUPABASE_ANON_KEY)
+  supabasePublishableKeyConfigured: Boolean(process.env.ADMIN_APP_SUPABASE_PUBLISHABLE_KEY)
 };

@@ -1221,7 +1221,7 @@ function AuthScreen({
       return;
     }
 
-    if (!runtimeReadiness.hasSupabaseUrl || !runtimeReadiness.hasSupabaseAnonKey) {
+    if (!runtimeReadiness.hasSupabaseUrl || !runtimeReadiness.hasSupabasePublishableKey) {
       setError('Supabase is not configured for password recovery in this environment.');
       return;
     }

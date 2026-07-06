@@ -1100,7 +1100,7 @@ function RuntimePanel() {
     () => [
       { label: 'API base URL', ready: runtimeReadiness.hasApiBaseUrl },
       { label: 'Supabase URL', ready: runtimeReadiness.hasSupabaseUrl },
-      { label: 'Supabase anon key', ready: runtimeReadiness.hasSupabaseAnonKey }
+      { label: 'Supabase publishable key', ready: runtimeReadiness.hasSupabasePublishableKey }
     ],
     []
   );

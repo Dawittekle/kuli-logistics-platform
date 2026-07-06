@@ -208,7 +208,7 @@ test('supabase verifier fails closed when project verification config is missing
     issuer: '',
     jwksUrl: '',
     supabaseUrl: '',
-    anonKey: ''
+    publishableKey: ''
   });
 
   const hs256UserJwt =
@@ -226,10 +226,10 @@ test('supabase verifier validates shared-secret projects through auth server', a
     issuer: 'https://example.supabase.co/auth/v1',
     jwksUrl: 'https://example.supabase.co/auth/v1/.well-known/jwks.json',
     supabaseUrl: 'https://example.supabase.co',
-    anonKey: 'anon-key',
+    publishableKey: 'sb_publishable_test_key',
     fetchImpl: async (url, options) => {
       assert.equal(url, 'https://example.supabase.co/auth/v1/user');
-      assert.equal(options.headers.apikey, 'anon-key');
+      assert.equal(options.headers.apikey, 'sb_publishable_test_key');
 
       return {
         ok: true,

@@ -29,7 +29,7 @@ export const env = {
   host: process.env.HOST ?? '127.0.0.1',
   port: toNumber(process.env.PORT, 4000),
   supabaseUrl,
-  supabaseAnonKey: process.env.SUPABASE_ANON_KEY ?? 'replace-me',
+  supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY ?? 'replace-me',
   supabaseJwtMode: process.env.SUPABASE_JWT_MODE ?? 'development_stub',
   supabaseJwtIssuer: process.env.SUPABASE_JWT_ISSUER ?? defaultSupabaseIssuer,
   supabaseJwtAudience: process.env.SUPABASE_JWT_AUDIENCE ?? 'authenticated',

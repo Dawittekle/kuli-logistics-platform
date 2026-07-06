@@ -37,5 +37,5 @@ loadEnvFile();
 export const mobileAppConfig = {
   apiBaseUrl: process.env.MOBILE_APP_API_BASE_URL ?? 'http://localhost:4000/api/v1',
   supabaseUrl: process.env.MOBILE_APP_SUPABASE_URL ?? 'https://example.supabase.co',
-  supabaseAnonKeyConfigured: Boolean(process.env.MOBILE_APP_SUPABASE_ANON_KEY)
+  supabasePublishableKeyConfigured: Boolean(process.env.MOBILE_APP_SUPABASE_PUBLISHABLE_KEY)
 };
