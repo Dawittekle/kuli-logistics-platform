@@ -13,8 +13,5 @@ dist
 skills-lock.json
 
 # Documentation and Reference
-docs/*
-docs/presentation/
-docs/presentation/**
-docss/
+docs/
 references/
