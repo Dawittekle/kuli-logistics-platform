@@ -12,6 +12,8 @@
     "lint": "node tools/lint.mjs",
     "typecheck": "node tools/typecheck.mjs",
     "test": "node --test",
+    "test:auth": "node --test tests/auth/*.test.mjs",
+    "test:e2e": "node --test tests/integration/*.test.mjs tests/e2e/*.test.mjs",
     "smoke:critical": "node tools/smoke-critical-workflows.mjs",
     "seed:demo": "node tools/seed-demo-data.mjs",
     "seed:fake-users": "node tools/seed-fake-users.mjs",
@@ -20,6 +22,8 @@
     "dev:api": "npm run dev --workspace @kuli/api",
     "dev:admin": "npm run dev --workspace @kuli/admin",
     "dev:mobile": "npm run dev --workspace @kuli/mobile",
+    "dev:customer": "KULI_APP_VARIANT=customer npm run dev --workspace @kuli/mobile",
+    "dev:driver": "KULI_APP_VARIANT=driver npm run dev --workspace @kuli/mobile",
     "dev:landing": "npm run dev --workspace @kuli/landing",
     "build:landing": "npm run build --workspace @kuli/landing"
   },

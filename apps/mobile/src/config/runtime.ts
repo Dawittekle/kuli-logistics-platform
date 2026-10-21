@@ -1,6 +1,8 @@
 import Constants from 'expo-constants';
 
 type KuliRuntimeConfig = {
+  appVariant: string;
+  isDriver: boolean;
   apiBaseUrl: string;
   supabaseUrl: string;
   supabasePublishableKey: string;
@@ -11,14 +13,17 @@ type KuliRuntimeConfig = {
 
 const extra = (Constants.expoConfig?.extra?.kuli ?? {}) as Partial<KuliRuntimeConfig>;
 const apiBaseUrl = extra.apiBaseUrl || 'http://localhost:4000/api/v1';
+const appVariant = extra.appVariant || 'customer';
 
 export const runtimeConfig: KuliRuntimeConfig = {
+  appVariant,
+  isDriver: appVariant === 'driver',
   apiBaseUrl,
   supabaseUrl: extra.supabaseUrl || '',
   supabasePublishableKey: extra.supabasePublishableKey || '',
   googleMapsApiKey: extra.googleMapsApiKey || '',
-  authRedirectUrl: extra.authRedirectUrl || 'kuli://auth/callback',
-  passwordResetRedirectUrl: extra.passwordResetRedirectUrl || 'kuli://auth/reset-password'
+  authRedirectUrl: extra.authRedirectUrl || (appVariant === 'driver' ? 'kuli-driver://auth/callback' : 'kuli://auth/callback'),
+  passwordResetRedirectUrl: extra.passwordResetRedirectUrl || (appVariant === 'driver' ? 'kuli-driver://auth/reset-password' : 'kuli://auth/reset-password')
 };
 
 export const runtimeReadiness = {

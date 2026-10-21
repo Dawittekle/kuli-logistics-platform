@@ -21,7 +21,24 @@ export class InMemoryUserRepository {
     return Array.from(this.usersById.values()).find((user) => user.email === email) ?? null;
   }
 
+  async findByPhone(phone) {
+    return Array.from(this.usersById.values()).find((user) => user.phone === phone) ?? null;
+  }
+
   async save(user) {
+    // Check phone uniqueness constraint (emulates MongoDB 11000 / Postgres UNIQUE)
+    if (user.phone) {
+      const existingPhoneUser = Array.from(this.usersById.values()).find(
+        (u) => u.phone === user.phone && u.id !== user.id
+      );
+      if (existingPhoneUser) {
+        const error = new Error('E11000 duplicate key error collection: kuli.users index: users_phone_unique');
+        error.code = 11000;
+        error.keyPattern = { phone: 1 };
+        throw error;
+      }
+    }
+
     const record = {
       ...user,
       updatedAt: new Date().toISOString()

@@ -30,17 +30,20 @@ const parseEnvFile = () => {
 const env = parseEnvFile();
 
 const apiBaseUrl = process.env.MOBILE_APP_API_BASE_URL ?? env.MOBILE_APP_API_BASE_URL ?? 'http://localhost:4000/api/v1';
+const appVariant = process.env.KULI_APP_VARIANT ?? env.KULI_APP_VARIANT ?? 'customer';
+const isDriver = appVariant === 'driver';
+
 export default ({ config }) => ({
   ...config,
-  name: 'KULI',
-  slug: 'kuli-mobile',
-  scheme: 'kuli',
+  name: isDriver ? 'KULI Driver' : 'KULI',
+  slug: isDriver ? 'kuli-driver' : 'kuli-customer',
+  scheme: isDriver ? 'kuli-driver' : 'kuli',
   version: '0.1.0',
   orientation: 'portrait',
   userInterfaceStyle: 'light',
   jsEngine: 'jsc',
   splash: {
-    backgroundColor: '#000000'
+    backgroundColor: isDriver ? '#142553' : '#1F3B87'
   },
   plugins: [
     [
@@ -54,21 +57,27 @@ export default ({ config }) => ({
   assetBundlePatterns: ['**/*'],
   ios: {
     supportsTablet: true,
-    bundleIdentifier: 'com.kuli.logistics'
+    bundleIdentifier: isDriver ? 'com.kuli.driver' : 'com.kuli.customer'
   },
   android: {
-    package: 'com.kuli.logistics'
+    package: isDriver ? 'com.kuli.driver' : 'com.kuli.customer'
   },
   extra: {
     kuli: {
+      appVariant,
       apiBaseUrl,
       supabaseUrl: process.env.MOBILE_APP_SUPABASE_URL ?? env.MOBILE_APP_SUPABASE_URL ?? '',
       supabasePublishableKey:
         process.env.MOBILE_APP_SUPABASE_PUBLISHABLE_KEY ?? env.MOBILE_APP_SUPABASE_PUBLISHABLE_KEY ?? '',
       googleMapsApiKey: process.env.MOBILE_APP_GOOGLE_MAPS_API_KEY ?? env.MOBILE_APP_GOOGLE_MAPS_API_KEY ?? '',
-      authRedirectUrl: process.env.MOBILE_APP_AUTH_REDIRECT_URL ?? env.MOBILE_APP_AUTH_REDIRECT_URL ?? 'kuli://auth/callback',
+      authRedirectUrl:
+        process.env.MOBILE_APP_AUTH_REDIRECT_URL ??
+        env.MOBILE_APP_AUTH_REDIRECT_URL ??
+        (isDriver ? 'kuli-driver://auth/callback' : 'kuli://auth/callback'),
       passwordResetRedirectUrl:
-        process.env.MOBILE_APP_PASSWORD_RESET_REDIRECT_URL ?? env.MOBILE_APP_PASSWORD_RESET_REDIRECT_URL ?? 'kuli://auth/reset-password'
+        process.env.MOBILE_APP_PASSWORD_RESET_REDIRECT_URL ??
+        env.MOBILE_APP_PASSWORD_RESET_REDIRECT_URL ??
+        (isDriver ? 'kuli-driver://auth/reset-password' : 'kuli://auth/reset-password')
     }
   }
 });

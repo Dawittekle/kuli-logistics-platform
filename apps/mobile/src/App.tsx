@@ -43,6 +43,8 @@ import { SectionHeader } from './components/ui/SectionHeader';
 import { StatusBadge } from './components/ui/StatusBadge';
 import { MetricCard } from './components/visual/MetricCard';
 import { RoutePill } from './components/visual/RoutePill';
+import { AuthFlowContainer } from './auth/AuthFlowContainer';
+import { ChangePasswordScreen } from './auth/screens/ChangePasswordScreen';
 
 declare const __DEV__: boolean;
 
@@ -1100,584 +1102,13 @@ function AuthScreen({
   onAuthenticated: (profile: UserProfile, session: Session) => void;
   onPasswordRecoveryVerified: (session: Session) => void;
 }) {
-  const [mode, setMode] = useState<AuthMode>('login');
-  const [role, setRole] = useState<PublicRole>('client');
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [pending, setPending] = useState(false);
-  const [verificationDraft, setVerificationDraft] = useState<VerificationDraft | null>(null);
-  const [verificationCode, setVerificationCode] = useState('');
-  const [verificationPending, setVerificationPending] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
-  const [resetStep, setResetStep] = useState<ResetPasswordStep>('request');
-  const [resetCode, setResetCode] = useState('');
-  const [resetEmail, setResetEmail] = useState('');
-  const [resetCooldown, setResetCooldown] = useState(0);
-  const [resetPending, setResetPending] = useState(false);
-  const [notice, setNotice] = useState(initialNotice);
-  const [error, setError] = useState('');
-
-  const isLogin = mode === 'login';
-  const isRegister = mode === 'register';
-  const normalizedEmail = email.trim().toLowerCase();
-  const phoneValidation = validateEthiopianPhone(phone);
-  const normalizedPhone = phoneValidation.valid ? phoneValidation.normalized : phone.trim();
-  const passwordsMatch = Boolean(password && confirmPassword && password === confirmPassword);
-  const canSubmit =
-    Boolean(normalizedEmail) &&
-    (isLogin
-      ? password.length >= 1
-      : Boolean(fullName.trim()) && phoneValidation.valid && isStrongPassword(password) && passwordsMatch);
-  const canResetPassword = !resetPending;
-
-  const changeMode = (nextMode: AuthMode) => {
-    setMode(nextMode);
-    setError('');
-    setNotice('');
-
-    if (nextMode !== 'forgot') {
-      setResetStep('request');
-      setResetCode('');
-      setResetEmail('');
-      setResetCooldown(0);
-      setResetPending(false);
-    }
-
-    if (nextMode !== 'register') {
-      setConfirmPassword('');
-    }
-  };
-
-  useEffect(() => {
-    setNotice(initialNotice);
-  }, [initialNotice]);
-
-  useEffect(() => {
-    if (resendCooldown <= 0) {
-      return;
-    }
-
-    const timer = setTimeout(() => setResendCooldown((value) => Math.max(0, value - 1)), 1000);
-
-    return () => clearTimeout(timer);
-  }, [resendCooldown]);
-
-  useEffect(() => {
-    if (resetCooldown <= 0) {
-      return;
-    }
-
-    const timer = setTimeout(() => setResetCooldown((value) => Math.max(0, value - 1)), 1000);
-
-    return () => clearTimeout(timer);
-  }, [resetCooldown]);
-
-  const loadProfile = async (session: Session) => {
-    try {
-      const profile = await fetchProfileForSession(session);
-      onAuthenticated(profile, session);
-    } catch (profileError) {
-      if ((profileError as { code?: string }).code === 'PROFILE_NOT_FOUND') {
-        const syncedProfile = (await syncPublicProfileFromSession(session)) ?? (await syncStoredProfileFromSession(session));
-
-        if (syncedProfile) {
-          onAuthenticated(syncedProfile, session);
-          return;
-        }
-      }
-
-      throw profileError;
-    }
-  };
-
-  const syncDraftProfile = async (session: Session, draft: VerificationDraft) => {
-    const syncedProfile = (await syncProfileFromDraft(session, draft)) ?? (await syncPublicProfileFromSession(session)) ?? (await syncStoredProfileFromSession(session));
-
-    if (!syncedProfile) {
-      throw new Error('Your email is confirmed, but KULI could not find the registration details for this account. Sign out and register again with the same email.');
-    }
-
-    onAuthenticated(syncedProfile, session);
-  };
-
-  const sendPasswordReset = async () => {
-    if (resetPending || resetCooldown > 0) {
-      return;
-    }
-
-    setError('');
-    setNotice('');
-
-    if (!normalizedEmail) {
-      setError('Enter the email address for your KULI account.');
-      return;
-    }
-
-    if (!isValidEmail(normalizedEmail)) {
-      setError('Enter a valid email address.');
-      return;
-    }
-
-    if (!runtimeReadiness.hasSupabaseUrl || !runtimeReadiness.hasSupabasePublishableKey) {
-      setError('Supabase is not configured for password recovery in this environment.');
-      return;
-    }
-
-    setResetPending(true);
-
-    try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
-        redirectTo: runtimeConfig.passwordResetRedirectUrl
-      });
-
-      if (resetError) {
-        throw resetError;
-      }
-
-      setResetEmail(normalizedEmail);
-      setResetCode('');
-      setResetStep('verify');
-      setResetCooldown(VERIFICATION_RESEND_COOLDOWN_SECONDS);
-      setNotice('Password reset code sent. Enter the code from your email to choose a new password in KULI.');
-    } catch (resetError) {
-      setError(getErrorMessage(resetError));
-    } finally {
-      setResetPending(false);
-    }
-  };
-
-  const verifyPasswordResetCode = async () => {
-    const targetEmail = (resetEmail || normalizedEmail).trim().toLowerCase();
-
-    if (resetPending) {
-      return;
-    }
-
-    setError('');
-    setNotice('');
-
-    if (!isValidEmail(targetEmail)) {
-      setError('Enter a valid email address before verifying the code.');
-      setResetStep('request');
-      return;
-    }
-
-    if (!resetCode.trim()) {
-      setError('Enter the reset code from your email.');
-      return;
-    }
-
-    setResetPending(true);
-
-    try {
-      const { data, error: verifyError } = await supabase.auth.verifyOtp({
-        email: targetEmail,
-        token: resetCode.trim(),
-        type: 'recovery'
-      });
-
-      if (verifyError) {
-        throw verifyError;
-      }
-
-      const recoverySession = data.session ?? (await supabase.auth.getSession()).data.session;
-
-      if (!recoverySession) {
-        setError('The code was accepted, but KULI could not open a recovery session. Request a new code and try again.');
-        return;
-      }
-
-      setSessionAccessToken(recoverySession.access_token);
-      onPasswordRecoveryVerified(recoverySession);
-    } catch (verifyError) {
-      setError(getErrorMessage(verifyError));
-    } finally {
-      setResetPending(false);
-    }
-  };
-
-  const resendConfirmation = async (targetEmail = verificationDraft?.email) => {
-    if (!targetEmail || verificationPending || resendCooldown > 0) {
-      return;
-    }
-
-    setVerificationPending(true);
-    setError('');
-    setNotice('');
-    setResendCooldown(VERIFICATION_RESEND_COOLDOWN_SECONDS);
-
-    try {
-      const { error: resendError } = await supabase.auth.resend({
-        type: 'signup',
-        email: targetEmail
-      });
-
-      if (resendError) {
-        throw resendError;
-      }
-
-      setNotice('Confirmation sent. Check your email for a code or confirmation link.');
-    } catch (resendError) {
-      setError(getErrorMessage(resendError));
-    } finally {
-      setVerificationPending(false);
-    }
-  };
-
-  const refreshVerification = async () => {
-    if (!verificationDraft || verificationPending) {
-      return;
-    }
-
-    setVerificationPending(true);
-    setError('');
-    setNotice('');
-
-    try {
-      const { data: currentData } = await supabase.auth.getSession();
-      let nextSession = currentData.session;
-
-      if (nextSession?.user.email?.toLowerCase() !== verificationDraft.email) {
-        nextSession = null;
-      }
-
-      if (!nextSession && password.length >= 6) {
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({
-          email: verificationDraft.email,
-          password
-        });
-
-        if (signInError) {
-          throw signInError;
-        }
-
-        nextSession = data.session;
-      }
-
-      if (!nextSession) {
-        setNotice('If you opened a confirmation link, sign in with your email and password to continue.');
-        return;
-      }
-
-      await syncDraftProfile(nextSession, verificationDraft);
-    } catch (refreshError) {
-      if (isEmailNotConfirmedError(refreshError)) {
-        setNotice('Email is still waiting for confirmation. Check your inbox or resend after the cooldown.');
-        return;
-      }
-
-      setError(getErrorMessage(refreshError));
-    } finally {
-      setVerificationPending(false);
-    }
-  };
-
-  const verifyEmailCode = async () => {
-    if (!verificationDraft || !verificationCode.trim() || verificationPending) {
-      return;
-    }
-
-    setVerificationPending(true);
-    setError('');
-    setNotice('');
-
-    try {
-      const { data, error: verifyError } = await supabase.auth.verifyOtp({
-        email: verificationDraft.email,
-        token: verificationCode.trim(),
-        type: 'signup'
-      });
-
-      if (verifyError) {
-        throw verifyError;
-      }
-
-      let nextSession = data.session ?? (await supabase.auth.getSession()).data.session;
-
-      if (!nextSession && password.length >= 6) {
-        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-          email: verificationDraft.email,
-          password
-        });
-
-        if (signInError) {
-          throw signInError;
-        }
-
-        nextSession = signInData.session;
-      }
-
-      if (!nextSession) {
-        setNotice('Email confirmed. Sign in with your password to continue.');
-        return;
-      }
-
-      await syncDraftProfile(nextSession, verificationDraft);
-    } catch (verifyError) {
-      setError(getErrorMessage(verifyError));
-    } finally {
-      setVerificationPending(false);
-    }
-  };
-
-  const submit = async () => {
-    if (!canSubmit || pending) {
-      return;
-    }
-
-    setPending(true);
-    setError('');
-    setNotice('');
-
-    try {
-      if (verificationDraft && verificationDraft.email !== normalizedEmail) {
-        setVerificationDraft(null);
-        setVerificationCode('');
-      }
-
-      if (mode === 'login') {
-        if (!isValidEmail(normalizedEmail)) {
-          setError('Enter a valid email address.');
-          return;
-        }
-
-        const { data, error: authError } = await supabase.auth.signInWithPassword({
-          email: normalizedEmail,
-          password
-        });
-
-        if (authError) {
-          throw authError;
-        }
-
-        if (!data.session) {
-          setNotice('Check your email if Supabase asks for confirmation. KULI will not resend automatically.');
-          return;
-        }
-
-        await loadProfile(data.session);
-        return;
-      }
-
-      if (!isValidEmail(normalizedEmail)) {
-        setError('Enter a valid email address.');
-        return;
-      }
-
-      if (!phoneValidation.valid) {
-        setError(phoneValidation.message);
-        return;
-      }
-
-      if (!isStrongPassword(password)) {
-        setError('Use a stronger password before creating the account.');
-        return;
-      }
-
-      if (!passwordsMatch) {
-        setError('Confirm password must match your password.');
-        return;
-      }
-
-      const registrationDraft: VerificationDraft = {
-        email: normalizedEmail,
-        role,
-        fullName: fullName.trim(),
-        phone: normalizedPhone
-      };
-
-      const { data, error: authError } = await supabase.auth.signUp({
-        email: normalizedEmail,
-        password,
-        options: {
-          emailRedirectTo: runtimeConfig.authRedirectUrl,
-          data: {
-            full_name: fullName.trim(),
-            phone: normalizedPhone,
-            role
-          }
-        }
-      });
-
-      if (authError) {
-        throw authError;
-      }
-
-      await saveStoredProfileDraft(registrationDraft);
-
-      if (!data.session) {
-        setVerificationDraft(registrationDraft);
-        setVerificationCode('');
-        setResendCooldown(VERIFICATION_RESEND_COOLDOWN_SECONDS);
-        setNotice('Account created. Check your email for a confirmation code or link. We will not resend unless you press Resend.');
-        setMode('login');
-        return;
-      }
-
-      const syncedProfile = await syncProfileFromDraft(data.session, registrationDraft);
-
-      if (!syncedProfile) {
-        throw new Error('KULI could not finish creating your mobile profile. Try signing in again.');
-      }
-
-      onAuthenticated(syncedProfile, data.session);
-    } catch (submitError) {
-      if (mode === 'login' && isEmailNotConfirmedError(submitError)) {
-        const loginEmail = email.trim().toLowerCase();
-        const storedDraft = await loadStoredProfileDraft(loginEmail);
-        setVerificationDraft(
-          storedDraft ?? {
-            email: loginEmail,
-            role,
-            fullName: fullName.trim(),
-            phone: phoneValidation.valid ? phoneValidation.normalized : phone.trim()
-          }
-        );
-        setVerificationCode('');
-        setError('');
-        setNotice('Email not confirmed. Use the code or link already sent to your email, or press Resend after the rate-limit window clears.');
-        return;
-      }
-
-      setError(getErrorMessage(submitError));
-    } finally {
-      setPending(false);
-    }
-  };
-
   return (
-    <SafeAreaView style={styles.screen}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
-        <ScrollView contentContainerStyle={styles.authContent}>
-          <AuthBrandPanel mode={mode} />
-
-          {mode !== 'forgot' && !verificationDraft ? <AuthModeTabs mode={mode} onChange={changeMode} /> : null}
-
-          {verificationDraft ? (
-            <VerificationRequiredScreen
-              draft={verificationDraft}
-              code={verificationCode}
-              cooldown={resendCooldown}
-              pending={verificationPending}
-              notice={notice}
-              error={error}
-              onCodeChange={setVerificationCode}
-              onVerifyCode={verifyEmailCode}
-              onRefresh={refreshVerification}
-              onResend={() => resendConfirmation()}
-              onBack={() => {
-                setVerificationDraft(null);
-                setVerificationCode('');
-                setError('');
-                setNotice('');
-                setMode('login');
-              }}
-            />
-          ) : mode === 'forgot' ? (
-            <UiCard style={styles.authCard}>
-              <AppHeader
-                eyebrow="Account recovery"
-                title={resetStep === 'request' ? 'Reset your password.' : 'Enter your reset code.'}
-                subtitle={
-                  resetStep === 'request'
-                    ? 'We will email a one-time reset code. You can finish the password change inside KULI.'
-                    : `Use the code sent to ${resetEmail || normalizedEmail}.`
-                }
-              />
-              {resetStep === 'request' ? (
-                <Field label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" />
-              ) : (
-                <>
-                  <View style={styles.verificationEmailBox}>
-                    <Text style={styles.fieldLabel}>{resetEmail || normalizedEmail}</Text>
-                    <Text style={styles.muted}>Reset codes can expire. Request a new one if this code no longer works.</Text>
-                  </View>
-                  <Field label="Reset code" value={resetCode} onChangeText={setResetCode} placeholder="6-digit code" keyboardType="numeric" />
-                </>
-              )}
-              {error ? <AuthMessage tone="error" message={error} /> : null}
-              {notice ? <AuthMessage tone="notice" message={notice} /> : null}
-              {resetStep === 'request' ? (
-                <PrimaryButton disabled={!canResetPassword} label={resetPending ? 'Sending...' : 'Send reset code'} loading={resetPending} onPress={sendPasswordReset} />
-              ) : (
-                <>
-                  <PrimaryButton disabled={resetPending || !resetCode.trim()} label={resetPending ? 'Checking...' : 'Verify code'} loading={resetPending} onPress={verifyPasswordResetCode} />
-                  <SecondaryButton
-                    disabled={resetPending || resetCooldown > 0}
-                    label={resetCooldown > 0 ? `Send a new code in ${resetCooldown}s` : 'Send a new code'}
-                    onPress={sendPasswordReset}
-                  />
-                </>
-              )}
-              <SecondaryButton
-                label="Back to login"
-                onPress={() => {
-                  setResetStep('request');
-                  setResetCode('');
-                  setResetEmail('');
-                  setResetCooldown(0);
-                  changeMode('login');
-                }}
-              />
-            </UiCard>
-          ) : (
-            <>
-              {mode === 'register' ? (
-                <View style={styles.roleGrid}>
-                  <RoleOption role="client" selected={role === 'client'} onPress={() => setRole('client')} />
-                  <RoleOption role="truck_owner" selected={role === 'truck_owner'} onPress={() => setRole('truck_owner')} />
-                </View>
-              ) : null}
-
-              <UiCard style={styles.authCard}>
-                <SectionHeader
-                  eyebrow={mode === 'login' ? 'Secure sign in' : 'Create account'}
-                  title={mode === 'login' ? 'Use your KULI account.' : 'Tell us who is moving.'}
-                  description={
-                    mode === 'login'
-                      ? 'Sign in to continue to your KULI workspace.'
-                      : 'Create a customer or truck-owner account for the KULI marketplace.'
-                  }
-                />
-                {mode === 'register' ? <Field label="Full name" value={fullName} onChangeText={setFullName} placeholder="Abebe Bekele" /> : null}
-                <Field label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" />
-                {mode === 'register' ? (
-                  <>
-                    <Field label="Phone" value={phone} onChangeText={setPhone} placeholder="+251911000000" keyboardType="phone-pad" />
-                    <PhoneValidationHint value={phone} />
-                  </>
-                ) : null}
-                <Field label="Password" value={password} onChangeText={setPassword} placeholder={mode === 'register' ? 'At least 8 characters' : 'Your password'} secureTextEntry />
-                {mode === 'register' ? (
-                  <>
-                    <Field label="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Repeat your password" secureTextEntry />
-                    <PasswordChecklist password={password} confirmPassword={confirmPassword} includeMatch />
-                  </>
-                ) : null}
-                {mode === 'login' ? (
-                  <Pressable accessibilityRole="button" onPress={() => changeMode('forgot')} style={styles.authInlineLink}>
-                    <Text style={styles.authInlineLinkText}>Forgot password?</Text>
-                  </Pressable>
-                ) : null}
-                {error ? <AuthMessage tone="error" message={error} /> : null}
-                {notice ? <AuthMessage tone="notice" message={notice} /> : null}
-                <PrimaryButton
-                  disabled={!canSubmit || pending}
-                  label={pending ? 'Working...' : mode === 'login' ? 'Login' : 'Create account'}
-                  loading={pending}
-                  onPress={submit}
-                />
-              </UiCard>
-
-            </>
-          )}
-
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    <AuthFlowContainer
+      initialNotice={initialNotice}
+      isDriver={runtimeConfig.isDriver}
+      onAuthenticated={onAuthenticated}
+      onPasswordRecoveryVerified={onPasswordRecoveryVerified}
+    />
   );
 }
 
@@ -1838,6 +1269,7 @@ function HomeOverview({ profile, onSignOut }: { profile: UserProfile; onSignOut:
   const [availabilityPendingId, setAvailabilityPendingId] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   const vehiclesQuery = useQuery({
     queryKey: ['vehicles', 'mine'],
@@ -2078,7 +1510,20 @@ function HomeOverview({ profile, onSignOut }: { profile: UserProfile; onSignOut:
         </View>
         <StatusBadge tone={profile.accountStatus === 'active' ? 'success' : 'warning'}>{accountStatusLabels[profile.accountStatus]}</StatusBadge>
       </View>
+      <SecondaryButton label="Change password" onPress={() => setChangePasswordOpen(true)} />
       <SecondaryButton label="Sign out" onPress={onSignOut} />
+
+      <Modal visible={changePasswordOpen} animationType="slide" onRequestClose={() => setChangePasswordOpen(false)}>
+        <SafeAreaView style={styles.flex}>
+          <ChangePasswordScreen
+            onUpdatePassword={async (newPassword) => {
+              const { error } = await supabase.auth.updateUser({ password: newPassword });
+              if (error) throw error;
+            }}
+            onBack={() => setChangePasswordOpen(false)}
+          />
+        </SafeAreaView>
+      </Modal>
     </Screen>
   );
 }
@@ -4960,6 +4405,7 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
   const [cancelTarget, setCancelTarget] = useState<KuliRequest | null>(null);
   const [expandedRequestIds, setExpandedRequestIds] = useState<string[]>([]);
   const [dismissedRatingRequestIds, setDismissedRatingRequestIds] = useState<string[]>([]);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   const requestsQuery = useQuery({
     queryKey: ['kuli-requests', 'mine'],
@@ -5079,8 +4525,20 @@ function ClientHomeScreen({ profile, onSignOut }: { profile: UserProfile; onSign
           )}
         </View>
 
+        <SecondaryButton label="Change password" onPress={() => setChangePasswordOpen(true)} />
         <SecondaryButton label="Sign out" onPress={onSignOut} />
       </Screen>
+      <Modal visible={changePasswordOpen} animationType="slide" onRequestClose={() => setChangePasswordOpen(false)}>
+        <SafeAreaView style={styles.flex}>
+          <ChangePasswordScreen
+            onUpdatePassword={async (newPassword) => {
+              const { error } = await supabase.auth.updateUser({ password: newPassword });
+              if (error) throw error;
+            }}
+            onBack={() => setChangePasswordOpen(false)}
+          />
+        </SafeAreaView>
+      </Modal>
       <ClientCancelDialog
         request={cancelTarget}
         pending={Boolean(pendingCancelId)}
