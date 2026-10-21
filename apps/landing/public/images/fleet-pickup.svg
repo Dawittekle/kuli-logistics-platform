@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 120" width="100%" height="100%" fill="none">
+  <!-- Ground Shadow -->
+  <ellipse cx="120" cy="106" rx="95" ry="6" fill="#0C1A3A" opacity="0.12"/>
+  
+  <!-- Chassis Base -->
+  <rect x="35" y="82" width="168" height="8" rx="2" fill="#334155"/>
+  
+  <!-- Open Cargo Bed -->
+  <path d="M102 52H198C200.2 52 202 53.8 202 56V82H102V52Z" fill="#2563EB" opacity="0.9"/>
+  <!-- Cargo Bed Rails / Top Guard -->
+  <path d="M100 48H200V52H100V48Z" fill="#1D4ED8"/>
+  <rect x="125" y="52" width="4" height="30" fill="#1E40AF" opacity="0.4"/>
+  <rect x="155" y="52" width="4" height="30" fill="#1E40AF" opacity="0.4"/>
+  <rect x="185" y="52" width="4" height="30" fill="#1E40AF" opacity="0.4"/>
+  
+  <!-- Cab Body -->
+  <path d="M42 82V66C42 63.8 43.8 62 46 62H58L76 42C77.5 40.5 79.5 39.5 81.5 39.5H102V82H42Z" fill="#1E3A8A"/>
+  
+  <!-- Windshield & Side Window -->
+  <path d="M60 60L75 44H84V60H60Z" fill="#93C5FD" opacity="0.85"/>
+  <rect x="88" y="44" width="10" height="16" rx="1" fill="#93C5FD" opacity="0.85"/>
+  
+  <!-- Door Outline & Handle -->
+  <path d="M72 61V82H101V42H82L69 57" stroke="#0F172A" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
+  <rect x="86" y="66" width="7" height="2" rx="1" fill="#CBD5E1"/>
+  
+  <!-- Front Bumper & Headlight -->
+  <path d="M36 78C36 75.8 37.8 74 40 74H43V86H38C36.9 86 36 85.1 36 84V78Z" fill="#475569"/>
+  <path d="M38 68H42V73H38C37 73 36.5 71.5 37 70.5L38 68Z" fill="#F59E0B"/>
+  
+  <!-- Wheel Well Cutouts -->
+  <path d="M54 82C54 73.2 61.2 66 70 66C78.8 66 86 73.2 86 82H54Z" fill="#0C1A3A" opacity="0.25"/>
+  <path d="M152 82C152 73.2 159.2 66 168 66C176.8 66 184 73.2 184 82H152Z" fill="#0C1A3A" opacity="0.25"/>
+  
+  <!-- Front Wheel -->
+  <circle cx="70" cy="85" r="16" fill="#1E293B"/>
+  <circle cx="70" cy="85" r="9" fill="#94A3B8"/>
+  <circle cx="70" cy="85" r="4" fill="#0F172A"/>
+  
+  <!-- Rear Wheel -->
+  <circle cx="168" cy="85" r="16" fill="#1E293B"/>
+  <circle cx="168" cy="85" r="9" fill="#94A3B8"/>
+  <circle cx="168" cy="85" r="4" fill="#0F172A"/>
+  
+  <!-- Kulli Kinetic Accent Stripe -->
+  <rect x="42" y="70" width="60" height="3" fill="#F97316"/>
+</svg>

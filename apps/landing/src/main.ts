@@ -9,6 +9,7 @@ import './styles/typography.css';
 import './styles/layout.css';
 import './styles/landing.css';
 import './styles/hero.css';
+import './styles/features.css';
 
 // Import Data & Calculator Engines
 import { ADDIS_LOCATIONS } from './data/addis-locations';
@@ -266,6 +267,41 @@ function initHeroInteractive(): void {
 }
 
 // ------------------------------------------------------------
+// Fleet Catalog Quick Select Integration
+// ------------------------------------------------------------
+function initFleetCatalogInteractions(): void {
+  const selectBtns = document.querySelectorAll<HTMLButtonElement>('[data-select-tier]');
+  const shipperRadioInputs = document.querySelectorAll<HTMLInputElement>('input[name="vehicleClass"]');
+  const shipperTabBtn = document.querySelector<HTMLButtonElement>('[data-hero-tab="shipper"]');
+  const heroSection = document.getElementById('hero');
+
+  selectBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tierSlug = btn.getAttribute('data-select-tier');
+      if (!tierSlug) return;
+
+      // 1. Switch to shipper tab if currently on driver tab
+      if (shipperTabBtn && !shipperTabBtn.classList.contains('is-active')) {
+        shipperTabBtn.click();
+      }
+
+      // 2. Select corresponding radio button
+      const targetRadio = Array.from(shipperRadioInputs).find((r) => r.value === tierSlug);
+      if (targetRadio) {
+        targetRadio.checked = true;
+        // Trigger change event to re-calculate fare and sync live route card
+        targetRadio.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+
+      // 3. Smooth scroll up to hero rate calculator
+      if (heroSection) {
+        heroSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+}
+
+// ------------------------------------------------------------
 // DOM Ready Lifecycle Initialization
 // ------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
@@ -273,5 +309,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initNavbarScroll();
   initMobileDrawer();
   initHeroInteractive();
-  console.log('Kulli Landing Page: Phase 1 & 2 fully loaded.');
+  initFleetCatalogInteractions();
+  console.log('Kulli Landing Page: Phase 1, 2 & 3 fully loaded.');
 });

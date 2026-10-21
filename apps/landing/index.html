@@ -382,60 +382,402 @@
       </div>
     </section>
 
-    <!-- 03. TRUST STRIP (PHASE 3 TARGET) -->
-    <section id="trust" class="landing-section" style="padding: var(--space-8) 0; background: var(--color-surface);" aria-label="Platform Trust & Key Metrics">
+    <!-- 03. TRUST STRIP (PHASE 3 IMPLEMENTATION) -->
+    <section id="trust" class="trust-section" aria-label="Platform Trust &amp; Credibility Metrics">
       <div class="kulli-container">
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-6); text-align: center;">
-          <div>
-            <strong class="text-h1" style="color: var(--color-primary); display: block;">5,000+</strong>
-            <span class="text-body-sm" style="color: var(--color-text-muted);">Completed Trips</span>
+        <div class="trust-metrics-grid">
+          <!-- Metric 1: Completed Trips -->
+          <div class="trust-metric-card">
+            <div class="trust-metric-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+              </svg>
+            </div>
+            <div class="trust-metric-content">
+              <span class="trust-metric-number">5,000+</span>
+              <span class="trust-metric-label">Completed Trips</span>
+              <span class="trust-metric-sub">Across all 11 Addis Ababa sub-cities</span>
+            </div>
           </div>
-          <div>
-            <strong class="text-h1" style="color: var(--color-primary); display: block;">450+</strong>
-            <span class="text-body-sm" style="color: var(--color-text-muted);">Verified Truck Owners</span>
+
+          <!-- Metric 2: Verified Truck Owners -->
+          <div class="trust-metric-card">
+            <div class="trust-metric-icon accent-tint">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="1" y="3" width="15" height="13"></rect>
+                <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                <circle cx="18.5" cy="18.5" r="2.5"></circle>
+              </svg>
+            </div>
+            <div class="trust-metric-content">
+              <span class="trust-metric-number">450+</span>
+              <span class="trust-metric-label">Verified Trucks</span>
+              <span class="trust-metric-sub">Vetted owner-operators ready for dispatch</span>
+            </div>
           </div>
-          <div>
-            <strong class="text-h1" style="color: var(--color-primary); display: block;">&lt; 28 min</strong>
-            <span class="text-body-sm" style="color: var(--color-text-muted);">Average Match Time</span>
+
+          <!-- Metric 3: Average Arrival Time -->
+          <div class="trust-metric-card">
+            <div class="trust-metric-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+            </div>
+            <div class="trust-metric-content">
+              <span class="trust-metric-number">&lt; 28 min</span>
+              <span class="trust-metric-label">Average Match &amp; ETA</span>
+              <span class="trust-metric-sub">From booking confirmation to your gate</span>
+            </div>
           </div>
-          <div>
-            <strong class="text-h1" style="color: var(--color-primary); display: block;">100%</strong>
-            <span class="text-body-sm" style="color: var(--color-text-muted);">Vetted with Title & ID</span>
+
+          <!-- Metric 4: Vetted Documentation -->
+          <div class="trust-metric-card">
+            <div class="trust-metric-icon accent-tint">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                <polyline points="9 12 11 14 15 10"></polyline>
+              </svg>
+            </div>
+            <div class="trust-metric-content">
+              <span class="trust-metric-number">100%</span>
+              <span class="trust-metric-label">Vetted Documentation</span>
+              <span class="trust-metric-sub">Libre title, license &amp; Kebele ID checked</span>
+            </div>
           </div>
+
         </div>
       </div>
     </section>
 
-    <!-- 04. HOW IT WORKS (PHASE 3 TARGET) -->
+    <!-- 04. HOW IT WORKS (PHASE 3 IMPLEMENTATION) -->
     <section id="how-it-works" class="landing-section" aria-labelledby="how-it-works-heading">
       <div class="kulli-container">
         <div class="section-header-block">
-          <span class="section-eyebrow">Simplicity First</span>
+          <span class="section-eyebrow">TRANSPARENT &amp; SIMPLE</span>
           <h2 id="how-it-works-heading" class="text-h2 section-main-title">How Kulli Moves Your Freight</h2>
-          <p class="section-subtitle">Four simple steps from request to delivery with transparent pricing.</p>
+          <p class="section-subtitle">Four simple steps from request to delivery with guaranteed upfront pricing and live tracking.</p>
         </div>
 
-        <div style="background: var(--color-surface); padding: var(--space-6); border-radius: var(--radius-xl); border: 1px dashed var(--color-border-strong); text-align: center;">
-          <span class="text-caption" style="color: var(--color-text-muted);">
-            📦 Phase 3 Target: 4-Step Process Ladder (Request → Match → Track → Confirm)
-          </span>
+        <div class="steps-container">
+          <ol class="steps-list" aria-label="Step by step logistics workflow">
+            <!-- Step 1 -->
+            <li class="step-card">
+              <div class="step-header">
+                <span class="step-index-badge">01</span>
+                <div class="step-icon-wrap">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                    <circle cx="12" cy="10" r="3"></circle>
+                  </svg>
+                </div>
+              </div>
+              <h3 class="step-card-title">Select Route &amp; Load</h3>
+              <p class="step-card-desc">
+                Choose your pickup and drop-off neighborhoods across Addis Ababa. Select from light pickups to multi-ton flatbeds sized for your cargo.
+              </p>
+              <div>
+                <span class="step-feature-chip">
+                  <span class="chip-dot"></span> 15 Addis Ababa Hubs
+                </span>
+              </div>
+            </li>
+
+            <!-- Step 2 -->
+            <li class="step-card">
+              <div class="step-header">
+                <span class="step-index-badge">02</span>
+                <div class="step-icon-wrap">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <line x1="12" y1="1" x2="12" y2="23"></line>
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                  </svg>
+                </div>
+              </div>
+              <h3 class="step-card-title">Instant Guaranteed Quote</h3>
+              <p class="step-card-desc">
+                Get a transparent, fixed price calculated by road distance. Nearby verified drivers receive your dispatch request—zero roadside haggling.
+              </p>
+              <div>
+                <span class="step-feature-chip">
+                  <span class="chip-dot"></span> Fixed Upfront Fare
+                </span>
+              </div>
+            </li>
+
+            <!-- Step 3 -->
+            <li class="step-card">
+              <div class="step-header">
+                <span class="step-index-badge">03</span>
+                <div class="step-icon-wrap">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+                    <line x1="8" y1="2" x2="8" y2="18"></line>
+                    <line x1="16" y1="6" x2="16" y2="22"></line>
+                  </svg>
+                </div>
+              </div>
+              <h3 class="step-card-title">Live Cargo Tracking</h3>
+              <p class="step-card-desc">
+                Watch your driver's approach to your pickup location. Follow the journey live on the map with direct telephone call and in-app chat contact.
+              </p>
+              <div>
+                <span class="step-feature-chip">
+                  <span class="chip-dot"></span> Live ETA &amp; Direct Call
+                </span>
+              </div>
+            </li>
+
+            <!-- Step 4 -->
+            <li class="step-card">
+              <div class="step-header">
+                <span class="step-index-badge">04</span>
+                <div class="step-icon-wrap">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                  </svg>
+                </div>
+              </div>
+              <h3 class="step-card-title">Inspect &amp; Pay on Delivery</h3>
+              <p class="step-card-desc">
+                Inspect your items upon arrival before payment release. Pay seamlessly with cash or digital confirmation via Telebirr or CBE Birr.
+              </p>
+              <div>
+                <span class="step-feature-chip">
+                  <span class="chip-dot"></span> Cash &amp; Telebirr
+                </span>
+              </div>
+            </li>
+
+          </ol>
         </div>
       </div>
     </section>
 
-    <!-- 05. VEHICLE FLEET (PHASE 3 TARGET) -->
+    <!-- 05. VEHICLE FLEET (PHASE 3 IMPLEMENTATION) -->
     <section id="fleet" class="landing-section" style="background: var(--color-surface-low);" aria-labelledby="fleet-heading">
       <div class="kulli-container">
         <div class="section-header-block">
-          <span class="section-eyebrow">Vehicle Fleet</span>
+          <span class="section-eyebrow">VERIFIED ETHIOPIAN FLEET</span>
           <h2 id="fleet-heading" class="text-h2 section-main-title">Right-Sized Trucks for Every Move</h2>
-          <p class="section-subtitle">From light pickups to heavy multi-ton flatbeds operating across Addis Ababa.</p>
+          <p class="section-subtitle">From light urban pickups to heavy multi-ton flatbeds operating across all Addis Ababa sub-cities.</p>
         </div>
 
-        <div style="background: var(--color-surface); padding: var(--space-6); border-radius: var(--radius-xl); border: 1px dashed var(--color-border-strong); text-align: center;">
-          <span class="text-caption" style="color: var(--color-text-muted);">
-            🚚 Phase 3 Target: Ethiopian Vehicle Fleet Catalog (Bedford KB26, Cargo Van, Isuzu NPR, Heavy Dumper)
-          </span>
+        <div class="fleet-catalog-grid">
+          <!-- Card 1: Small Pickup -->
+          <div class="fleet-card" data-vehicle-tier="small-pickup">
+            <div class="fleet-visual-container">
+              <div class="fleet-vehicle-svg-wrap">
+                <img src="/images/fleet-pickup.svg" alt="Small Pickup truck illustration" width="240" height="120" loading="lazy" />
+              </div>
+            </div>
+            <div class="fleet-card-body">
+              <div class="fleet-tier-header">
+                <span class="fleet-tonnage-tag">1.0 – 1.5 TON PAYLOAD</span>
+                <h3 class="fleet-vehicle-name">Small Pickup</h3>
+                <p class="fleet-vehicle-models">Bedford KB26 • Toyota Hilux • Carry</p>
+              </div>
+
+              <div class="fleet-price-box">
+                <div>
+                  <div class="fleet-price-label">Starting Fare</div>
+                  <div class="fleet-price-value">From 600 ETB</div>
+                </div>
+                <div class="fleet-price-rate">45 ETB / km</div>
+              </div>
+
+              <div class="fleet-specs-grid">
+                <div class="fleet-spec-item">
+                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span><strong>Payload:</strong> Up to 1,500 kg</span>
+                </div>
+                <div class="fleet-spec-item">
+                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span><strong>Bed:</strong> 2.4m × 1.6m open bed</span>
+                </div>
+                <div class="fleet-spec-item">
+                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span><strong>Access:</strong> Fits narrow market lanes</span>
+                </div>
+              </div>
+
+              <div class="fleet-ideal-section">
+                <div class="fleet-ideal-heading">Best Suited For</div>
+                <div class="fleet-ideal-tags">
+                  <span class="fleet-ideal-pill">Single furniture / Sofa</span>
+                  <span class="fleet-ideal-pill">Studio apartment</span>
+                  <span class="fleet-ideal-pill">Market stock</span>
+                </div>
+              </div>
+
+              <button type="button" class="btn btn-outline fleet-book-btn" data-select-tier="small-pickup">
+                Select &amp; Calculate →
+              </button>
+            </div>
+          </div>
+
+          <!-- Card 2: Closed Cargo Van -->
+          <div class="fleet-card" data-vehicle-tier="small-pickup">
+            <div class="fleet-visual-container">
+              <div class="fleet-vehicle-svg-wrap">
+                <img src="/images/fleet-van.svg" alt="Closed Cargo Van illustration" width="240" height="120" loading="lazy" />
+              </div>
+            </div>
+            <div class="fleet-card-body">
+              <div class="fleet-tier-header">
+                <span class="fleet-tonnage-tag">1.5 – 2.0 TON PAYLOAD</span>
+                <h3 class="fleet-vehicle-name">Closed Cargo Van</h3>
+                <p class="fleet-vehicle-models">Toyota HiAce • Sprinter Box Van</p>
+              </div>
+
+              <div class="fleet-price-box">
+                <div>
+                  <div class="fleet-price-label">Starting Fare</div>
+                  <div class="fleet-price-value">From 800 ETB</div>
+                </div>
+                <div class="fleet-price-rate">55 ETB / km</div>
+              </div>
+
+              <div class="fleet-specs-grid">
+                <div class="fleet-spec-item">
+                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span><strong>Payload:</strong> Up to 2,000 kg</span>
+                </div>
+                <div class="fleet-spec-item">
+                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span><strong>Volume:</strong> 9.2 m³ weatherproof hold</span>
+                </div>
+                <div class="fleet-spec-item">
+                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span><strong>Security:</strong> Lockable doors (Rain-safe)</span>
+                </div>
+              </div>
+
+              <div class="fleet-ideal-section">
+                <div class="fleet-ideal-heading">Best Suited For</div>
+                <div class="fleet-ideal-tags">
+                  <span class="fleet-ideal-pill">Electronics &amp; TV</span>
+                  <span class="fleet-ideal-pill">Rainy season transit</span>
+                  <span class="fleet-ideal-pill">Retail cartons</span>
+                </div>
+              </div>
+
+              <button type="button" class="btn btn-outline fleet-book-btn" data-select-tier="small-pickup">
+                Select &amp; Calculate →
+              </button>
+            </div>
+          </div>
+
+          <!-- Card 3: Medium Flatbed (Isuzu NPR) [Most Popular] -->
+          <div class="fleet-card is-popular" data-vehicle-tier="medium-truck">
+            <span class="fleet-popular-ribbon">★ Most Popular</span>
+            <div class="fleet-visual-container">
+              <div class="fleet-vehicle-svg-wrap">
+                <img src="/images/fleet-medium-flatbed.svg" alt="Medium Flatbed Isuzu NPR truck illustration" width="240" height="120" loading="lazy" />
+              </div>
+            </div>
+            <div class="fleet-card-body">
+              <div class="fleet-tier-header">
+                <span class="fleet-tonnage-tag" style="background-color: var(--color-accent-subtle); color: var(--color-accent);">3.5 – 4.5 TON PAYLOAD</span>
+                <h3 class="fleet-vehicle-name">Medium Flatbed</h3>
+                <p class="fleet-vehicle-models">Isuzu NPR • Mitsubishi Canter</p>
+              </div>
+
+              <div class="fleet-price-box" style="border-color: var(--color-accent-subtle);">
+                <div>
+                  <div class="fleet-price-label">Starting Fare</div>
+                  <div class="fleet-price-value" style="color: var(--color-primary);">From 1,200 ETB</div>
+                </div>
+                <div class="fleet-price-rate">75 ETB / km</div>
+              </div>
+
+              <div class="fleet-specs-grid">
+                <div class="fleet-spec-item">
+                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span><strong>Payload:</strong> Up to 4,500 kg</span>
+                </div>
+                <div class="fleet-spec-item">
+                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span><strong>Bed:</strong> 4.5m × 2.1m high-sided</span>
+                </div>
+                <div class="fleet-spec-item">
+                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span><strong>Crew:</strong> Loading helper crew option</span>
+                </div>
+              </div>
+
+              <div class="fleet-ideal-section">
+                <div class="fleet-ideal-heading">Best Suited For</div>
+                <div class="fleet-ideal-tags">
+                  <span class="fleet-ideal-pill">2–3 Bedroom home move</span>
+                  <span class="fleet-ideal-pill">Wholesale freight</span>
+                  <span class="fleet-ideal-pill">Office relocation</span>
+                </div>
+              </div>
+
+              <button type="button" class="btn btn-accent fleet-book-btn" data-select-tier="medium-truck">
+                Select &amp; Calculate →
+              </button>
+            </div>
+          </div>
+
+          <!-- Card 4: Heavy Freight / Sino Dump Truck -->
+          <div class="fleet-card" data-vehicle-tier="large-truck">
+            <div class="fleet-visual-container">
+              <div class="fleet-vehicle-svg-wrap">
+                <img src="/images/fleet-heavy-dumper.svg" alt="Sino Truck Heavy Dumper illustration" width="240" height="120" loading="lazy" />
+              </div>
+            </div>
+            <div class="fleet-card-body">
+              <div class="fleet-tier-header">
+                <span class="fleet-tonnage-tag">10 – 15 TON HEAVY HAUL</span>
+                <h3 class="fleet-vehicle-name">Heavy Freight &amp; Tipper</h3>
+                <p class="fleet-vehicle-models">Sino Truck • Isuzu FSR Tipper</p>
+              </div>
+
+              <div class="fleet-price-box">
+                <div>
+                  <div class="fleet-price-label">Starting Fare</div>
+                  <div class="fleet-price-value">From 2,200 ETB</div>
+                </div>
+                <div class="fleet-price-rate">120 ETB / km</div>
+              </div>
+
+              <div class="fleet-specs-grid">
+                <div class="fleet-spec-item">
+                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span><strong>Payload:</strong> Up to 12,000 kg</span>
+                </div>
+                <div class="fleet-spec-item">
+                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span><strong>Dump Box:</strong> 18.0 m³ hydraulic tipper</span>
+                </div>
+                <div class="fleet-spec-item">
+                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span><strong>Access:</strong> Construction site ready</span>
+                </div>
+              </div>
+
+              <div class="fleet-ideal-section">
+                <div class="fleet-ideal-heading">Best Suited For</div>
+                <div class="fleet-ideal-tags">
+                  <span class="fleet-ideal-pill">Sand, gravel &amp; cement</span>
+                  <span class="fleet-ideal-pill">Structural rebar</span>
+                  <span class="fleet-ideal-pill">Industrial plant freight</span>
+                </div>
+              </div>
+
+              <button type="button" class="btn btn-outline fleet-book-btn" data-select-tier="large-truck">
+                Select &amp; Calculate →
+              </button>
+            </div>
+          </div>
+
         </div>
       </div>
     </section>
