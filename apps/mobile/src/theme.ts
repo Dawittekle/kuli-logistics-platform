@@ -17,6 +17,8 @@ export const colors = {
   subtle: '#F1F5F9',
 
   // Backward-compatible aliases used by the existing large App.tsx.
+  white: '#FFFFFF',
+  text: '#0F172A',
   ink: '#0F172A',
   canvas: '#F8FAFC',
   panel: '#FFFFFF',

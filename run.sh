@@ -163,9 +163,15 @@ case "$COMMAND" in
     ;;
 
   typecheck)
-    log_info "Running contract and type checks..."
-    npm run typecheck
+    log_info "Running contract and TypeScript checks across apps..."
+    npm run typecheck:all
     log_success "Typecheck passed."
+    ;;
+
+  typecheck:mobile)
+    log_info "Running Mobile app TypeScript checks..."
+    npm run typecheck:mobile
+    log_success "Mobile TypeScript checks passed."
     ;;
 
   verify)

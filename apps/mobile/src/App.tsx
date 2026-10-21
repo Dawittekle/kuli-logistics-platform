@@ -15,7 +15,7 @@ import {
   TextInput,
   View
 } from 'react-native';
-import type { StyleProp, ViewStyle } from 'react-native';
+import type { GestureResponderEvent, LayoutChangeEvent, StyleProp, ViewStyle } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -2628,6 +2628,7 @@ type MapLocationInput = AddisLocationOption | QuoteLocation;
 const normalizeMapLocation = (location: MapLocationInput, fallbackLabel: string) => {
   if ('lon' in location) {
     return {
+      key: location.key,
       label: location.label,
       subtitle: location.area,
       lon: Number(location.lon),
@@ -2636,6 +2637,7 @@ const normalizeMapLocation = (location: MapLocationInput, fallbackLabel: string)
   }
 
   return {
+    key: undefined,
     label: location.addressText || fallbackLabel,
     subtitle: location.source.replaceAll('_', ' '),
     lon: Number(location.point.coordinates[0]),
@@ -3130,11 +3132,13 @@ function ClientQuoteScreen() {
   const vehicleClasses = vehicleClassesQuery.data ?? [];
   const selectedVehicleClass = vehicleClasses.find((vehicleClass) => vehicleClass.id === vehicleClassId);
   const selectedCapacityLabel = selectedVehicleClass?.capacityKg ? `${selectedVehicleClass.capacityKg}kg` : 'class';
-  const pickupOption = useMemo(() => {
+  const pickupOption: AddisLocationOption = useMemo(() => {
     if (pickupLocationKey === 'custom') {
       return {
         key: 'custom',
         label: 'Custom pin',
+        area: 'Map pin',
+        detail: `${Number(pickupLon).toFixed(4)}, ${Number(pickupLat).toFixed(4)}`,
         lon: pickupLon,
         lat: pickupLat
       };
@@ -3142,11 +3146,13 @@ function ClientQuoteScreen() {
     return getLocationOption(pickupLocationKey);
   }, [pickupLocationKey, pickupLon, pickupLat]);
 
-  const destinationOption = useMemo(() => {
+  const destinationOption: AddisLocationOption = useMemo(() => {
     if (destinationLocationKey === 'custom') {
       return {
         key: 'custom',
         label: 'Custom pin',
+        area: 'Map pin',
+        detail: `${Number(destinationLon).toFixed(4)}, ${Number(destinationLat).toFixed(4)}`,
         lon: destinationLon,
         lat: destinationLat
       };
