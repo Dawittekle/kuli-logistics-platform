@@ -84,6 +84,8 @@ const requiredPaths = [
   'apps/mobile/src/auth/screens/ChangePasswordScreen.tsx',
   'docs/plan/KULI_MOBILE_APPS_AND_AUTH_PLAN.md',
   'run.sh',
+  'render.yaml',
+  '.nvmrc',
   'tests/auth/phone-validation.test.mjs',
   'tests/auth/auth-workflow.test.mjs',
   'tests/integration/role-access.test.mjs',
