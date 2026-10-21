@@ -49,6 +49,7 @@ describe('Kulli Landing Page Production Suite', () => {
     assert.match(html, /Construction and Jobsites/);
     assert.match(html, /shipment-truck\.png/);
     assert.match(html, /Learn more/);
+    assert.match(html, /href="[^"]*about\.html"[^>]*>Learn more<\/a>/);
 
     // Section 5: Truck Types Catalog (Phase 4)
     assert.match(html, /id="fleet"/);
@@ -91,6 +92,34 @@ describe('Kulli Landing Page Production Suite', () => {
     assert.match(html, /Merkato/);
     assert.match(html, /Privacy Policy/);
     assert.match(html, /Terms of Service/);
+  });
+
+  it('dist/about.html is compiled and contains all semantic section landmarks', () => {
+    const aboutPath = join(landingRoot, 'dist/about.html');
+    assert.ok(existsSync(aboutPath), 'dist/about.html must exist after vite build');
+
+    const html = readFileSync(aboutPath, 'utf-8');
+
+    // Title & Meta
+    assert.match(html, /<title>About Kulli \| How It Works &amp; Vehicle Selection Guide<\/title>/);
+    assert.match(html, /class="about-hero"/);
+    assert.match(html, /How to use the Kulli app/);
+
+    // Walkthrough 3 steps
+    assert.match(html, /1\. A customer opens the app/);
+    assert.match(html, /2\. The customer is matched with a driver/);
+    assert.match(html, /3\. The driver takes the cargo to the destination/);
+    assert.match(html, /about-how-it-works\.jpg/);
+
+    // Vehicle guide
+    assert.match(html, /What Size Vehicle Should I Choose\?/);
+    assert.match(html, /Box Truck/);
+    assert.match(html, /Cargo Van/);
+    assert.match(html, /Pickup Truck/);
+
+    // Apps & Footer
+    assert.match(html, /It’s easier in the apps|It's easier in the apps/);
+    assert.match(html, /class="kulli-footer"/);
   });
 
   it('all required vector SVG graphics are present and valid', () => {
