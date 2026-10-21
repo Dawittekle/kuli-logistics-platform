@@ -17,4 +17,6 @@ docs/*
 !docs/KULI_DEVELOPER_GUIDE.md
 !docs/brand/
 !docs/brand/**
+!docs/plan/
+!docs/plan/**
 references/

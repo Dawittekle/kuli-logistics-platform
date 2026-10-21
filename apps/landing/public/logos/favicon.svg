@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <title>Kulli Favicon</title>
+  <!--
+    Favicon: Rounded square navy background with white K mark.
+    Simplified for tiny sizes (16-32px).
+  -->
+  <!-- Navy rounded-square background -->
+  <rect x="0" y="0" width="32" height="32" rx="6" fill="#0C1A3A"/>
+  <!-- White K mark (simplified, scaled to fit) -->
+  <g transform="translate(4, 4) scale(0.375) rotate(2.5, 32, 32)" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <line x1="18.5" y1="10" x2="18.5" y2="54" stroke-width="11"/>
+    <line x1="27" y1="33" x2="48" y2="10" stroke-width="10"/>
+    <line x1="27" y1="33" x2="48" y2="54" stroke-width="10"/>
+  </g>
+</svg>

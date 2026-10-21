@@ -19,7 +19,9 @@
     "verify:startup": "node tools/verify-startup.mjs",
     "dev:api": "npm run dev --workspace @kuli/api",
     "dev:admin": "npm run dev --workspace @kuli/admin",
-    "dev:mobile": "npm run dev --workspace @kuli/mobile"
+    "dev:mobile": "npm run dev --workspace @kuli/mobile",
+    "dev:landing": "npm run dev --workspace @kuli/landing",
+    "build:landing": "npm run build --workspace @kuli/landing"
   },
   "dependencies": {
     "jose": "^6.2.3",

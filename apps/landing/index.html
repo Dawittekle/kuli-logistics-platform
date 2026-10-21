@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kulli | On-Demand Truck Logistics & Moving in Addis Ababa</title>
+  <meta name="description" content="Connect directly with verified local truck owners in Addis Ababa for household moves, freight transport, and B2B logistics. Upfront pricing, live tracking, cash or telebirr on delivery.">
+  <link rel="icon" type="image/svg+xml" href="/logos/favicon.svg">
+  
+  <!-- OpenGraph Metadata -->
+  <meta property="og:title" content="Kulli | On-Demand Truck Logistics & Moving in Addis Ababa">
+  <meta property="og:description" content="On-demand truck booking across Addis Ababa. Verified drivers, transparent per-km rates, and live cargo tracking.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="/logos/kulli-logo-primary.svg">
+  <meta name="twitter:card" content="summary_large_image">
+</head>
+<body>
+
+  <!-- ============================================================
+       1. GLOBAL STICKY NAVIGATION BAR
+       ============================================================ -->
+  <header class="kulli-navbar" role="banner">
+    <div class="kulli-container navbar-inner">
+      <a href="#hero" class="navbar-brand" aria-label="Kulli Logistics Home">
+        <img src="/logos/kulli-logo-primary.svg" alt="Kulli" class="navbar-brand-logo" data-brand-logo>
+      </a>
+
+      <!-- Desktop Links -->
+      <nav class="navbar-nav" aria-label="Main Navigation">
+        <ul class="navbar-links">
+          <li><a href="#hero" class="navbar-link">Book</a></li>
+          <li><a href="#fleet" class="navbar-link">Truck Types</a></li>
+          <li><a href="#business" class="navbar-link">For Business</a></li>
+          <li><a href="#drivers" class="navbar-link">Drive & Earn</a></li>
+          <li><a href="#faq" class="navbar-link">FAQ</a></li>
+        </ul>
+      </nav>
+
+      <!-- Utility Actions -->
+      <div class="navbar-actions">
+        <a href="tel:8492" class="hotline-pill" aria-label="Call Dispatch Hotline at 8492">
+          <span>📞</span>
+          <span>Hotline: <strong class="hotline-number">8492</strong></span>
+        </a>
+
+        <button type="button" class="theme-toggle-btn" data-theme-toggle aria-label="Toggle Dark Mode">
+          <span class="theme-icon">🌙</span>
+        </button>
+
+        <a href="#hero" class="btn btn-primary btn-sm">Find Trucks</a>
+
+        <button type="button" class="navbar-burger" data-drawer-trigger aria-label="Open mobile menu" aria-expanded="false">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Mobile Drawer Scrim & Panel -->
+  <div class="mobile-scrim" aria-hidden="true"></div>
+  <aside class="mobile-drawer" role="dialog" aria-modal="true" aria-label="Mobile Navigation Menu">
+    <div class="mobile-drawer-header">
+      <img src="/logos/kulli-logo-primary.svg" alt="Kulli" style="height: 32px;" data-brand-logo>
+      <button type="button" class="drawer-close-btn" data-drawer-close aria-label="Close mobile menu">✕</button>
+    </div>
+
+    <ul class="mobile-drawer-links">
+      <li><a href="#hero" class="mobile-drawer-link">Book a Truck</a></li>
+      <li><a href="#fleet" class="mobile-drawer-link">Vehicle Types & Specs</a></li>
+      <li><a href="#business" class="mobile-drawer-link">B2B Logistics</a></li>
+      <li><a href="#drivers" class="mobile-drawer-link">Drive with Kulli</a></li>
+      <li><a href="#apps" class="mobile-drawer-link">Download Apps</a></li>
+      <li><a href="#faq" class="mobile-drawer-link">Frequently Asked Questions</a></li>
+    </ul>
+
+    <div style="display: flex; flex-direction: column; gap: var(--space-3); margin-top: auto;">
+      <a href="tel:8492" class="btn btn-accent btn-lg" style="width: 100%;">
+        📞 Call Hotline 8492
+      </a>
+      <a href="#hero" class="btn btn-primary btn-lg" style="width: 100%;">
+        Book Now
+      </a>
+    </div>
+  </aside>
+
+  <!-- ============================================================
+       MAIN CONTENT LANDMARKS (PHASED ARCHITECTURE)
+       ============================================================ -->
+  <main id="main-content" role="main">
+
+    <!-- 02. HERO SECTION SCAFFOLD (PHASE 2 TARGET) -->
+    <section id="hero" class="hero-section" aria-labelledby="hero-heading">
+      <div class="kulli-container">
+        <div class="hero-grid">
+          <!-- Left Column: Copy & Value Proposition -->
+          <div>
+            <span class="status-pill info" style="margin-bottom: var(--space-4);">
+              <span class="status-dot"></span> On-Demand Logistics • Addis Ababa
+            </span>
+            <h1 id="hero-heading" class="text-display" style="margin-bottom: var(--space-4);">
+              Ship Anything, Anywhere in Addis Ababa
+            </h1>
+            <p class="text-body-lg" style="color: var(--color-text-secondary); margin-bottom: var(--space-6);">
+              On-demand freight, household moving, and cargo transport. Instant upfront prices, verified local truck owners, cash or telebirr on delivery.
+            </p>
+            <div style="display: flex; gap: var(--space-4); flex-wrap: wrap;">
+              <a href="#fleet" class="btn btn-accent btn-lg">Explore Available Trucks →</a>
+              <a href="#drivers" class="btn btn-outline btn-lg">Drive & Earn Income</a>
+            </div>
+          </div>
+
+          <!-- Right Column: Interactive Widget Scaffold (Phase 2 Target) -->
+          <div class="hero-placeholder-card">
+            <span class="text-overline" style="color: var(--color-primary); margin-bottom: var(--space-2); display: block;">
+              Phase 2 Target: Interactive Rate Estimator
+            </span>
+            <h3 class="text-h3" style="margin-bottom: var(--space-2);">Instant Route & Price Calculator</h3>
+            <p class="text-body-sm" style="color: var(--color-text-muted); margin-bottom: var(--space-6);">
+              Select Addis Ababa neighborhoods (Merkato, Bole, Saris, Kality) and instantly preview vehicle rates and arrival ETAs.
+            </p>
+            <div style="background: var(--color-surface-low); padding: var(--space-4); border-radius: var(--radius-lg); border: 1px dashed var(--color-border-strong); text-align: center;">
+              <span class="text-caption" style="color: var(--color-text-secondary);">
+                ⚡ Interactive Rate Estimator Component Mount Point (Phase 2)
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 03. TRUST STRIP (PHASE 3 TARGET) -->
+    <section id="trust" class="landing-section" style="padding: var(--space-8) 0; background: var(--color-surface);" aria-label="Platform Trust & Key Metrics">
+      <div class="kulli-container">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-6); text-align: center;">
+          <div>
+            <strong class="text-h1" style="color: var(--color-primary); display: block;">5,000+</strong>
+            <span class="text-body-sm" style="color: var(--color-text-muted);">Completed Trips</span>
+          </div>
+          <div>
+            <strong class="text-h1" style="color: var(--color-primary); display: block;">450+</strong>
+            <span class="text-body-sm" style="color: var(--color-text-muted);">Verified Truck Owners</span>
+          </div>
+          <div>
+            <strong class="text-h1" style="color: var(--color-primary); display: block;">&lt; 28 min</strong>
+            <span class="text-body-sm" style="color: var(--color-text-muted);">Average Match Time</span>
+          </div>
+          <div>
+            <strong class="text-h1" style="color: var(--color-primary); display: block;">100%</strong>
+            <span class="text-body-sm" style="color: var(--color-text-muted);">Vetted with Title & ID</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 04. HOW IT WORKS (PHASE 3 TARGET) -->
+    <section id="how-it-works" class="landing-section" aria-labelledby="how-it-works-heading">
+      <div class="kulli-container">
+        <div class="section-header-block">
+          <span class="section-eyebrow">Simplicity First</span>
+          <h2 id="how-it-works-heading" class="text-h2 section-main-title">How Kulli Moves Your Freight</h2>
+          <p class="section-subtitle">Four simple steps from request to delivery with transparent pricing.</p>
+        </div>
+
+        <div style="background: var(--color-surface); padding: var(--space-6); border-radius: var(--radius-xl); border: 1px dashed var(--color-border-strong); text-align: center;">
+          <span class="text-caption" style="color: var(--color-text-muted);">
+            📦 Phase 3 Target: 4-Step Process Ladder (Request → Match → Track → Confirm)
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 05. VEHICLE FLEET (PHASE 3 TARGET) -->
+    <section id="fleet" class="landing-section" style="background: var(--color-surface-low);" aria-labelledby="fleet-heading">
+      <div class="kulli-container">
+        <div class="section-header-block">
+          <span class="section-eyebrow">Vehicle Fleet</span>
+          <h2 id="fleet-heading" class="text-h2 section-main-title">Right-Sized Trucks for Every Move</h2>
+          <p class="section-subtitle">From light pickups to heavy multi-ton flatbeds operating across Addis Ababa.</p>
+        </div>
+
+        <div style="background: var(--color-surface); padding: var(--space-6); border-radius: var(--radius-xl); border: 1px dashed var(--color-border-strong); text-align: center;">
+          <span class="text-caption" style="color: var(--color-text-muted);">
+            🚚 Phase 3 Target: Ethiopian Vehicle Fleet Catalog (Bedford KB26, Cargo Van, Isuzu NPR, Heavy Dumper)
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 06. BUSINESS & B2B LOGISTICS (PHASE 4 TARGET) -->
+    <section id="business" class="landing-section" aria-labelledby="business-heading">
+      <div class="kulli-container">
+        <div class="section-header-block">
+          <span class="section-eyebrow">Commercial Transport</span>
+          <h2 id="business-heading" class="text-h2 section-main-title">Built for Growing Businesses</h2>
+          <p class="section-subtitle">Multi-stop wholesale delivery, warehouse distribution, and corporate billing.</p>
+        </div>
+
+        <div style="background: var(--color-surface); padding: var(--space-6); border-radius: var(--radius-xl); border: 1px dashed var(--color-border-strong); text-align: center;">
+          <span class="text-caption" style="color: var(--color-text-muted);">
+            🏢 Phase 4 Target: B2B Multi-stop Route Optimization & Corporate Invoicing
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 07. DRIVERS & TRUCK OWNERS (PHASE 4 TARGET) -->
+    <section id="drivers" class="landing-section" style="background: var(--color-surface-low);" aria-labelledby="drivers-heading">
+      <div class="kulli-container">
+        <div class="section-header-block">
+          <span class="section-eyebrow">Partner with Us</span>
+          <h2 id="drivers-heading" class="text-h2 section-main-title">Drive When You Want, Earn Daily</h2>
+          <p class="section-subtitle">Turn your truck into a reliable business. Verified shippers, transparent earnings.</p>
+        </div>
+
+        <div style="background: var(--color-surface); padding: var(--space-6); border-radius: var(--radius-xl); border: 1px dashed var(--color-border-strong); text-align: center;">
+          <span class="text-caption" style="color: var(--color-text-muted);">
+            🤝 Phase 4 Target: Truck Partner Recruitment Funnel & Earnings Calculator
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 08. APPS DOWNLOAD CENTER (PHASE 5 TARGET) -->
+    <section id="apps" class="landing-section" aria-labelledby="apps-heading">
+      <div class="kulli-container">
+        <div class="section-header-block">
+          <span class="section-eyebrow">Mobile Ecosystem</span>
+          <h2 id="apps-heading" class="text-h2 section-main-title">It's Easier in the Apps</h2>
+          <p class="section-subtitle">Book moves, track live GPS, and manage payments straight from your phone.</p>
+        </div>
+
+        <div style="background: var(--color-surface); padding: var(--space-6); border-radius: var(--radius-xl); border: 1px dashed var(--color-border-strong); text-align: center;">
+          <span class="text-caption" style="color: var(--color-text-muted);">
+            📱 Phase 5 Target: Dual QR Code Download Center (Customer & Driver App Badges)
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 09. FAQ (PHASE 4 TARGET) -->
+    <section id="faq" class="landing-section" style="background: var(--color-surface-low);" aria-labelledby="faq-heading">
+      <div class="kulli-container">
+        <div class="section-header-block">
+          <span class="section-eyebrow">Got Questions?</span>
+          <h2 id="faq-heading" class="text-h2 section-main-title">Frequently Asked Questions</h2>
+          <p class="section-subtitle">Everything you need to know about pricing, vehicle vetting, and cargo safety.</p>
+        </div>
+
+        <div style="background: var(--color-surface); padding: var(--space-6); border-radius: var(--radius-xl); border: 1px dashed var(--color-border-strong); text-align: center;">
+          <span class="text-caption" style="color: var(--color-text-muted);">
+            ❓ Phase 4 Target: Accessible ARIA Accordion & Hotline Fallback Banner (8492)
+          </span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============================================================
+       10. MASTER GLOBAL FOOTER
+       ============================================================ -->
+  <footer class="kulli-footer" role="contentinfo">
+    <div class="kulli-container">
+      <div class="footer-top-grid">
+        <!-- Col 1: Brand & Contact -->
+        <div class="footer-brand-col">
+          <img src="/logos/kulli-logo-primary.svg" alt="Kulli" style="height: 38px; width: fit-content;" data-brand-logo>
+          <p class="footer-brand-desc">
+            On-demand peer-to-peer logistics marketplace for Addis Ababa. Connecting verified truck owners with individuals and businesses.
+          </p>
+          <div>
+            <a href="tel:8492" class="hotline-pill">
+              <span>📞 Hotline: <strong>8492</strong></span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Col 2: Services -->
+        <div>
+          <h4 class="footer-col-title">Services</h4>
+          <ul class="footer-links-list">
+            <li><a href="#hero" class="footer-link">Home & Apartment Moving</a></li>
+            <li><a href="#business" class="footer-link">B2B Warehouse Freight</a></li>
+            <li><a href="#fleet" class="footer-link">Construction Materials</a></li>
+            <li><a href="tel:8492" class="footer-link">Assisted Phone Booking (8492)</a></li>
+          </ul>
+        </div>
+
+        <!-- Col 3: Vehicle Fleet -->
+        <div>
+          <h4 class="footer-col-title">Vehicle Fleet</h4>
+          <ul class="footer-links-list">
+            <li><a href="#fleet" class="footer-link">Bedford KB26 (1.5 Ton)</a></li>
+            <li><a href="#fleet" class="footer-link">Cargo Van (2.0 Ton)</a></li>
+            <li><a href="#fleet" class="footer-link">Isuzu NPR Flatbed (4.5 Ton)</a></li>
+            <li><a href="#fleet" class="footer-link">Sino Truck (15 Ton Dumper)</a></li>
+          </ul>
+        </div>
+
+        <!-- Col 4: For Drivers & Legal -->
+        <div>
+          <h4 class="footer-col-title">Company & Drivers</h4>
+          <ul class="footer-links-list">
+            <li><a href="#drivers" class="footer-link">Register Your Truck</a></li>
+            <li><a href="#faq" class="footer-link">Driver Verification Standards</a></li>
+            <li><a href="#" class="footer-link">Privacy Policy</a></li>
+            <li><a href="#" class="footer-link">Terms of Service</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Service Zones Cloud -->
+      <div class="footer-zones-strip">
+        <div class="zones-title">Primary Addis Ababa Service Zones</div>
+        <div class="zones-tags">
+          <span class="zone-tag">Merkato Wholesale District</span>
+          <span class="zone-tag">Bole Medhanialem & Atlas</span>
+          <span class="zone-tag">Saris Industrial Zone</span>
+          <span class="zone-tag">Kality Warehouses</span>
+          <span class="zone-tag">Piassa & Arada</span>
+          <span class="zone-tag">Mexico Square & Kirkos</span>
+          <span class="zone-tag">CMC & Ayat Residential</span>
+          <span class="zone-tag">Jemo Condominiums</span>
+          <span class="zone-tag">Kolfe Keranio</span>
+          <span class="zone-tag">Akaki Kaliti</span>
+        </div>
+      </div>
+
+      <!-- Bottom Bar -->
+      <div class="footer-bottom-bar">
+        <span>© 2026 Kulli Logistics Platform. All rights reserved.</span>
+        <span>Built with Kulli Design System tokens • Addis Ababa, Ethiopia</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Client Application Scripts -->
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Kulli App Icon</title>
+  <!--
+    App icon template: Navy background, white K mark centered at ~60%.
+    No rounded corners — platforms apply their own masking.
+  -->
+  <!-- Navy background -->
+  <rect x="0" y="0" width="1024" height="1024" fill="#0C1A3A"/>
+  <!--
+    White K mark centered.
+    The K mark in 64x64 space scaled by 9.6 (≈614px) and centered.
+    60% of 1024 = ~614. Offset = (1024 - 614) / 2 = 205
+  -->
+  <g transform="translate(205, 205) scale(9.6) rotate(2.5, 32, 32)" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <line x1="18.5" y1="10" x2="18.5" y2="54" stroke-width="9.5"/>
+    <line x1="26" y1="33" x2="48" y2="10" stroke-width="9"/>
+    <line x1="26" y1="33" x2="48" y2="54" stroke-width="9"/>
+  </g>
+</svg>
