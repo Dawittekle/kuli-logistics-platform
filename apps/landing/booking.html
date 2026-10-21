@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Book a Truck | Kulli Logistics Platform Addis Ababa</title>
+  <meta name="description" content="Book verified trucks, pickups, and moving vans across Addis Ababa with transparent upfront pricing and live tracking." />
+  <meta property="og:title" content="Book a Truck | Kulli Logistics Platform" />
+  <meta property="og:description" content="On-demand truck booking across Addis Ababa. Upfront pricing, verified drivers, cash or telebirr on delivery." />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="theme-color" content="#1F3B87" />
+  <link rel="icon" type="image/svg+xml" href="/logos/favicon.svg" />
+
+  <!-- Authentic Fonts & Design Tokens -->
+  <link rel="stylesheet" href="/src/styles/theme.css" />
+  <link rel="stylesheet" href="/src/styles/layout.css" />
+  <link rel="stylesheet" href="/src/styles/landing.css" />
+  <link rel="stylesheet" href="/src/styles/booking.css" />
+</head>
+<body data-theme="light">
+  <!-- ============================================================
+       01. MASTER FIXED FLOATING NAVBAR
+       ============================================================ -->
+  <header class="kulli-navbar" id="master-navbar" role="banner">
+    <div class="navbar-inner">
+      <div class="navbar-brand">
+        <a href="/" class="brand-link" aria-label="Kulli Home">
+          <img
+            src="/logos/kulli-logo-primary.svg"
+            alt="Kulli Logo"
+            class="brand-logo"
+            width="120"
+            height="36"
+            data-brand-logo
+          />
+        </a>
+      </div>
+
+      <nav class="navbar-nav" aria-label="Main Navigation">
+        <ul class="navbar-links">
+          <li><a href="/booking.html" class="navbar-link is-active" aria-current="page" data-text="Book"><span class="navbar-link-text">Book</span></a></li>
+          <li><a href="/#drivers" class="navbar-link" data-text="Drivers"><span class="navbar-link-text">Drivers</span></a></li>
+          <li><a href="/about.html" class="navbar-link" data-text="About"><span class="navbar-link-text">About</span></a></li>
+          <li><a href="/#faq" class="navbar-link" data-text="FAQ"><span class="navbar-link-text">FAQ</span></a></li>
+        </ul>
+      </nav>
+
+      <div class="navbar-actions">
+        <a href="/login.html?role=customer" class="navbar-btn-login">Log in</a>
+        <a href="/signup.html?role=customer" class="navbar-btn-signup">Sign up</a>
+      </div>
+
+      <button
+        type="button"
+        class="navbar-hamburger"
+        id="navbar-hamburger-btn"
+        aria-label="Open mobile navigation menu"
+        aria-expanded="false"
+        aria-controls="mobile-drawer"
+      >
+        <span class="hamburger-bar"></span>
+        <span class="hamburger-bar"></span>
+        <span class="hamburger-bar"></span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       02. BOOKING FLOW MAIN WORKSPACE
+       ============================================================ -->
+  <main class="booking-page-wrap" id="main-content">
+    <div class="booking-main-container">
+      
+      <!-- Prototype Simulation Notice -->
+      <div class="prototype-banner" role="alert">
+        <div class="prototype-badge">
+          <span>⚡</span> Visual Prototype Mode
+        </div>
+        <div>
+          Interactive shipment booking demonstration using authentic Addis Ababa landmarks and simulated ETB pricing.
+        </div>
+      </div>
+
+      <!-- Stepper / Progress Header -->
+      <div class="booking-stepper-card">
+        <nav class="stepper-nav" aria-label="Booking Progress">
+          <button type="button" class="step-item is-active" data-step-target="1" aria-current="step">
+            <span class="step-num">1</span>
+            <span>Route &amp; Stops</span>
+          </button>
+          <div class="step-divider"></div>
+
+          <button type="button" class="step-item" data-step-target="2">
+            <span class="step-num">2</span>
+            <span>Cargo Inventory</span>
+          </button>
+          <div class="step-divider"></div>
+
+          <button type="button" class="step-item" data-step-target="3">
+            <span class="step-num">3</span>
+            <span>Select Truck</span>
+          </button>
+          <div class="step-divider"></div>
+
+          <button type="button" class="step-item" data-step-target="4">
+            <span class="step-num">4</span>
+            <span>Access &amp; Schedule</span>
+          </button>
+          <div class="step-divider"></div>
+
+          <button type="button" class="step-item" data-step-target="5">
+            <span class="step-num">5</span>
+            <span>Review &amp; Confirm</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- Two-Column Booking Grid -->
+      <div class="booking-grid">
+        
+        <!-- Left Column: Step Panels -->
+        <div class="booking-form-pane">
+          
+          <!-- STEP 1: Route & Stops -->
+          <div class="step-card" id="step-panel-1">
+            <div class="step-header">
+              <h1 class="step-title">Where are we moving your cargo?</h1>
+              <p class="step-subtitle">Enter your pickup and destination in Addis Ababa. You can add extra stops along the route.</p>
+            </div>
+
+            <!-- Origin Input -->
+            <div class="form-group">
+              <label for="input-origin" class="form-label">
+                <span>Pickup Location</span>
+                <span class="stop-badge is-origin">Origin</span>
+              </label>
+              <div class="input-with-icon">
+                <span class="input-icon-left" aria-hidden="true">🟢</span>
+                <input
+                  type="text"
+                  id="input-origin"
+                  class="form-input"
+                  placeholder="e.g. Bole Medhanialem, Kazanchis, CMC..."
+                  value="Bole Medhanialem, Addis Ababa"
+                  autocomplete="off"
+                />
+              </div>
+              <div class="autocomplete-dropdown" id="origin-autocomplete" role="listbox"></div>
+            </div>
+
+            <!-- Origin Access Notes -->
+            <div class="form-group">
+              <label for="origin-instructions" class="form-label">
+                <span>Pickup Landmark &amp; Gate Instructions</span>
+                <span style="font-size:0.75rem; color:#71717A;">Optional</span>
+              </label>
+              <input
+                type="text"
+                id="origin-instructions"
+                class="form-input"
+                placeholder="e.g. Next to Morning Star Mall, Gate #3, call upon arrival"
+              />
+            </div>
+
+            <!-- Intermediate Stops Chain -->
+            <div id="intermediate-stops-list" class="stops-chain"></div>
+
+            <button type="button" id="btn-add-stop" class="btn-add-stop">
+              <span>+</span> Add Stop on the Way
+            </button>
+
+            <!-- Destination Input -->
+            <div class="form-group" style="margin-top: 1.25rem;">
+              <label for="input-destination" class="form-label">
+                <span>Drop-off Destination</span>
+                <span class="stop-badge is-destination">Destination</span>
+              </label>
+              <div class="input-with-icon">
+                <span class="input-icon-left" aria-hidden="true">🔴</span>
+                <input
+                  type="text"
+                  id="input-destination"
+                  class="form-input"
+                  placeholder="e.g. Merkato Wholesale, Piassa, Kality..."
+                  value="Merkato Wholesale District, Addis Ababa"
+                  autocomplete="off"
+                />
+              </div>
+              <div class="autocomplete-dropdown" id="dest-autocomplete" role="listbox"></div>
+            </div>
+
+            <!-- Destination Access Notes -->
+            <div class="form-group">
+              <label for="dest-instructions" class="form-label">
+                <span>Drop-off Landmark &amp; Building Details</span>
+                <span style="font-size:0.75rem; color:#71717A;">Optional</span>
+              </label>
+              <input
+                type="text"
+                id="dest-instructions"
+                class="form-input"
+                placeholder="e.g. Military Tera building, Ground floor wholesale store"
+              />
+            </div>
+
+            <!-- Popular Corridor Shortcuts -->
+            <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #F4F4F5;">
+              <p style="font-size: 0.8125rem; font-weight: 600; color: #71717A; margin-bottom: 0.5rem;">
+                Popular Commercial Corridors:
+              </p>
+              <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                <button type="button" class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.65rem;" onclick="document.getElementById('input-origin').value='Bole Medhanialem, Addis Ababa'; document.getElementById('input-destination').value='Merkato Wholesale District, Addis Ababa';">
+                  Bole ↔ Merkato
+                </button>
+                <button type="button" class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.65rem;" onclick="document.getElementById('input-origin').value='CMC Residential, Addis Ababa'; document.getElementById('input-destination').value='Kazanchis & UNECA, Addis Ababa';">
+                  CMC ↔ Kazanchis
+                </button>
+                <button type="button" class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.65rem;" onclick="document.getElementById('input-origin').value='Saris Industrial Zone, Addis Ababa'; document.getElementById('input-destination').value='Kality Port & Warehouses, Addis Ababa';">
+                  Saris ↔ Kality
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- STEP 2: Cargo Inventory (Shell) -->
+          <div class="step-card" id="step-panel-2" style="display: none;">
+            <div class="step-header">
+              <h2 class="step-title">What items are you shipping?</h2>
+              <p class="step-subtitle">Select moving items or cargo categories to calculate volume and find the best truck.</p>
+            </div>
+            <div style="padding: 2rem; text-align: center; color: #71717A; background: #F8FAFC; border-radius: 8px;">
+              <p style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; color: #142553;">Cargo Inventory Selector</p>
+              <p style="font-size: 0.875rem;">Nextories-style item selector with categories (Living Room, Bedroom, Appliances, Boxes) will appear here in Phase 2.</p>
+            </div>
+          </div>
+
+          <!-- STEP 3: Vehicle Selection (Shell) -->
+          <div class="step-card" id="step-panel-3" style="display: none;">
+            <div class="step-header">
+              <h2 class="step-title">Choose your truck type</h2>
+              <p class="step-subtitle">Compare payload capacity, enclosed space, and upfront rates across our Addis Ababa fleet.</p>
+            </div>
+            <div style="padding: 2rem; text-align: center; color: #71717A; background: #F8FAFC; border-radius: 8px;">
+              <p style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; color: #142553;">Fleet Tier Comparison</p>
+              <p style="font-size: 0.875rem;">Small Pickup, Cargo Van, Box Truck, and Medium Flatbed tier cards will appear here in Phase 3.</p>
+            </div>
+          </div>
+
+          <!-- STEP 4: Access & Schedule (Shell) -->
+          <div class="step-card" id="step-panel-4" style="display: none;">
+            <div class="step-header">
+              <h2 class="step-title">Loading details &amp; schedule</h2>
+              <p class="step-subtitle">Specify building floors, elevator availability, loading helpers, and pickup timing.</p>
+            </div>
+            <div style="padding: 2rem; text-align: center; color: #71717A; background: #F8FAFC; border-radius: 8px;">
+              <p style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; color: #142553;">Loading Assistance &amp; Scheduling</p>
+              <p style="font-size: 0.875rem;">Helper add-ons, stairs/elevator settings, and scheduling options will appear here in Phase 3.</p>
+            </div>
+          </div>
+
+          <!-- STEP 5: Review & Confirm (Shell) -->
+          <div class="step-card" id="step-panel-5" style="display: none;">
+            <div class="step-header">
+              <h2 class="step-title">Shipment Review &amp; Confirmation</h2>
+              <p class="step-subtitle">Verify your route, cargo manifest, truck assignment, and transparent price breakdown.</p>
+            </div>
+            <div style="padding: 2rem; text-align: center; color: #71717A; background: #F8FAFC; border-radius: 8px;">
+              <p style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; color: #142553;">Uber Freight Review Screen</p>
+              <p style="font-size: 0.875rem;">Two-column review summary and client auth gate will appear here in Phase 4.</p>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Right Column: Sticky Summary & Map -->
+        <aside class="booking-summary-pane" aria-label="Route Summary &amp; Estimated Pricing">
+          
+          <!-- Interactive Route Map Card -->
+          <div class="route-map-card">
+            <div class="map-header">
+              <span class="map-title">
+                <span>🗺️</span> Addis Ababa Route Map
+              </span>
+              <span style="font-size:0.75rem; color:#71717A;">Live Preview</span>
+            </div>
+            <div class="map-canvas-container" id="route-map-preview">
+              <div class="map-bg-grid"></div>
+              <svg class="map-svg-overlay" viewBox="0 0 400 240" preserveAspectRatio="none">
+                <!-- Route Polyline (Simulated Addis Arterial Route) -->
+                <path d="M 80 180 Q 200 90 320 60" class="map-route-line" />
+                <!-- Origin Pin (Bole Area) -->
+                <circle cx="80" cy="180" r="8" fill="#15803D" class="map-pin" />
+                <circle cx="80" cy="180" r="16" fill="#15803D" fill-opacity="0.2" />
+                <!-- Destination Pin (Merkato Area) -->
+                <rect x="312" y="52" width="16" height="16" rx="3" fill="#B91C1C" class="map-pin" />
+                <rect x="306" y="46" width="28" height="28" rx="6" fill="#B91C1C" fill-opacity="0.15" />
+              </svg>
+            </div>
+            <div class="map-metrics-bar">
+              <div class="metric-box">
+                <span class="metric-val" id="route-distance-metric">14.8 km</span>
+                <span class="metric-lbl">Est. Distance</span>
+              </div>
+              <div style="width: 1px; height: 28px; background: #E4E4E7;"></div>
+              <div class="metric-box">
+                <span class="metric-val" id="route-duration-metric">32 min</span>
+                <span class="metric-lbl">Est. Duration</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live Price Receipt Card -->
+          <div class="summary-receipt-card" id="booking-live-summary">
+            <div class="receipt-header">Estimated Quote Summary</div>
+            
+            <div class="receipt-route-brief" id="summary-route-brief">
+              Bole Medhanialem → Merkato Wholesale
+            </div>
+
+            <div class="receipt-breakdown" id="booking-fare-breakdown">
+              <div class="receipt-row">
+                <span>Base Fare (Medium Truck)</span>
+                <span id="summary-base-fare">1,200 ETB</span>
+              </div>
+              <div class="receipt-row">
+                <span>Road Distance <small id="summary-distance-subtext" style="color:#71717A;">(14.8 km × 75 ETB/km)</small></span>
+                <span id="summary-distance-fare">1,110 ETB</span>
+              </div>
+              <div class="receipt-row">
+                <span>Loading Assistance (1 Helper)</span>
+                <span id="summary-helpers-fare">350 ETB</span>
+              </div>
+              <div class="receipt-row is-total">
+                <span>Total Estimate</span>
+                <span id="summary-total-fare" style="color:#1F3B87;">2,660 ETB</span>
+              </div>
+            </div>
+
+            <div class="receipt-actions">
+              <button type="button" id="btn-booking-prev" class="btn btn-secondary" style="display: none;">
+                ← Back
+              </button>
+              <button type="button" id="btn-booking-next" class="btn btn-primary">
+                Continue →
+              </button>
+            </div>
+
+            <div class="receipt-guarantee">
+              <span>🛡️</span> Upfront quote. Pay upon delivery via Cash or Telebirr.
+            </div>
+          </div>
+
+        </aside>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- Mobile Sticky Bottom Action Bar -->
+  <div class="mobile-booking-action-bar" aria-label="Mobile Booking Actions">
+    <div class="mobile-action-fare">
+      <span class="mobile-fare-lbl">Estimated Total</span>
+      <span class="mobile-fare-val" id="mobile-total-fare">2,660 ETB</span>
+    </div>
+    <button type="button" id="btn-mobile-next" class="btn btn-primary mobile-action-btn">
+      Continue →
+    </button>
+  </div>
+
+  <!-- Master Footer matching landing page -->
+  <footer class="kulli-footer" role="contentinfo">
+    <div class="footer-container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <a href="/" class="footer-brand-link">
+            <img src="/logos/kulli-logo-primary.svg" alt="Kulli Logo" class="brand-logo" width="120" height="36" />
+          </a>
+        </div>
+        <nav class="footer-nav" aria-label="Footer Navigation">
+          <a href="/booking.html" class="footer-link">Book</a>
+          <a href="/#drivers" class="footer-link">Drivers</a>
+          <a href="/about.html" class="footer-link">About</a>
+          <a href="/#faq" class="footer-link">FAQ</a>
+          <a href="/#apps" class="footer-link">Download App</a>
+        </nav>
+      </div>
+      <div class="footer-bottom">
+        <p class="footer-copyright">
+          &copy; 2026 Kulli Logistics Platform. Addis Ababa, Ethiopia. All rights reserved.
+        </p>
+      </div>
+    </div>
+  </footer>
+
+  <script type="module" src="/src/scripts/booking.ts"></script>
+</body>
+</html>

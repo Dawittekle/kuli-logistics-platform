@@ -15,7 +15,9 @@ export default defineConfig({
         about: resolve(__dirname, 'about.html'),
         login: resolve(__dirname, 'login.html'),
         signup: resolve(__dirname, 'signup.html'),
-        verifyOtp: resolve(__dirname, 'verify-otp.html')
+        verifyOtp: resolve(__dirname, 'verify-otp.html'),
+        booking: resolve(__dirname, 'booking.html'),
+        tracking: resolve(__dirname, 'tracking.html')
       }
     }
   },

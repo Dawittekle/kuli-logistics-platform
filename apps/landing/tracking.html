@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Track Shipment | Kulli Logistics Addis Ababa</title>
+  <meta name="description" content="Track your Kulli truck shipment in real time across Addis Ababa." />
+  <meta name="theme-color" content="#1F3B87" />
+  <link rel="icon" type="image/svg+xml" href="/logos/favicon.svg" />
+
+  <link rel="stylesheet" href="/src/styles/theme.css" />
+  <link rel="stylesheet" href="/src/styles/layout.css" />
+  <link rel="stylesheet" href="/src/styles/landing.css" />
+  <link rel="stylesheet" href="/src/styles/booking.css" />
+</head>
+<body data-theme="light">
+  <!-- Navbar -->
+  <header class="kulli-navbar" id="master-navbar" role="banner">
+    <div class="navbar-inner">
+      <div class="navbar-brand">
+        <a href="/" class="brand-link" aria-label="Kulli Home">
+          <img src="/logos/kulli-logo-primary.svg" alt="Kulli Logo" class="brand-logo" width="120" height="36" />
+        </a>
+      </div>
+
+      <nav class="navbar-nav" aria-label="Main Navigation">
+        <ul class="navbar-links">
+          <li><a href="/booking.html" class="navbar-link" data-text="Book"><span class="navbar-link-text">Book</span></a></li>
+          <li><a href="/#drivers" class="navbar-link" data-text="Drivers"><span class="navbar-link-text">Drivers</span></a></li>
+          <li><a href="/about.html" class="navbar-link" data-text="About"><span class="navbar-link-text">About</span></a></li>
+          <li><a href="/#faq" class="navbar-link" data-text="FAQ"><span class="navbar-link-text">FAQ</span></a></li>
+        </ul>
+      </nav>
+
+      <div class="navbar-actions">
+        <a href="/booking.html" class="btn btn-primary" style="padding: 0.4rem 0.9rem; font-size: 0.8125rem;">+ New Booking</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="tracking-page-wrap" id="main-content">
+    <div class="booking-main-container">
+      
+      <!-- Order Header Card -->
+      <div class="tracking-header-card">
+        <div>
+          <span style="font-size: 0.8125rem; color: #71717A; display: block; margin-bottom: 0.25rem;">Shipment Tracking</span>
+          <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+            <span class="tracking-ref-badge" id="tracking-order-ref">KL-2026-8492</span>
+            <span class="tracking-status-pill" id="tracking-status-badge">⚡ Matching Nearby Drivers</span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; align-items: center;">
+          <a href="/booking.html" class="btn btn-secondary" style="font-size: 0.875rem;">Book Another Move</a>
+          <button type="button" class="btn btn-secondary" style="font-size: 0.875rem;" onclick="window.print()">Receipt</button>
+        </div>
+      </div>
+
+      <!-- Tracking Grid -->
+      <div class="tracking-grid">
+        
+        <!-- Left: Map & Driver Details -->
+        <div>
+          <!-- Large Tracking Map -->
+          <div class="route-map-card" style="margin-bottom: 1.5rem;">
+            <div class="map-header">
+              <span class="map-title">
+                <span>📍</span> Live Transit Route
+              </span>
+              <span style="font-size: 0.75rem; color: #15803D; font-weight: 600;">● Active GPS Simulation</span>
+            </div>
+            <div class="map-canvas-container" style="height: 320px;">
+              <div class="map-bg-grid"></div>
+              <svg class="map-svg-overlay" viewBox="0 0 500 320" preserveAspectRatio="none">
+                <path d="M 100 240 Q 250 140 400 80" class="map-route-line" stroke-width="5" />
+                <circle cx="100" cy="240" r="10" fill="#15803D" />
+                <circle cx="100" cy="240" r="20" fill="#15803D" fill-opacity="0.2" />
+                <rect x="390" y="70" width="20" height="20" rx="4" fill="#B91C1C" />
+                <circle cx="250" cy="140" r="12" fill="#FFAD61" />
+                <text x="250" y="145" text-anchor="middle" font-size="12">🚚</text>
+              </svg>
+            </div>
+            <div class="map-metrics-bar">
+              <div class="metric-box">
+                <span class="metric-val">Bole Medhanialem</span>
+                <span class="metric-lbl">Pickup</span>
+              </div>
+              <div style="width: 1px; height: 28px; background: #E4E4E7;"></div>
+              <div class="metric-box">
+                <span class="metric-val">Merkato Wholesale</span>
+                <span class="metric-lbl">Destination</span>
+              </div>
+              <div style="width: 1px; height: 28px; background: #E4E4E7;"></div>
+              <div class="metric-box">
+                <span class="metric-val">~25 mins</span>
+                <span class="metric-lbl">Est. Arrival</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Driver Profile Card -->
+          <div class="step-card">
+            <h3 style="font-size: 1rem; font-weight: 700; color: #142553; margin: 0 0 0.75rem 0;">Assigned Driver &amp; Truck</h3>
+            <div class="driver-profile-card">
+              <div class="driver-avatar">AT</div>
+              <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                  <h4 style="font-size: 1rem; font-weight: 700; margin: 0; color: #142553;">Abebe Tadesse</h4>
+                  <span style="font-size: 0.8125rem; font-weight: 700; color: #B45309;">★ 4.9 (342 moves)</span>
+                </div>
+                <p style="font-size: 0.875rem; color: #71717A; margin: 0.25rem 0 0 0;">
+                  Isuzu NPR Medium Box Truck • Plate: <strong>3-A48291 AA</strong>
+                </p>
+              </div>
+            </div>
+            <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
+              <a href="tel:+251911000000" class="btn btn-primary" style="flex: 1; justify-content: center; font-size: 0.875rem;">
+                📞 Call Driver
+              </a>
+              <button type="button" class="btn btn-secondary" style="flex: 1; justify-content: center; font-size: 0.875rem;" onclick="alert('In-app driver messaging will connect to MongoDB messages in backend phase.')">
+                💬 Message
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Right: Status Stepper & Manifest Brief -->
+        <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+          
+          <!-- Canonical Status Timeline Card -->
+          <div class="step-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+              <h3 style="font-size: 1rem; font-weight: 700; color: #142553; margin: 0;">Status Timeline</h3>
+              <button type="button" id="btn-advance-status" class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">
+                Demo: Advance Status ⏭️
+              </button>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 1rem; position: relative;">
+              <div class="timeline-step is-done" style="display: flex; gap: 0.75rem; align-items: start;">
+                <span style="color: #15803D; font-weight: 700;">✓</span>
+                <div>
+                  <strong style="font-size: 0.875rem; color: #142553;">1. Booking Request Received</strong>
+                  <p style="font-size: 0.75rem; color: #71717A; margin: 2px 0 0 0;">Request logged in central dispatch</p>
+                </div>
+              </div>
+
+              <div class="timeline-step is-active" id="status-step-2" style="display: flex; gap: 0.75rem; align-items: start;">
+                <span style="color: #B45309; font-weight: 700;">●</span>
+                <div>
+                  <strong style="font-size: 0.875rem; color: #B45309;">2. Driver Accepted Offer</strong>
+                  <p style="font-size: 0.75rem; color: #71717A; margin: 2px 0 0 0;">Abebe Tadesse confirmed the dispatch</p>
+                </div>
+              </div>
+
+              <div class="timeline-step" id="status-step-3" style="display: flex; gap: 0.75rem; align-items: start; opacity: 0.5;">
+                <span style="color: #A1A1AA; font-weight: 700;">○</span>
+                <div>
+                  <strong style="font-size: 0.875rem; color: #71717A;">3. En Route to Pickup</strong>
+                  <p style="font-size: 0.75rem; color: #71717A; margin: 2px 0 0 0;">Truck approaching Bole pickup point</p>
+                </div>
+              </div>
+
+              <div class="timeline-step" id="status-step-4" style="display: flex; gap: 0.75rem; align-items: start; opacity: 0.5;">
+                <span style="color: #A1A1AA; font-weight: 700;">○</span>
+                <div>
+                  <strong style="font-size: 0.875rem; color: #71717A;">4. Loading at Origin</strong>
+                  <p style="font-size: 0.75rem; color: #71717A; margin: 2px 0 0 0;">Loading items with 1 helper</p>
+                </div>
+              </div>
+
+              <div class="timeline-step" id="status-step-5" style="display: flex; gap: 0.75rem; align-items: start; opacity: 0.5;">
+                <span style="color: #A1A1AA; font-weight: 700;">○</span>
+                <div>
+                  <strong style="font-size: 0.875rem; color: #71717A;">5. In Transit to Destination</strong>
+                  <p style="font-size: 0.75rem; color: #71717A; margin: 2px 0 0 0;">Heading towards Merkato Wholesale</p>
+                </div>
+              </div>
+
+              <div class="timeline-step" id="status-step-6" style="display: flex; gap: 0.75rem; align-items: start; opacity: 0.5;">
+                <span style="color: #A1A1AA; font-weight: 700;">○</span>
+                <div>
+                  <strong style="font-size: 0.875rem; color: #71717A;">6. Delivery Completed</strong>
+                  <p style="font-size: 0.75rem; color: #71717A; margin: 2px 0 0 0;">Unloaded &amp; cash/telebirr settlement</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dispatch Support Box -->
+          <div style="background: #FFF8E6; border: 1px solid #FFE082; border-radius: 12px; padding: 1.25rem;">
+            <h4 style="font-size: 0.9375rem; font-weight: 700; color: #795548; margin: 0 0 0.25rem 0;">Need dispatch support?</h4>
+            <p style="font-size: 0.8125rem; color: #5D4037; margin: 0 0 0.75rem 0;">
+              Call Kulli central dispatch directly for changes, route adjustments, or questions.
+            </p>
+            <a href="tel:8492" class="btn btn-secondary" style="font-weight: 700; width: 100%; justify-content: center;">
+              📞 Call Central Dispatch: 8492
+            </a>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <footer class="kulli-footer" role="contentinfo">
+    <div class="footer-container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <a href="/" class="footer-brand-link">
+            <img src="/logos/kulli-logo-primary.svg" alt="Kulli Logo" class="brand-logo" width="120" height="36" />
+          </a>
+        </div>
+        <nav class="footer-nav" aria-label="Footer Navigation">
+          <a href="/booking.html" class="footer-link">Book</a>
+          <a href="/#drivers" class="footer-link">Drivers</a>
+          <a href="/about.html" class="footer-link">About</a>
+          <a href="/#faq" class="footer-link">FAQ</a>
+          <a href="/#apps" class="footer-link">Download App</a>
+        </nav>
+      </div>
+      <div class="footer-bottom">
+        <p class="footer-copyright">
+          &copy; 2026 Kulli Logistics Platform. Addis Ababa, Ethiopia. All rights reserved.
+        </p>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Read ref query param
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if (ref) {
+      const refEl = document.getElementById('tracking-order-ref');
+      if (refEl) refEl.textContent = ref;
+    }
+
+    // Status simulation
+    let currentStatusIndex = 2;
+    const statusTitles = [
+      'Booking Request Received',
+      '⚡ Driver Accepted Offer',
+      '🚚 En Route to Pickup',
+      '📦 Loading at Origin',
+      '🛣️ In Transit to Destination',
+      '✅ Delivery Completed'
+    ];
+
+    const advanceBtn = document.getElementById('btn-advance-status');
+    advanceBtn?.addEventListener('click', () => {
+      currentStatusIndex = (currentStatusIndex % 6) + 1;
+      const badge = document.getElementById('tracking-status-badge');
+      if (badge) {
+        badge.textContent = statusTitles[currentStatusIndex - 1];
+      }
+
+      for (let i = 2; i <= 6; i++) {
+        const stepEl = document.getElementById(`status-step-${i}`);
+        if (stepEl) {
+          stepEl.style.opacity = i <= currentStatusIndex ? '1' : '0.5';
+          const icon = stepEl.querySelector('span');
+          if (icon) {
+            icon.textContent = i < currentStatusIndex ? '✓' : (i === currentStatusIndex ? '●' : '○');
+            icon.style.color = i < currentStatusIndex ? '#15803D' : (i === currentStatusIndex ? '#B45309' : '#A1A1AA');
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>

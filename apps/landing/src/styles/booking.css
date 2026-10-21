@@ -1,0 +1,693 @@
+/* ============================================================
+   Kulli Logistics Platform — Shipment Booking Experience Styles
+   Desktop Two-Column Split + Mobile Responsive Action Flow
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   1. Page Layout & Grid Container
+   ------------------------------------------------------------ */
+.booking-page-wrap {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-background, #FBFAF9);
+  color: var(--color-text-primary, #191818);
+  padding-top: 84px; /* Space for fixed navbar */
+  padding-bottom: var(--space-12, 3rem);
+}
+
+.booking-main-container {
+  width: min(92%, 1240px);
+  margin: 0 auto;
+  flex: 1;
+}
+
+/* Prototype Honesty Banner */
+.prototype-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 0.75rem);
+  padding: 0.625rem 1rem;
+  background-color: #FFF8E6;
+  border: 1px solid #FFE082;
+  border-radius: var(--radius-md, 8px);
+  margin-bottom: var(--space-4, 1rem);
+  font-size: 0.8125rem;
+  color: #795548;
+}
+
+.prototype-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #B78103;
+}
+
+/* Two-Column Booking Grid */
+.booking-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6, 1.5rem);
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .booking-grid {
+    grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.95fr);
+    gap: var(--space-8, 2rem);
+  }
+}
+
+/* ------------------------------------------------------------
+   2. Stepper & Progress Navigation
+   ------------------------------------------------------------ */
+.booking-stepper-card {
+  background: var(--color-surface, #FFFFFF);
+  border: 1px solid var(--color-border, rgba(20, 37, 83, 0.1));
+  border-radius: var(--radius-lg, 12px);
+  padding: 1rem 1.25rem;
+  margin-bottom: var(--space-5, 1.25rem);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.stepper-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.stepper-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  color: var(--color-text-muted, #71717A);
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.375rem 0.5rem;
+  border-radius: var(--radius-sm, 6px);
+  transition: all 0.2s ease;
+}
+
+.step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-surface-low, #F4F4F5);
+  color: var(--color-text-muted, #71717A);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  transition: all 0.2s ease;
+}
+
+.step-item.is-active {
+  color: var(--color-primary, #1F3B87);
+  font-weight: 700;
+}
+
+.step-item.is-active .step-num {
+  background: var(--color-primary, #1F3B87);
+  color: #FFFFFF;
+}
+
+.step-item.is-complete {
+  color: #15803D;
+}
+
+.step-item.is-complete .step-num {
+  background: #DCFCE7;
+  color: #15803D;
+}
+
+.step-divider {
+  flex: 1;
+  height: 2px;
+  background: var(--color-border, #E4E4E7);
+  margin: 0 0.5rem;
+  min-width: 16px;
+}
+
+/* ------------------------------------------------------------
+   3. Left Column: Step Panels & Cards
+   ------------------------------------------------------------ */
+.booking-form-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 1rem);
+}
+
+.step-card {
+  background: var(--color-surface, #FFFFFF);
+  border: 1px solid var(--color-border, rgba(20, 37, 83, 0.1));
+  border-radius: var(--radius-lg, 12px);
+  padding: 1.5rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.step-header {
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--color-border, #F4F4F5);
+  padding-bottom: 1rem;
+}
+
+.step-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--color-navy-dark, #142553);
+  margin: 0 0 0.25rem 0;
+}
+
+.step-subtitle {
+  font-size: 0.875rem;
+  color: var(--color-text-muted, #71717A);
+  margin: 0;
+}
+
+/* Form Groups & Inputs */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-bottom: 1rem;
+  position: relative;
+}
+
+.form-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-navy-dark, #142553);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 0.9375rem;
+  border: 1px solid var(--color-border, #D4D4D8);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-surface, #FFFFFF);
+  color: var(--color-text-primary, #191818);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  font-family: inherit;
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: var(--color-primary, #1F3B87);
+  box-shadow: 0 0 0 3px rgba(31, 59, 135, 0.12);
+}
+
+.input-with-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-icon-left {
+  position: absolute;
+  left: 0.875rem;
+  color: var(--color-primary, #1F3B87);
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.input-with-icon .form-input {
+  padding-left: 2.75rem;
+}
+
+/* Autocomplete Suggestions Box */
+.autocomplete-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: var(--color-surface, #FFFFFF);
+  border: 1px solid var(--color-border, #D4D4D8);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  margin-top: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  display: none;
+}
+
+.autocomplete-dropdown.is-open {
+  display: block;
+}
+
+.autocomplete-item {
+  display: flex;
+  flex-direction: column;
+  padding: 0.625rem 1rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-border, #F4F4F5);
+  transition: background-color 0.15s ease;
+}
+
+.autocomplete-item:last-child {
+  border-bottom: none;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.is-selected {
+  background-color: var(--color-primary-subtle, rgba(31, 59, 135, 0.08));
+}
+
+.autocomplete-name {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--color-navy-dark, #142553);
+}
+
+.autocomplete-subcity {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #71717A);
+}
+
+/* Stop Row & Add Stop Button */
+.stops-chain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  position: relative;
+}
+
+.stop-card-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.stop-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  width: fit-content;
+}
+
+.stop-badge.is-origin {
+  background: #DCFCE7;
+  color: #15803D;
+}
+
+.stop-badge.is-stop {
+  background: #FEF3C7;
+  color: #B45309;
+}
+
+.stop-badge.is-destination {
+  background: #FEE2E2;
+  color: #B91C1C;
+}
+
+.btn-add-stop {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: transparent;
+  border: 1px dashed var(--color-primary, #1F3B87);
+  color: var(--color-primary, #1F3B87);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md, 8px);
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: fit-content;
+  margin-top: 0.25rem;
+}
+
+.btn-add-stop:hover {
+  background: var(--color-primary-subtle, rgba(31, 59, 135, 0.08));
+}
+
+/* ------------------------------------------------------------
+   4. Right Column: Sticky Summary & Route Map
+   ------------------------------------------------------------ */
+.booking-summary-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5, 1.25rem);
+}
+
+@media (min-width: 1024px) {
+  .booking-summary-pane {
+    position: sticky;
+    top: 96px;
+  }
+}
+
+/* Interactive Route Map Card */
+.route-map-card {
+  background: var(--color-surface, #FFFFFF);
+  border: 1px solid var(--color-border, rgba(20, 37, 83, 0.1));
+  border-radius: var(--radius-lg, 12px);
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.map-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: #FAFAFA;
+  border-bottom: 1px solid var(--color-border, #E4E4E7);
+}
+
+.map-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--color-navy-dark, #142553);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.map-canvas-container {
+  position: relative;
+  width: 100%;
+  height: 240px;
+  background: #E5E9F0;
+  overflow: hidden;
+}
+
+.map-bg-grid {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    linear-gradient(to right, rgba(20, 37, 83, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(20, 37, 83, 0.06) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.map-svg-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.map-route-line {
+  stroke: var(--color-primary, #1F3B87);
+  stroke-width: 4;
+  stroke-dasharray: 6 6;
+  fill: none;
+  animation: routeDash 30s linear infinite;
+}
+
+@keyframes routeDash {
+  to {
+    stroke-dashoffset: -300;
+  }
+}
+
+.map-pin {
+  cursor: grab;
+  transition: transform 0.2s ease;
+}
+
+.map-pin:hover {
+  transform: scale(1.15);
+}
+
+/* Map Metrics Overlay */
+.map-metrics-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0.75rem;
+  background: #FFFFFF;
+  border-top: 1px solid var(--color-border, #E4E4E7);
+}
+
+.metric-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.metric-val {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-primary, #1F3B87);
+}
+
+.metric-lbl {
+  font-size: 0.6875rem;
+  color: var(--color-text-muted, #71717A);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+@media (max-width: 480px) {
+  .map-metrics-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.375rem;
+    padding: 0.625rem 0.375rem;
+  }
+  .map-metrics-bar > div:nth-child(2),
+  .map-metrics-bar > div:nth-child(4) {
+    display: none;
+  }
+  .metric-val {
+    font-size: 0.75rem;
+    text-align: center;
+    line-height: 1.2;
+  }
+  .metric-lbl {
+    font-size: 0.625rem;
+    text-align: center;
+  }
+}
+
+/* Live Booking Summary Card */
+.summary-receipt-card {
+  background: var(--color-surface, #FFFFFF);
+  border: 1px solid var(--color-border, rgba(20, 37, 83, 0.1));
+  border-radius: var(--radius-lg, 12px);
+  padding: 1.25rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.receipt-header {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-navy-dark, #142553);
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-border, #F4F4F5);
+}
+
+.receipt-route-brief {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--color-text-primary, #191818);
+  margin-bottom: 1rem;
+  padding: 0.625rem 0.75rem;
+  background: #F8FAFC;
+  border-radius: var(--radius-md, 8px);
+}
+
+.receipt-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.receipt-row {
+  display: flex;
+  justify-content: space-between;
+  color: var(--color-text-muted, #71717A);
+}
+
+.receipt-row.is-total {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--color-navy-dark, #142553);
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--color-border, #E4E4E7);
+  margin-top: 0.25rem;
+}
+
+.receipt-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.receipt-actions .btn {
+  flex: 1;
+}
+
+.receipt-guarantee {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: #15803D;
+  margin-top: 0.75rem;
+  justify-content: center;
+}
+
+/* ------------------------------------------------------------
+   5. Mobile Sticky Bottom Action Bar
+   ------------------------------------------------------------ */
+.mobile-booking-action-bar {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .mobile-booking-action-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 900;
+    background: #FFFFFF;
+    border-top: 1px solid var(--color-border, rgba(20, 37, 83, 0.1));
+    padding: 0.75rem 1.25rem;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
+  }
+
+  .mobile-action-fare {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .mobile-fare-val {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--color-navy-dark, #142553);
+  }
+
+  .mobile-fare-lbl {
+    font-size: 0.75rem;
+    color: var(--color-text-muted, #71717A);
+  }
+
+  .mobile-action-btn {
+    min-width: 140px;
+    height: 48px;
+  }
+}
+
+/* ------------------------------------------------------------
+   6. Tracking Page Specific Styles
+   ------------------------------------------------------------ */
+.tracking-page-wrap {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-background, #FBFAF9);
+  padding-top: 84px;
+  padding-bottom: 3rem;
+}
+
+.tracking-header-card {
+  background: var(--color-surface, #FFFFFF);
+  border: 1px solid var(--color-border, rgba(20, 37, 83, 0.1));
+  border-radius: var(--radius-lg, 12px);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.tracking-ref-badge {
+  font-family: monospace;
+  font-weight: 700;
+  font-size: 1.1rem;
+  background: var(--color-primary-subtle, rgba(31, 59, 135, 0.08));
+  color: var(--color-primary, #1F3B87);
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-sm, 6px);
+}
+
+.tracking-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.875rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  background: #DCFCE7;
+  color: #15803D;
+}
+
+.tracking-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+@media (min-width: 1024px) {
+  .tracking-grid {
+    grid-template-columns: 1.35fr 1fr;
+  }
+}
+
+.driver-profile-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: #F8FAFC;
+  border-radius: var(--radius-md, 8px);
+  margin-top: 1rem;
+}
+
+.driver-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--color-primary, #1F3B87);
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.2rem;
+}

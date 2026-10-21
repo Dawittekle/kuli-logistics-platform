@@ -205,4 +205,52 @@ describe('Kulli Landing Page Production Suite', () => {
       assert.ok(existsSync(fullPath), `Font file ${font} must exist in public/fonts/`);
     }
   });
+
+  it('landing page and about page Book buttons route to /booking.html', () => {
+    const indexPath = join(landingRoot, 'dist/index.html');
+    const indexHtml = readFileSync(indexPath, 'utf-8');
+
+    // Index Book links
+    assert.match(indexHtml, /href="\/booking\.html"[^>]*>Book<\/a>/);
+    assert.match(indexHtml, /href="\/booking\.html"[^>]*>Book Now<\/a>/);
+    assert.match(indexHtml, /href="\/booking\.html\?vehicle=medium-truck"[^>]*>Book Now →<\/a>/);
+    assert.match(indexHtml, /href="\/booking\.html\?vehicle=cargo-van"[^>]*>Book Now →<\/a>/);
+    assert.match(indexHtml, /href="\/booking\.html\?vehicle=small-pickup"[^>]*>Book Now →<\/a>/);
+
+    // About Book links
+    const aboutPath = join(landingRoot, 'dist/about.html');
+    const aboutHtml = readFileSync(aboutPath, 'utf-8');
+    assert.match(aboutHtml, /href="\/booking\.html"[^>]*>Book<\/a>/);
+    assert.match(aboutHtml, /href="\/booking\.html"[^>]*>Book Now<\/a>/);
+  });
+
+  it('dist/booking.html is compiled and contains two-column booking layout with route & pricing elements', () => {
+    const bookingPath = join(landingRoot, 'dist/booking.html');
+    assert.ok(existsSync(bookingPath), 'dist/booking.html must exist after vite build');
+
+    const html = readFileSync(bookingPath, 'utf-8');
+    assert.match(html, /<title>Book a Truck \| Kulli Logistics Platform Addis Ababa<\/title>/);
+    assert.match(html, /class="prototype-banner"/);
+    assert.match(html, /class="booking-stepper-card"/);
+    assert.match(html, /id="input-origin"/);
+    assert.match(html, /id="input-destination"/);
+    assert.match(html, /id="route-map-preview"/);
+    assert.match(html, /id="booking-live-summary"/);
+    assert.match(html, /id="btn-booking-next"/);
+    assert.match(html, /id="btn-mobile-next"/);
+  });
+
+  it('dist/tracking.html is compiled and contains real-time status tracker and driver card', () => {
+    const trackingPath = join(landingRoot, 'dist/tracking.html');
+    assert.ok(existsSync(trackingPath), 'dist/tracking.html must exist after vite build');
+
+    const html = readFileSync(trackingPath, 'utf-8');
+    assert.match(html, /<title>Track Shipment \| Kulli Logistics Addis Ababa<\/title>/);
+    assert.match(html, /id="tracking-order-ref"/);
+    assert.match(html, /id="tracking-status-badge"/);
+    assert.match(html, /class="driver-profile-card"/);
+    assert.match(html, /Abebe Tadesse/);
+    assert.match(html, /class="timeline-step/);
+    assert.match(html, /id="btn-advance-status"/);
+  });
 });
