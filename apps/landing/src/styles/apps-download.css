@@ -4,21 +4,24 @@
    ============================================================ */
 
 .apps-section {
-  padding: var(--space-16) 0;
+  min-height: 640px;
+  display: flex;
+  align-items: center;
+  padding: clamp(6.5rem, 9vw, 9.5rem) 0;
   background-color: var(--color-background);
   border-top: 1px solid var(--color-border);
 }
 
 .apps-header {
   text-align: center;
-  margin-bottom: var(--space-10);
+  margin-bottom: var(--space-12);
 }
 
 .apps-title {
   font-family: var(--font-heading);
-  font-size: clamp(2rem, 3.8vw, 2.625rem);
+  font-size: clamp(2.25rem, 4.2vw, 3.25rem);
   font-weight: 700;
-  line-height: 1.25;
+  line-height: 1.2;
   color: var(--color-text-primary);
 }
 
@@ -26,17 +29,18 @@
   display: flex;
   justify-content: center;
   align-items: stretch;
-  gap: var(--space-8);
+  gap: clamp(2rem, 4vw, 3.5rem);
   flex-wrap: wrap;
 }
 
 .app-card {
   flex: 1 1 380px;
-  max-width: 440px;
+  max-width: 460px;
   background-color: #FFFFFF;
   border: 1px solid var(--color-border);
-  border-radius: 36px;
-  padding: var(--space-8);
+  border-radius: 40px;
+  padding: var(--space-10) var(--space-8);
+  min-height: 540px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -46,20 +50,20 @@
 }
 
 .app-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 16px 36px rgba(20, 37, 83, 0.12);
+  transform: translateY(-6px);
+  box-shadow: 0 20px 40px rgba(20, 37, 83, 0.14);
 }
 
 .app-card-qr-wrap {
-  width: 220px;
-  height: 220px;
+  width: 230px;
+  height: 230px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: var(--space-5);
+  margin-bottom: var(--space-6);
   background-color: #F7F9FC;
-  border-radius: 24px;
-  padding: var(--space-3);
+  border-radius: 28px;
+  padding: var(--space-4);
   border: 1px solid var(--color-border);
 }
 
@@ -71,7 +75,7 @@
 
 .app-card-title {
   font-family: var(--font-heading);
-  font-size: 1.375rem;
+  font-size: 1.5rem;
   font-weight: 700;
   color: var(--color-text-primary);
   margin-bottom: var(--space-2);
@@ -79,10 +83,10 @@
 
 .app-card-subtitle {
   font-family: var(--font-body);
-  font-size: 1rem;
+  font-size: 1.0625rem;
   font-weight: 600;
   color: var(--color-orange);
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--space-8);
 }
 
 .app-card-actions {
@@ -98,13 +102,13 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 10px 20px;
+  padding: 12px 24px;
   background-color: var(--color-navy-dark, #142553);
   color: #FFFFFF;
   border-radius: var(--radius-pill, 9999px);
   text-decoration: none;
   font-family: var(--font-heading);
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   font-weight: 700;
   transition: background-color var(--transition-fast, 150ms ease);
 }
@@ -118,14 +122,14 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 10px 20px;
+  padding: 12px 24px;
   background-color: transparent;
   color: var(--color-primary);
   border: 2px solid var(--color-primary);
   border-radius: var(--radius-pill, 9999px);
   text-decoration: none;
   font-family: var(--font-heading);
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   font-weight: 700;
   transition: all var(--transition-fast, 150ms ease);
 }

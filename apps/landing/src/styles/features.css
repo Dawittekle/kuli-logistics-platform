@@ -6,16 +6,20 @@
    1. DRIVE & EARN SECTION (#drivers)
    ------------------------------------------------------------ */
 .drive-earn-section {
-  padding: var(--space-16) 0;
+  min-height: 640px;
+  display: flex;
+  align-items: center;
+  padding: clamp(6rem, 8vw, 8.5rem) 0;
   background-color: var(--color-background);
   border-bottom: 1px solid var(--color-border);
 }
 
 .drive-earn-inner {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-8);
+  gap: clamp(2.5rem, 5vw, 5rem);
 }
 
 .drive-earn-image-col {
@@ -26,7 +30,8 @@
 
 .driver-cabin-img {
   width: 100%;
-  max-width: 520px;
+  max-width: 560px;
+  max-height: 500px;
   height: auto;
   object-fit: cover;
   border-radius: 48px;
@@ -35,7 +40,7 @@
 
 .drive-earn-content-col {
   flex: 1 1 50%;
-  max-width: 540px;
+  max-width: 580px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -43,11 +48,11 @@
 
 .drive-earn-title {
   font-family: var(--font-heading);
-  font-size: clamp(2rem, 3.8vw, 2.625rem);
+  font-size: clamp(2.25rem, 4.2vw, 3.25rem);
   font-weight: 700;
-  line-height: 1.25;
+  line-height: 1.2;
   color: var(--color-text-primary);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-6);
 }
 
 .drive-earn-title .accent-orange {
@@ -56,10 +61,10 @@
 
 .drive-earn-desc {
   font-family: var(--font-body);
-  font-size: 1.125rem;
+  font-size: 1.1875rem;
   color: var(--color-text-secondary);
-  line-height: 1.6;
-  margin-bottom: var(--space-6);
+  line-height: 1.65;
+  margin-bottom: var(--space-8);
 }
 
 .drive-earn-actions {
@@ -88,16 +93,20 @@
    2. OUR SERVICES SECTION (#services)
    ------------------------------------------------------------ */
 .services-section {
-  padding: var(--space-16) 0;
+  min-height: 700px;
+  display: flex;
+  align-items: center;
+  padding: clamp(6.5rem, 9vw, 9.5rem) 0;
   background-color: var(--color-primary);
   color: #FFFFFF;
 }
 
 .services-inner {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-8);
+  gap: clamp(2.5rem, 5vw, 5rem);
 }
 
 .services-image-col {
@@ -108,16 +117,17 @@
 
 .services-truck-img {
   width: 100%;
-  max-width: 520px;
+  max-width: 560px;
+  max-height: 500px;
   height: auto;
   object-fit: cover;
   border-radius: 48px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.25);
 }
 
 .services-content-col {
   flex: 1 1 52%;
-  max-width: 580px;
+  max-width: 600px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -137,9 +147,9 @@
 .services-title {
   color: #FFFFFF;
   font-family: var(--font-heading);
-  font-size: clamp(1.85rem, 3.5vw, 2.5rem);
+  font-size: clamp(2.25rem, 4.2vw, 3.25rem);
   font-weight: 700;
-  line-height: 1.25;
+  line-height: 1.2;
   margin-bottom: var(--space-8);
 }
 
@@ -245,12 +255,15 @@
    3. TRUCK TYPES SECTION (#fleet)
    ------------------------------------------------------------ */
 .truck-types-section {
-  padding: var(--space-16) 0;
+  min-height: 700px;
+  display: flex;
+  align-items: center;
+  padding: clamp(6.5rem, 9vw, 9.5rem) 0;
   background-color: var(--color-background);
 }
 
 .truck-types-header {
-  margin-bottom: var(--space-8);
+  margin-bottom: var(--space-10);
 }
 
 .truck-types-eyebrow {
@@ -266,16 +279,16 @@
 
 .truck-types-title {
   font-family: var(--font-heading);
-  font-size: clamp(2rem, 3.8vw, 2.625rem);
+  font-size: clamp(2.25rem, 4.2vw, 3.25rem);
   font-weight: 700;
-  line-height: 1.25;
+  line-height: 1.2;
   color: var(--color-text-primary);
 }
 
 .truck-types-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-8);
+  gap: clamp(1.5rem, 2.5vw, 2.5rem);
   align-items: stretch;
 }
 
@@ -284,10 +297,10 @@
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  min-height: 480px;
+  min-height: 520px;
   border-radius: 36px;
   overflow: hidden;
-  padding: var(--space-5);
+  padding: var(--space-6);
   background-color: #EEF3FA;
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-panel);
@@ -295,8 +308,8 @@
 }
 
 .truck-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 16px 36px rgba(20, 37, 83, 0.14);
+  transform: translateY(-6px);
+  box-shadow: 0 20px 40px rgba(20, 37, 83, 0.16);
 }
 
 .truck-card-media {
@@ -321,7 +334,7 @@
 
 .truck-card-img.is-contain {
   object-fit: contain;
-  padding: var(--space-6) var(--space-6) 160px;
+  padding: var(--space-6) var(--space-6) 190px;
 }
 
 .truck-card-info {
@@ -329,14 +342,14 @@
   z-index: 2;
   width: 100%;
   background-color: #FFFFFF;
-  border-radius: 20px;
-  padding: var(--space-5) var(--space-6);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border-radius: 24px;
+  padding: var(--space-6) var(--space-6);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
 }
 
 .truck-card-title {
   font-family: var(--font-heading);
-  font-size: 1.25rem;
+  font-size: 1.375rem;
   font-weight: 700;
   color: var(--color-text-primary);
   margin-bottom: var(--space-2);
@@ -346,13 +359,13 @@
   font-family: var(--font-body);
   font-size: 0.9375rem;
   color: var(--color-text-secondary);
-  line-height: 1.5;
-  margin-bottom: var(--space-3);
+  line-height: 1.55;
+  margin-bottom: var(--space-4);
 }
 
 .truck-card-btn {
   font-family: var(--font-heading);
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   font-weight: 700;
   color: var(--color-primary);
   text-decoration: none;
@@ -379,6 +392,6 @@
     gap: var(--space-6);
   }
   .truck-card {
-    min-height: 420px;
+    min-height: 440px;
   }
 }

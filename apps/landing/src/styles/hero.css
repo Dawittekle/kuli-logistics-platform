@@ -11,21 +11,27 @@
 .hero-section {
   position: relative;
   background-color: var(--color-navy-dark);
-  padding: var(--space-12) 0 var(--space-16);
+  min-height: clamp(640px, calc(100vh - 72px), 980px);
+  min-height: clamp(640px, calc(100dvh - 72px), 980px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(3.5rem, 6vh, 6rem) 0;
   color: #FFFFFF;
   overflow: hidden;
 }
 
 .hero-inner {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-8);
+  gap: clamp(2rem, 5vw, 4rem);
 }
 
 .hero-content {
-  flex: 1 1 50%;
-  max-width: 580px;
+  flex: 1 1 52%;
+  max-width: 600px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -34,11 +40,11 @@
 .hero-title {
   color: #FFFFFF;
   font-family: var(--font-heading);
-  font-size: clamp(2.25rem, 4.5vw, 3.25rem);
+  font-size: clamp(2.5rem, 5vw, 3.75rem);
   font-weight: 700;
-  line-height: 1.18;
+  line-height: 1.15;
   letter-spacing: -0.015em;
-  margin-bottom: var(--space-5);
+  margin-bottom: var(--space-6);
 }
 
 .hero-accent-orange {
@@ -48,9 +54,10 @@
 .hero-description {
   color: rgba(255, 255, 255, 0.9);
   font-family: var(--font-body);
-  font-size: 1.125rem;
-  line-height: 1.6;
+  font-size: clamp(1.125rem, 1.8vw, 1.25rem);
+  line-height: 1.65;
   margin-bottom: var(--space-8);
+  max-width: 540px;
 }
 
 .hero-actions {
@@ -65,13 +72,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 14px 34px;
+  padding: 16px 38px;
+  min-height: 52px;
   background-color: var(--color-orange);
   color: #FFFFFF;
   border: 2px solid var(--color-orange);
   border-radius: var(--radius-button);
   font-family: var(--font-heading);
-  font-size: 1rem;
+  font-size: 1.0625rem;
   font-weight: 600;
   line-height: 1;
   text-decoration: none;
@@ -82,20 +90,22 @@
 .btn-hero-book:hover {
   background-color: var(--color-orange-hover);
   border-color: var(--color-orange-hover);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(255, 173, 97, 0.35);
 }
 
 .btn-hero-signup {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 14px 34px;
+  padding: 16px 38px;
+  min-height: 52px;
   background-color: transparent;
   color: #FFFFFF;
   border: 2px solid #FFFFFF;
   border-radius: var(--radius-button);
   font-family: var(--font-heading);
-  font-size: 1rem;
+  font-size: 1.0625rem;
   font-weight: 600;
   line-height: 1;
   text-decoration: none;
@@ -105,12 +115,12 @@
 
 .btn-hero-signup:hover {
   background-color: rgba(255, 255, 255, 0.15);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
 }
 
 /* Right Illustration Box */
 .hero-image-box {
-  flex: 1 1 50%;
+  flex: 1 1 48%;
   display: flex;
   justify-content: flex-end;
   position: relative;
@@ -118,13 +128,14 @@
 
 .hero-image {
   width: 100%;
-  max-width: 520px;
+  max-width: 580px;
+  max-height: 520px;
   height: auto;
   object-fit: cover;
   border-radius: 48px;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.3);
   display: block;
 }
 

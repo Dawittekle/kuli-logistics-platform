@@ -4,16 +4,20 @@
    ============================================================ */
 
 .faq-section {
-  padding: var(--space-16) 0;
+  min-height: 700px;
+  display: flex;
+  align-items: center;
+  padding: clamp(6.5rem, 9vw, 9.5rem) 0;
   background-color: var(--color-background);
   border-top: 1px solid var(--color-border);
 }
 
 .faq-inner {
+  width: 100%;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: var(--space-10);
+  gap: clamp(2.5rem, 5vw, 5rem);
 }
 
 .faq-questions-col {
@@ -35,9 +39,9 @@
 
 .faq-title {
   font-family: var(--font-heading);
-  font-size: clamp(2rem, 3.8vw, 2.625rem);
+  font-size: clamp(2.25rem, 4.2vw, 3.25rem);
   font-weight: 700;
-  line-height: 1.25;
+  line-height: 1.2;
   color: var(--color-text-primary);
   margin-bottom: var(--space-8);
 }
@@ -57,14 +61,14 @@
 .faq-item {
   background-color: #FFFFFF;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl, 16px);
+  border-radius: 20px;
   overflow: hidden;
   transition: all var(--transition-fast, 150ms ease);
 }
 
 .faq-item.is-open {
   border-color: var(--color-primary);
-  box-shadow: 0 4px 16px rgba(31, 59, 135, 0.08);
+  box-shadow: 0 6px 20px rgba(31, 59, 135, 0.08);
 }
 
 .faq-question-btn {
@@ -72,14 +76,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-4) var(--space-5);
+  padding: 20px 24px;
   background: transparent;
   border: none;
   text-align: left;
   cursor: pointer;
   color: var(--color-text-primary);
   font-family: var(--font-heading);
-  font-size: 1.0625rem;
+  font-size: 1.125rem;
   font-weight: 700;
   line-height: 1.4;
   gap: var(--space-4);
@@ -96,8 +100,9 @@
 }
 
 .faq-chevron {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
   border-radius: var(--radius-full, 9999px);
   background-color: var(--color-background);
   border: 1px solid var(--color-border);
@@ -105,7 +110,7 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-size: 1.125rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: var(--color-primary);
   transition: transform var(--transition-fast, 150ms ease),
@@ -122,11 +127,11 @@
 
 .faq-answer-panel {
   display: none;
-  padding: 0 var(--space-5) var(--space-5);
+  padding: 0 24px 24px;
   color: var(--color-text-secondary);
   font-family: var(--font-body);
-  font-size: 0.9375rem;
-  line-height: 1.6;
+  font-size: 1.0625rem;
+  line-height: 1.65;
 }
 
 .faq-item.is-open .faq-answer-panel {
@@ -141,28 +146,29 @@
   gap: var(--space-4);
   background-color: #FFFFFF;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl, 16px);
-  padding: var(--space-4) var(--space-6);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border-radius: 24px;
+  padding: var(--space-6) var(--space-8);
+  margin-top: var(--space-8);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
 }
 
 .hotline-banner-content {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 
 .hotline-title {
   font-family: var(--font-heading);
-  font-size: 1rem;
+  font-size: 1.0625rem;
   font-weight: 700;
   color: var(--color-text-primary);
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 
 .hotline-desc {
   font-family: var(--font-body);
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   color: var(--color-text-secondary);
 }
 
@@ -174,7 +180,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 8px 20px;
+  padding: 12px 26px;
   background-color: var(--color-primary);
   color: #FFFFFF;
   border-radius: var(--radius-pill, 9999px);
@@ -194,12 +200,13 @@
   flex: 1 1 46%;
   display: flex;
   justify-content: center;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .faq-moving-img {
   width: 100%;
-  max-width: 520px;
+  max-width: 560px;
+  max-height: 520px;
   height: auto;
   border-radius: 48px;
   object-fit: cover;
