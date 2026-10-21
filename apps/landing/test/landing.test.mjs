@@ -122,6 +122,57 @@ describe('Kulli Landing Page Production Suite', () => {
     assert.match(html, /class="kulli-footer"/);
   });
 
+  it('dist/login.html is compiled and contains split-screen auth with customer and driver roles', () => {
+    const loginPath = join(landingRoot, 'dist/login.html');
+    assert.ok(existsSync(loginPath), 'dist/login.html must exist after vite build');
+
+    const html = readFileSync(loginPath, 'utf-8');
+    assert.match(html, /<title>Log In \| Kulli Logistics Platform<\/title>/);
+    assert.match(html, /class="auth-split-card"/);
+    assert.match(html, /Welcome Back/);
+    assert.match(html, /Customer Portal/);
+    assert.match(html, /Driver Partner/);
+    assert.match(html, /id="login-email"/);
+    assert.match(html, /id="login-password"/);
+    assert.match(html, /Remember Me/);
+    assert.match(html, /Forgot Password\?/);
+    assert.match(html, /verify-otp\.html/);
+    assert.match(html, /signup\.html/);
+  });
+
+  it('dist/signup.html is compiled and contains split-screen registration with customer and driver options', () => {
+    const signupPath = join(landingRoot, 'dist/signup.html');
+    assert.ok(existsSync(signupPath), 'dist/signup.html must exist after vite build');
+
+    const html = readFileSync(signupPath, 'utf-8');
+    assert.match(html, /<title>Sign Up \| Kulli Logistics Platform<\/title>/);
+    assert.match(html, /class="auth-split-card"/);
+    assert.match(html, /Get started with Kulli/);
+    assert.match(html, /Customer \/ Shipper/);
+    assert.match(html, /Driver Partner/);
+    assert.match(html, /id="signup-first-name"/);
+    assert.match(html, /id="signup-last-name"/);
+    assert.match(html, /id="signup-email"/);
+    assert.match(html, /id="signup-phone"/);
+    assert.match(html, /\+251/);
+    assert.match(html, /signup-vehicle-class/);
+    assert.match(html, /login\.html/);
+  });
+
+  it('dist/verify-otp.html is compiled and contains 6-digit OTP verification card and timer', () => {
+    const otpPath = join(landingRoot, 'dist/verify-otp.html');
+    assert.ok(existsSync(otpPath), 'dist/verify-otp.html must exist after vite build');
+
+    const html = readFileSync(otpPath, 'utf-8');
+    assert.match(html, /<title>OTP Verification \| Kulli Logistics Platform<\/title>/);
+    assert.match(html, /class="auth-otp-card"/);
+    assert.match(html, /OTP Verification/);
+    assert.match(html, /class="otp-inputs-grid"/);
+    assert.match(html, /class="otp-digit-input"/);
+    assert.match(html, /data-otp-countdown/);
+    assert.match(html, /Verify &amp; Continue|Verify & Continue/);
+  });
+
   it('all required vector SVG graphics are present and valid', () => {
     const svgFiles = [
       'images/fleet-pickup.svg',

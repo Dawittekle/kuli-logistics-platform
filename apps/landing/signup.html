@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign Up | Kulli Logistics Platform</title>
+  <meta name="description" content="Create your Kulli account to book trucks or register as a certified driver partner in Ethiopia.">
+  <link rel="icon" type="image/svg+xml" href="/logos/favicon.svg">
+  
+  <link rel="stylesheet" href="/src/styles/fonts.css">
+  <link rel="stylesheet" href="/src/styles/theme.css">
+  <link rel="stylesheet" href="/src/styles/typography.css">
+  <link rel="stylesheet" href="/src/styles/layout.css">
+  <link rel="stylesheet" href="/src/styles/auth.css">
+</head>
+<body data-auth-mode="signup">
+  <main class="auth-page">
+    <div class="auth-split-card">
+      
+      <!-- Left Panel: Sign Up Form -->
+      <section class="auth-form-panel" aria-labelledby="signup-heading">
+        <header class="auth-brand-header">
+          <a href="/" class="auth-logo-link" aria-label="Kulli Home">
+            <img src="/logos/kulli-logo-primary.svg" alt="Kulli Logo" class="auth-logo-img">
+          </a>
+          <a href="/" class="auth-back-home">
+            <span aria-hidden="true">←</span> Back to Home
+          </a>
+        </header>
+
+        <h1 id="signup-heading" class="auth-heading">Get started with Kulli</h1>
+        <p class="auth-subheading">Enter your details to create your shipping or driver account.</p>
+
+        <!-- Role Switcher (Customer vs Driver) -->
+        <div class="auth-role-tabs" role="tablist" aria-label="Account Type Selection">
+          <button
+            type="button"
+            class="auth-role-tab is-active"
+            role="tab"
+            aria-selected="true"
+            data-role-tab="customer"
+          >
+            📦 Customer / Shipper
+          </button>
+          <button
+            type="button"
+            class="auth-role-tab"
+            role="tab"
+            aria-selected="false"
+            data-role-tab="driver"
+          >
+            🚚 Driver Partner
+          </button>
+        </div>
+
+        <form class="auth-form" action="#" method="POST" onsubmit="event.preventDefault(); window.location.href='/';">
+          <!-- First & Last Name -->
+          <div class="form-row-2col">
+            <div class="form-group">
+              <label for="signup-first-name" class="form-label">First Name</label>
+              <input
+                type="text"
+                id="signup-first-name"
+                name="firstName"
+                class="form-input"
+                placeholder="Enter first name"
+                required
+                autocomplete="given-name"
+              >
+            </div>
+            <div class="form-group">
+              <label for="signup-last-name" class="form-label">Last Name</label>
+              <input
+                type="text"
+                id="signup-last-name"
+                name="lastName"
+                class="form-input"
+                placeholder="Enter last name"
+                required
+                autocomplete="family-name"
+              >
+            </div>
+          </div>
+
+          <!-- Email -->
+          <div class="form-group">
+            <label for="signup-email" class="form-label">Email Address</label>
+            <input
+              type="email"
+              id="signup-email"
+              name="email"
+              class="form-input"
+              placeholder="Enter your email"
+              required
+              autocomplete="email"
+            >
+          </div>
+
+          <!-- Phone Number with +251 Country Code -->
+          <div class="form-group">
+            <label for="signup-phone" class="form-label">Phone Number</label>
+            <div class="phone-input-wrap">
+              <div class="country-code-badge" title="Ethiopia (+251)">
+                <span class="country-flag" aria-hidden="true">🇪🇹</span>
+                <span>+251</span>
+              </div>
+              <input
+                type="tel"
+                id="signup-phone"
+                name="phone"
+                class="form-input"
+                placeholder="091 123 4567"
+                required
+                autocomplete="tel"
+              >
+            </div>
+          </div>
+
+          <!-- Driver-Specific Fields: Vehicle Class (Shown when Driver role selected) -->
+          <div class="form-group" data-role-field="driver" style="display: none;">
+            <label for="signup-vehicle-class" class="form-label">Vehicle Type</label>
+            <select id="signup-vehicle-class" name="vehicleClass" class="form-select" disabled>
+              <option value="" disabled selected>Select your vehicle category</option>
+              <option value="pickup">Pickup Truck (Up to 1.5 Tons)</option>
+              <option value="van">Cargo Van (Up to 2.5 Tons)</option>
+              <option value="box_truck">Box Truck (3.5 – 5 Tons)</option>
+              <option value="flatbed">Medium Flatbed (Up to 8 Tons)</option>
+            </select>
+          </div>
+
+          <!-- Driver-Specific Fields: Operating Hub -->
+          <div class="form-group" data-role-field="driver" style="display: none;">
+            <label for="signup-hub" class="form-label">Primary Operating Zone</label>
+            <select id="signup-hub" name="hub" class="form-select" disabled>
+              <option value="" disabled selected>Select primary Addis Ababa hub</option>
+              <option value="bole">Bole & East Sub-cities</option>
+              <option value="merkato">Merkato, Piassa & Central Commercial</option>
+              <option value="kality">Kality & Akaki Freight Corridors</option>
+              <option value="nationwide">Nationwide & Inter-Regional Transit</option>
+            </select>
+          </div>
+
+          <!-- Password -->
+          <div class="form-group">
+            <label for="signup-password" class="form-label">Password</label>
+            <div class="password-input-wrap">
+              <input
+                type="password"
+                id="signup-password"
+                name="password"
+                class="form-input"
+                placeholder="Create a strong password"
+                required
+                autocomplete="new-password"
+                minlength="8"
+              >
+              <button
+                type="button"
+                class="password-toggle-btn"
+                aria-label="Show password"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Primary Submit -->
+          <button type="submit" class="btn-auth-submit" data-auth-submit>
+            Create Customer Account
+          </button>
+
+          <!-- Divider -->
+          <div class="auth-divider">
+            <span>Or fast track via</span>
+          </div>
+
+          <!-- Quick Phone Registration -->
+          <a href="/verify-otp.html" class="btn-auth-secondary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+              <line x1="12" y1="18" x2="12.01" y2="18"></line>
+            </svg>
+            <span>Fast Sign up with Phone (SMS OTP)</span>
+          </a>
+
+          <!-- Switch to Sign in -->
+          <footer class="auth-switch-footer">
+            <span>Already have an account?</span>
+            <a href="/login.html" class="auth-switch-link">Log in</a>
+          </footer>
+        </form>
+      </section>
+
+      <!-- Right Panel: Visual Hero (Reference 1) -->
+      <aside class="auth-visual-panel" aria-label="Kulli Platform Overview">
+        <img
+          src="/images/delivery-van.jpg"
+          alt="Kulli Commercial Delivery Truck"
+          class="auth-visual-bg"
+          loading="lazy"
+        >
+        <div class="auth-visual-overlay"></div>
+        <div class="auth-visual-content">
+          <span class="auth-visual-tag" data-auth-tag>Customer & Shipper Network</span>
+          <h2 class="auth-visual-headline" data-auth-headline>
+            Kulli — powering Ethiopian logistics, one trip at a time.
+          </h2>
+          <p class="auth-visual-desc">
+            Seamlessly book verified trucks, transport high-value shipments, and track freight across Addis Ababa and major trade corridors.
+          </p>
+        </div>
+      </aside>
+
+    </div>
+  </main>
+
+  <script type="module" src="/src/scripts/auth.ts"></script>
+</body>
+</html>
