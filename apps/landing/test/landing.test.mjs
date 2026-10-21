@@ -61,10 +61,12 @@ describe('Kulli Landing Page Production Suite', () => {
     assert.match(html, /delivery-van\.png/);
     assert.match(html, /bedford-kb26\.png/);
 
-    // Section 6: Apps Download Center
+    // Section 6: Apps Download Center (Phase 5)
     assert.match(html, /id="apps"/);
-    assert.match(html, /Kulli Customer App/);
-    assert.match(html, /Kulli Driver Partner App/);
+    assert.match(html, /It’s easier in the apps|It's easier in the apps/);
+    assert.match(html, /Download the Kulli app/);
+    assert.match(html, /Download the Driver app/);
+    assert.match(html, /Scan to download/);
     assert.match(html, /qr-client-app\.svg/);
     assert.match(html, /qr-driver-app\.svg/);
     assert.match(html, /Google Play/);
@@ -83,10 +85,12 @@ describe('Kulli Landing Page Production Suite', () => {
     assert.match(html, /class="hotline-banner"/);
     assert.match(html, /8492/);
 
-    // Section 8: Footer
+    // Section 8: Footer (Phase 5)
     assert.match(html, /class="kulli-footer"/);
     assert.match(html, /Bole/);
     assert.match(html, /Merkato/);
+    assert.match(html, /Privacy Policy/);
+    assert.match(html, /Terms of Service/);
   });
 
   it('all required vector SVG graphics are present and valid', () => {
