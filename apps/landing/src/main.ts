@@ -2,12 +2,18 @@
    Kulli Landing Page — Client Application Entry Point
    ============================================================ */
 
-// Import Core CSS
+// Import Core CSS & Section Styles
 import './styles/fonts.css';
 import './styles/theme.css';
 import './styles/typography.css';
 import './styles/layout.css';
 import './styles/landing.css';
+import './styles/hero.css';
+
+// Import Data & Calculator Engines
+import { ADDIS_LOCATIONS } from './data/addis-locations';
+import { VEHICLE_TIERS } from './data/vehicle-classes';
+import { calculateQuote, calculateDriverEarnings } from './scripts/rate-calculator';
 
 // ------------------------------------------------------------
 // Theme Switcher Logic (Light / Dark Mode with Persistence)
@@ -43,11 +49,9 @@ function initTheme(): void {
     });
   };
 
-  // Initial setup
   const currentTheme = getSavedTheme();
   applyTheme(currentTheme);
 
-  // Event listeners
   themeToggleBtns.forEach((btn) => {
     btn.addEventListener('click', () => {
       const active = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
@@ -55,7 +59,6 @@ function initTheme(): void {
     });
   });
 
-  // Listen for system theme changes if user hasn't explicitly overridden
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
     if (!localStorage.getItem('kulli-theme')) {
       applyTheme(e.matches ? 'dark' : 'light');
@@ -124,11 +127,151 @@ function initMobileDrawer(): void {
 }
 
 // ------------------------------------------------------------
+// Phase 2: Dual-Audience Tabs & Interactive Rate Calculator
+// ------------------------------------------------------------
+function initHeroInteractive(): void {
+  // 1. Dual-Audience Tab Switcher
+  const tabBtns = document.querySelectorAll<HTMLButtonElement>('[data-hero-tab]');
+  const tabPanels = document.querySelectorAll<HTMLElement>('[data-hero-panel]');
+
+  tabBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const target = btn.getAttribute('data-hero-tab');
+      tabBtns.forEach((b) => b.classList.remove('is-active'));
+      tabPanels.forEach((p) => p.classList.remove('is-active'));
+
+      btn.classList.add('is-active');
+      const panel = document.querySelector<HTMLElement>(`[data-hero-panel="${target}"]`);
+      if (panel) {
+        panel.classList.add('is-active');
+      }
+    });
+  });
+
+  // 2. Populate Location Dropdowns
+  const pickupSelect = document.getElementById('calcPickup') as HTMLSelectElement | null;
+  const destSelect = document.getElementById('calcDestination') as HTMLSelectElement | null;
+  const swapBtn = document.getElementById('swapLocationsBtn') as HTMLButtonElement | null;
+
+  if (pickupSelect && destSelect) {
+    ADDIS_LOCATIONS.forEach((loc) => {
+      const opt1 = document.createElement('option');
+      opt1.value = loc.id;
+      opt1.textContent = `${loc.name} (${loc.subcity})`;
+      pickupSelect.appendChild(opt1);
+
+      const opt2 = document.createElement('option');
+      opt2.value = loc.id;
+      opt2.textContent = `${loc.name} (${loc.subcity})`;
+      destSelect.appendChild(opt2);
+    });
+
+    // Default selections: Merkato -> Bole Medhanialem
+    pickupSelect.value = 'merkato';
+    destSelect.value = 'bole-medhanialem';
+  }
+
+  // 3. Vehicle Tier Selection State
+  let selectedTierSlug = 'medium-truck';
+  const tierOptions = document.querySelectorAll<HTMLElement>('[data-tier-option]');
+
+  tierOptions.forEach((opt) => {
+    opt.addEventListener('click', () => {
+      tierOptions.forEach((o) => o.classList.remove('is-selected'));
+      opt.classList.add('is-selected');
+      const slug = opt.getAttribute('data-tier-option');
+      if (slug) {
+        selectedTierSlug = slug;
+        updateQuoteUI();
+      }
+    });
+  });
+
+  // 4. Update Quote UI Engine
+  const updateQuoteUI = (): void => {
+    if (!pickupSelect || !destSelect) return;
+
+    const pickupId = pickupSelect.value;
+    const destId = destSelect.value;
+    const quote = calculateQuote(pickupId, destId, selectedTierSlug);
+
+    // Update Left Column Calculator Results
+    const fareEl = document.getElementById('calcFareTotal');
+    const etaEl = document.getElementById('calcFareEta');
+    const breakdownEl = document.getElementById('calcBreakdown');
+
+    if (fareEl) fareEl.textContent = `${quote.estimatedFare.toLocaleString()} ETB`;
+    if (etaEl) etaEl.textContent = `${quote.distanceKm} km • ~${quote.etaMinutes} mins estimated transit`;
+    if (breakdownEl) {
+      breakdownEl.textContent = `Base fare ${quote.baseFare} ETB + ${quote.distanceFare} ETB distance rate (${quote.tier.perKmRate} ETB/km)`;
+    }
+
+    // Update Right Column Live Preview Card
+    const previewOrigin = document.getElementById('previewOriginName');
+    const previewOriginSub = document.getElementById('previewOriginSub');
+    const previewDest = document.getElementById('previewDestName');
+    const previewDestSub = document.getElementById('previewDestSub');
+    const previewDistance = document.getElementById('previewDistancePill');
+    const previewFare = document.getElementById('previewFareValue');
+    const previewVehicleName = document.getElementById('previewVehicleName');
+    const previewVehicleModels = document.getElementById('previewVehicleModels');
+
+    if (previewOrigin) previewOrigin.textContent = quote.pickup.name;
+    if (previewOriginSub) previewOriginSub.textContent = quote.pickup.subcity;
+    if (previewDest) previewDest.textContent = quote.destination.name;
+    if (previewDestSub) previewDestSub.textContent = quote.destination.subcity;
+    if (previewDistance) previewDistance.textContent = `${quote.distanceKm} km via Ring Road • ~${quote.etaMinutes} min`;
+    if (previewFare) previewFare.textContent = `${quote.estimatedFare.toLocaleString()} ETB`;
+    if (previewVehicleName) previewVehicleName.textContent = quote.tier.name;
+    if (previewVehicleModels) previewVehicleModels.textContent = quote.tier.exampleModels;
+  };
+
+  pickupSelect?.addEventListener('change', updateQuoteUI);
+  destSelect?.addEventListener('change', updateQuoteUI);
+
+  // Swap Locations
+  swapBtn?.addEventListener('click', () => {
+    if (!pickupSelect || !destSelect) return;
+    const temp = pickupSelect.value;
+    pickupSelect.value = destSelect.value;
+    destSelect.value = temp;
+    updateQuoteUI();
+  });
+
+  // Initial Calculation
+  updateQuoteUI();
+
+  // 5. Driver Partner Earnings Simulator (Tab 2)
+  const tripsSlider = document.getElementById('driverTripsSlider') as HTMLInputElement | null;
+  const tripsCountLabel = document.getElementById('driverTripsCount');
+  const driverTierSelect = document.getElementById('driverTierSelect') as HTMLSelectElement | null;
+  const weeklyGrossEl = document.getElementById('driverWeeklyGross');
+  const monthlyGrossEl = document.getElementById('driverMonthlyGross');
+
+  const updateDriverEarningsUI = (): void => {
+    if (!tripsSlider) return;
+    const trips = parseInt(tripsSlider.value, 10);
+    const tierSlug = driverTierSelect?.value || 'medium-truck';
+
+    if (tripsCountLabel) tripsCountLabel.textContent = `${trips} trips/week`;
+
+    const earnings = calculateDriverEarnings(tierSlug, trips);
+    if (weeklyGrossEl) weeklyGrossEl.textContent = `${earnings.estimatedWeeklyGross.toLocaleString()} ETB`;
+    if (monthlyGrossEl) monthlyGrossEl.textContent = `${Math.round(earnings.estimatedMonthlyGross).toLocaleString()} ETB`;
+  };
+
+  tripsSlider?.addEventListener('input', updateDriverEarningsUI);
+  driverTierSelect?.addEventListener('change', updateDriverEarningsUI);
+  updateDriverEarningsUI();
+}
+
+// ------------------------------------------------------------
 // DOM Ready Lifecycle Initialization
 // ------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   initNavbarScroll();
   initMobileDrawer();
-  console.log('Kulli Landing Page v1.0 initialized.');
+  initHeroInteractive();
+  console.log('Kulli Landing Page: Phase 1 & 2 fully loaded.');
 });
