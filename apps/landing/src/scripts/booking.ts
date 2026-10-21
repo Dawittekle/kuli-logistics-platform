@@ -1,6 +1,6 @@
 /* ============================================================
    Kulli Logistics Platform — Client-Side Booking Flow Controller
-   Multi-Step Wizard, Autocomplete, Nextories Cargo Inventory & Calc
+   Multi-Step Wizard, Autocomplete, Nextories Cargo, Fleet & Access
    ============================================================ */
 
 import { ADDIS_LOCATIONS, type AddisLocation } from '../data/addis-locations';
@@ -29,6 +29,7 @@ export interface BookingState {
   durationMins: number;
   helpersCount: number;
   stairsFloors: number;
+  stairsFee: number;
   isImmediate: boolean;
   scheduledDate?: string;
   scheduledTime?: string;
@@ -49,6 +50,13 @@ export interface BookingState {
   cargoPhotos: string[];
   activeCategory: string;
   inventorySearchQuery: string;
+  // Phase 3: Access & Labor Details
+  pickupFloor: number;
+  pickupElevator: boolean;
+  pickupWalkingDistance: 'short' | 'long';
+  dropoffFloor: number;
+  dropoffElevator: boolean;
+  dropoffWalkingDistance: 'short' | 'long';
 }
 
 const STORAGE_KEY = 'kuli_booking_draft_v1';
@@ -70,7 +78,15 @@ export class BookingWizardController {
       durationMins: 32,
       helpersCount: 1,
       stairsFloors: 0,
+      stairsFee: 0,
       isImmediate: true,
+      scheduledDate: new Date().toISOString().split('T')[0],
+      scheduledTime: 'Morning (08:00 - 10:00)',
+      senderName: 'Dawit Tadesse',
+      senderPhone: '+251 91 123 4567',
+      recipientName: 'Abebe Bekele',
+      recipientPhone: '+251 92 987 6543',
+      specialInstructions: 'Commercial loading dock Gate 3, call before arrival.',
       cargoInventory: {
         'sofa-3-seater': 1,
         'dining-table': 1,
@@ -87,15 +103,25 @@ export class BookingWizardController {
       isWeatherSensitive: true,
       cargoPhotos: [],
       activeCategory: 'all',
-      inventorySearchQuery: ''
+      inventorySearchQuery: '',
+      pickupFloor: 0,
+      pickupElevator: true,
+      pickupWalkingDistance: 'short',
+      dropoffFloor: 1,
+      dropoffElevator: false,
+      dropoffWalkingDistance: 'short'
     };
 
-    // Ensure cargo collections are initialized
+    // Ensure collections exist
     if (!this.state.cargoInventory) this.state.cargoInventory = {};
     if (!this.state.customItems) this.state.customItems = [];
     if (!this.state.cargoPhotos) this.state.cargoPhotos = [];
     if (!this.state.activeCategory) this.state.activeCategory = 'all';
     if (!this.state.inventorySearchQuery) this.state.inventorySearchQuery = '';
+    if (this.state.pickupFloor === undefined) this.state.pickupFloor = 0;
+    if (this.state.dropoffFloor === undefined) this.state.dropoffFloor = 0;
+    if (this.state.helpersCount === undefined) this.state.helpersCount = 1;
+    if (this.state.stairsFee === undefined) this.state.stairsFee = 0;
   }
 
   public init(): void {
@@ -108,7 +134,10 @@ export class BookingWizardController {
     this.setupHandlingFlags();
     this.setupPhotoUploadDropzone();
     this.setupMapPinInteractions();
+    this.setupVehicleSelection();
+    this.setupAccessDetailsHandlers();
     this.updateInventoryTotals();
+    this.recalculateStairsSurcharge();
     this.updateSummaryReceipt();
     this.goToStep(this.state.currentStep);
   }
@@ -162,6 +191,11 @@ export class BookingWizardController {
         stepperItem.classList.toggle('is-active', i === stepNumber);
         stepperItem.classList.toggle('is-complete', i < stepNumber);
       }
+    }
+
+    // Refresh vehicle cards when entering Step 3
+    if (stepNumber === 3) {
+      this.setupVehicleSelection();
     }
 
     // Toggle Prev / Next buttons
@@ -384,6 +418,7 @@ export class BookingWizardController {
     if (distEl) distEl.textContent = `${totalDist.toFixed(1)} km`;
     if (durEl) durEl.textContent = `${estDuration} min`;
 
+    this.setupVehicleSelection();
     this.updateSummaryReceipt();
     this.saveDraft();
   }
@@ -623,7 +658,7 @@ export class BookingWizardController {
     if (volEl) volEl.textContent = `${this.state.totalVolumeM3.toFixed(1)} m³`;
     if (weightEl) weightEl.textContent = `~${this.state.totalWeightKg.toLocaleString()} kg`;
     if (summaryCargoTally) {
-      summaryCargoTally.textContent = `${totalCount} items (${this.state.totalVolumeM3.toFixed(1)} m³)`;
+      summaryCargoTally.textContent = `${totalCount} items (${this.state.totalVolumeM3.toFixed(1)} m³) • ~${this.state.totalWeightKg} kg`;
     }
 
     // Auto-check heavy flag if weight > 50kg or volume > 1m³
@@ -636,6 +671,7 @@ export class BookingWizardController {
       }
     }
 
+    this.setupVehicleSelection();
     this.updateSummaryReceipt();
     this.saveDraft();
   }
@@ -657,6 +693,7 @@ export class BookingWizardController {
       checkbox.addEventListener('change', () => {
         this.state[key] = checkbox.checked;
         checkbox.closest('.flag-toggle-card')?.classList.toggle('is-checked', checkbox.checked);
+        this.setupVehicleSelection();
         this.saveDraft();
       });
     });
@@ -755,20 +792,295 @@ export class BookingWizardController {
     });
   }
 
+  /* ------------------------------------------------------------
+     Phase 3: Step 3 Truck Selection & Fleet Comparison
+     ------------------------------------------------------------ */
+  public calculateRecommendedVehicle(): string {
+    const vol = this.state.totalVolumeM3;
+    const weight = this.state.totalWeightKg;
+    const weather = this.state.isWeatherSensitive;
+
+    if (vol <= 4.8 && weight <= 1400 && !weather) {
+      return 'small-pickup';
+    } else if (vol <= 8.8 && weight <= 1900) {
+      return 'cargo-van';
+    } else if (vol <= 17.5 && weight <= 4200) {
+      return 'medium-truck';
+    } else {
+      return 'large-truck';
+    }
+  }
+
+  public setupVehicleSelection(): void {
+    const container = document.getElementById('vehicle-cards-container');
+    if (!container) return;
+
+    const recommendedSlug = this.calculateRecommendedVehicle();
+
+    // Map volumes for each vehicle
+    const vehicleVolumes: Record<string, number> = {
+      'small-pickup': 5.2,
+      'cargo-van': 9.2,
+      'medium-truck': 18.5,
+      'large-truck': 18.0
+    };
+
+    container.innerHTML = FLEET_CATALOG.map((v) => {
+      const isSelected = this.state.vehicleTier === v.vehicleTierSlug;
+      const isRecommended = recommendedSlug === v.vehicleTierSlug;
+      const maxVol = vehicleVolumes[v.vehicleTierSlug] || 15.0;
+      const fillPercent = Math.min(100, Math.round((this.state.totalVolumeM3 / maxVol) * 100));
+      const estFare = v.baseFare + Math.round(this.state.distanceKm * v.perKmRate);
+
+      let imageSrc = '/images/bedford-kb26.png';
+      if (v.vehicleTierSlug === 'cargo-van') imageSrc = '/images/delivery-van.png';
+      if (v.vehicleTierSlug === 'medium-truck') imageSrc = '/images/box-truck.jpg';
+      if (v.vehicleTierSlug === 'large-truck') imageSrc = '/images/fleet-heavy-dumper.svg';
+
+      return `
+        <div
+          class="vehicle-tier-card ${isSelected ? 'is-selected' : ''} ${isRecommended ? 'is-recommended' : ''}"
+          data-vehicle-slug="${v.vehicleTierSlug}"
+          role="radio"
+          aria-checked="${isSelected ? 'true' : 'false'}"
+        >
+          ${isRecommended ? '<div class="vehicle-recommend-badge"><span>✨</span> Recommended Fit</div>' : ''}
+          <div class="vehicle-card-media">
+            <img src="${imageSrc}" alt="${v.name}" class="vehicle-card-img" loading="lazy" />
+          </div>
+
+          <div class="vehicle-card-info">
+            <div class="vehicle-card-title-row">
+              <h3 class="vehicle-card-name">${v.name}</h3>
+              ${v.badge ? `<span class="vehicle-badge-pill">${v.badge}</span>` : ''}
+            </div>
+            <div class="vehicle-card-models">${v.modelName}</div>
+
+            <div class="vehicle-specs-row">
+              <span class="vehicle-spec-item">⚖️ <strong>${v.payload}</strong></span>
+              <span class="vehicle-spec-item">📐 <strong>${v.dimensions}</strong></span>
+              <span class="vehicle-spec-item">📦 <strong>${v.volume}</strong></span>
+            </div>
+
+            <div style="margin-top: 0.25rem;">
+              <div style="display:flex; justify-content:space-between; font-size: 0.6875rem; color: #71717A;">
+                <span>Cargo Space Utilization</span>
+                <span>${fillPercent}%</span>
+              </div>
+              <div class="vehicle-capacity-bar">
+                <div class="capacity-fill ${fillPercent > 95 ? 'is-overloaded' : ''}" style="width: ${fillPercent}%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="vehicle-card-pricing">
+            <span class="vehicle-est-fare">${estFare.toLocaleString()} ETB</span>
+            <span class="vehicle-rate-sub">Base ${v.baseFare} ETB + ${v.perKmRate} ETB/km</span>
+            <button type="button" class="vehicle-select-btn">
+              ${isSelected ? '✓ Selected' : 'Select'}
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Attach click listeners to cards
+    container.querySelectorAll('.vehicle-tier-card').forEach((card) => {
+      card.addEventListener('click', () => {
+        const slug = (card as HTMLElement).dataset.vehicleSlug;
+        if (slug) {
+          this.state.vehicleTier = slug;
+          this.setupVehicleSelection();
+          this.updateSummaryReceipt();
+          this.saveDraft();
+        }
+      });
+    });
+  }
+
+  /* ------------------------------------------------------------
+     Phase 3: Step 4 Access Details & Scheduling
+     ------------------------------------------------------------ */
+  private setupAccessDetailsHandlers(): void {
+    // Pickup Floor & Elevator
+    const pickupFloorEl = document.getElementById('pickup-floor') as HTMLSelectElement | null;
+    const pickupElevatorEl = document.getElementById('pickup-elevator') as HTMLInputElement | null;
+    if (pickupFloorEl) {
+      pickupFloorEl.value = String(this.state.pickupFloor);
+      pickupFloorEl.addEventListener('change', () => {
+        this.state.pickupFloor = parseInt(pickupFloorEl.value, 10) || 0;
+        this.recalculateStairsSurcharge();
+      });
+    }
+    if (pickupElevatorEl) {
+      pickupElevatorEl.checked = this.state.pickupElevator;
+      pickupElevatorEl.addEventListener('change', () => {
+        this.state.pickupElevator = pickupElevatorEl.checked;
+        this.recalculateStairsSurcharge();
+      });
+    }
+
+    // Drop-off Floor & Elevator
+    const dropoffFloorEl = document.getElementById('dropoff-floor') as HTMLSelectElement | null;
+    const dropoffElevatorEl = document.getElementById('dropoff-elevator') as HTMLInputElement | null;
+    if (dropoffFloorEl) {
+      dropoffFloorEl.value = String(this.state.dropoffFloor);
+      dropoffFloorEl.addEventListener('change', () => {
+        this.state.dropoffFloor = parseInt(dropoffFloorEl.value, 10) || 0;
+        this.recalculateStairsSurcharge();
+      });
+    }
+    if (dropoffElevatorEl) {
+      dropoffElevatorEl.checked = this.state.dropoffElevator;
+      dropoffElevatorEl.addEventListener('change', () => {
+        this.state.dropoffElevator = dropoffElevatorEl.checked;
+        this.recalculateStairsSurcharge();
+      });
+    }
+
+    // Helpers selection cards
+    const helperCards = document.querySelectorAll<HTMLElement>('[data-helper-tier]');
+    helperCards.forEach((card) => {
+      const tier = parseInt(card.dataset.helperTier || '1', 10);
+      card.classList.toggle('is-selected', this.state.helpersCount === tier);
+      card.addEventListener('click', () => {
+        this.state.helpersCount = tier;
+        helperCards.forEach((c) => c.classList.remove('is-selected'));
+        card.classList.add('is-selected');
+        this.updateSummaryReceipt();
+        this.saveDraft();
+      });
+    });
+
+    // Schedule Immediate vs Later
+    const immediateBtn = document.getElementById('btn-sched-immediate');
+    const laterBtn = document.getElementById('btn-sched-later');
+    const laterFields = document.getElementById('scheduled-later-fields');
+
+    const setScheduleMode = (immediate: boolean): void => {
+      this.state.isImmediate = immediate;
+      if (immediateBtn) immediateBtn.classList.toggle('is-active', immediate);
+      if (laterBtn) laterBtn.classList.toggle('is-active', !immediate);
+      if (laterFields) laterFields.style.display = immediate ? 'none' : 'block';
+      this.saveDraft();
+    };
+
+    immediateBtn?.addEventListener('click', () => setScheduleMode(true));
+    laterBtn?.addEventListener('click', () => setScheduleMode(false));
+    setScheduleMode(this.state.isImmediate);
+
+    // Time Slots
+    const timeSlotBtns = document.querySelectorAll<HTMLButtonElement>('[data-time-slot]');
+    timeSlotBtns.forEach((btn) => {
+      const slot = btn.dataset.timeSlot;
+      btn.classList.toggle('is-selected', this.state.scheduledTime === slot);
+      btn.addEventListener('click', () => {
+        timeSlotBtns.forEach((b) => b.classList.remove('is-selected'));
+        btn.classList.add('is-selected');
+        this.state.scheduledTime = slot || '';
+        this.saveDraft();
+      });
+    });
+
+    // Date Input
+    const dateInput = document.getElementById('scheduled-date-input') as HTMLInputElement | null;
+    if (dateInput) {
+      if (this.state.scheduledDate) dateInput.value = this.state.scheduledDate;
+      dateInput.addEventListener('change', () => {
+        this.state.scheduledDate = dateInput.value;
+        this.saveDraft();
+      });
+    }
+
+    // Contact Fields
+    const senderNameInput = document.getElementById('sender-name') as HTMLInputElement | null;
+    const senderPhoneInput = document.getElementById('sender-phone') as HTMLInputElement | null;
+    const recipientNameInput = document.getElementById('recipient-name') as HTMLInputElement | null;
+    const recipientPhoneInput = document.getElementById('recipient-phone') as HTMLInputElement | null;
+    const notesInput = document.getElementById('special-delivery-instructions') as HTMLInputElement | null;
+
+    if (senderNameInput) {
+      if (this.state.senderName) senderNameInput.value = this.state.senderName;
+      senderNameInput.addEventListener('input', () => {
+        this.state.senderName = senderNameInput.value;
+        this.saveDraft();
+      });
+    }
+    if (senderPhoneInput) {
+      if (this.state.senderPhone) senderPhoneInput.value = senderPhoneInput.value;
+      senderPhoneInput.addEventListener('input', () => {
+        this.state.senderPhone = senderPhoneInput.value;
+        this.saveDraft();
+      });
+    }
+    if (recipientNameInput) {
+      if (this.state.recipientName) recipientNameInput.value = this.state.recipientName;
+      recipientNameInput.addEventListener('input', () => {
+        this.state.recipientName = recipientNameInput.value;
+        this.saveDraft();
+      });
+    }
+    if (recipientPhoneInput) {
+      if (this.state.recipientPhone) recipientPhoneInput.value = this.state.recipientPhone;
+      recipientPhoneInput.addEventListener('input', () => {
+        this.state.recipientPhone = recipientPhoneInput.value;
+        this.saveDraft();
+      });
+    }
+    if (notesInput) {
+      if (this.state.specialInstructions) notesInput.value = this.state.specialInstructions;
+      notesInput.addEventListener('input', () => {
+        this.state.specialInstructions = notesInput.value;
+        this.saveDraft();
+      });
+    }
+  }
+
+  private recalculateStairsSurcharge(): void {
+    let stairsCount = 0;
+    if (!this.state.pickupElevator && this.state.pickupFloor > 2) {
+      stairsCount += (this.state.pickupFloor - 2);
+    }
+    if (!this.state.dropoffElevator && this.state.dropoffFloor > 2) {
+      stairsCount += (this.state.dropoffFloor - 2);
+    }
+
+    this.state.stairsFloors = stairsCount;
+    this.state.stairsFee = stairsCount * 100;
+
+    const stairsRow = document.getElementById('summary-stairs-row');
+    const stairsFeeEl = document.getElementById('summary-stairs-fare');
+    if (stairsRow && stairsFeeEl) {
+      if (this.state.stairsFee > 0) {
+        stairsRow.style.display = 'flex';
+        stairsFeeEl.textContent = `${this.state.stairsFee.toLocaleString()} ETB`;
+      } else {
+        stairsRow.style.display = 'none';
+      }
+    }
+
+    this.updateSummaryReceipt();
+    this.saveDraft();
+  }
+
   public updateSummaryReceipt(): void {
     const vehicle = FLEET_CATALOG.find((v) => v.vehicleTierSlug === this.state.vehicleTier) || FLEET_CATALOG[2];
 
     const baseFare = vehicle.baseFare;
     const distanceFee = Math.round(this.state.distanceKm * vehicle.perKmRate);
     const helperFee = this.state.helpersCount * 350;
-    const stairsFee = this.state.stairsFloors * 100;
+    const stairsFee = this.state.stairsFee || 0;
     const totalFare = baseFare + distanceFee + helperFee + stairsFee;
 
     const routeBriefEl = document.getElementById('summary-route-brief');
     const baseFareEl = document.getElementById('summary-base-fare');
+    const baseFareLbl = document.getElementById('summary-base-label');
     const distFareEl = document.getElementById('summary-distance-fare');
     const distSubtextEl = document.getElementById('summary-distance-subtext');
     const helperFareEl = document.getElementById('summary-helpers-fare');
+    const helperFareLbl = document.getElementById('summary-helpers-label');
+    const stairsRow = document.getElementById('summary-stairs-row');
+    const stairsFeeEl = document.getElementById('summary-stairs-fare');
     const totalFareEl = document.getElementById('summary-total-fare');
     const mobileFareEl = document.getElementById('mobile-total-fare');
     const summaryCargoTally = document.getElementById('summary-cargo-tally');
@@ -777,9 +1089,21 @@ export class BookingWizardController {
       routeBriefEl.textContent = `${this.state.origin.split(',')[0]} → ${this.state.destination.split(',')[0]}`;
     }
     if (baseFareEl) baseFareEl.textContent = `${baseFare.toLocaleString()} ETB`;
+    if (baseFareLbl) baseFareLbl.textContent = `Base Fare (${vehicle.name})`;
     if (distFareEl) distFareEl.textContent = `${distanceFee.toLocaleString()} ETB`;
     if (distSubtextEl) distSubtextEl.textContent = `(${this.state.distanceKm.toFixed(1)} km × ${vehicle.perKmRate} ETB/km)`;
     if (helperFareEl) helperFareEl.textContent = `${helperFee.toLocaleString()} ETB`;
+    if (helperFareLbl) {
+      helperFareLbl.textContent = this.state.helpersCount === 0 ? 'Driver Assistance (Curbside)' : `Loading Labor (${this.state.helpersCount} Helper${this.state.helpersCount > 1 ? 's' : ''})`;
+    }
+    if (stairsRow && stairsFeeEl) {
+      if (stairsFee > 0) {
+        stairsRow.style.display = 'flex';
+        stairsFeeEl.textContent = `${stairsFee.toLocaleString()} ETB`;
+      } else {
+        stairsRow.style.display = 'none';
+      }
+    }
     if (totalFareEl) totalFareEl.textContent = `${totalFare.toLocaleString()} ETB`;
     if (mobileFareEl) mobileFareEl.textContent = `${totalFare.toLocaleString()} ETB`;
     if (summaryCargoTally) {

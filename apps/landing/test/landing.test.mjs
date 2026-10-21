@@ -257,6 +257,30 @@ describe('Kulli Landing Page Production Suite', () => {
     assert.match(html, /id="flag-weather"/);
     assert.match(html, /id="cargo-photo-dropzone"/);
     assert.match(html, /id="photo-thumbnails-strip"/);
+
+    // Phase 3 Vehicle selection & Loading schedule landmarks
+    assert.match(html, /id="vehicle-cards-container"/);
+    assert.match(html, /id="pickup-floor"/);
+    assert.match(html, /id="pickup-elevator"/);
+    assert.match(html, /id="dropoff-floor"/);
+    assert.match(html, /id="dropoff-elevator"/);
+    assert.match(html, /data-helper-tier="0"/);
+    assert.match(html, /data-helper-tier="1"/);
+    assert.match(html, /data-helper-tier="2"/);
+    assert.match(html, /id="btn-sched-immediate"/);
+    assert.match(html, /id="btn-sched-later"/);
+    assert.match(html, /id="scheduled-later-fields"/);
+    assert.match(html, /id="scheduled-date-input"/);
+    assert.match(html, /data-time-slot="afternoon"/);
+    assert.match(html, /id="sender-name"/);
+    assert.match(html, /id="sender-phone"/);
+    assert.match(html, /id="recipient-name"/);
+    assert.match(html, /id="recipient-phone"/);
+    assert.match(html, /id="special-delivery-instructions"/);
+    assert.match(html, /id="summary-base-label"/);
+    assert.match(html, /id="summary-helpers-label"/);
+    assert.match(html, /id="summary-stairs-row"/);
+    assert.match(html, /id="summary-stairs-fare"/);
   });
 
   it('dist/tracking.html is compiled and contains real-time status tracker and driver card', () => {

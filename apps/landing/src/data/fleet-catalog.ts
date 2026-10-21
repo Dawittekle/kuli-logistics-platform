@@ -12,7 +12,7 @@ export interface FleetVehicle {
   baseFare: number;
   perKmRate: number;
   idealFor: string[];
-  vehicleTierSlug: 'small-pickup' | 'medium-truck' | 'large-truck';
+  vehicleTierSlug: 'small-pickup' | 'cargo-van' | 'medium-truck' | 'large-truck';
   svgIcon: string;
 }
 
@@ -54,7 +54,7 @@ export const FLEET_CATALOG: FleetVehicle[] = [
       'Catering equipment & packaged food',
       'Boxed retail merchandise & textiles'
     ],
-    vehicleTierSlug: 'small-pickup',
+    vehicleTierSlug: 'cargo-van',
     svgIcon: 'van'
   },
   {

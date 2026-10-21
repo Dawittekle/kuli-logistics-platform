@@ -342,28 +342,202 @@
 
           </div>
 
-          <!-- STEP 3: Vehicle Selection (Shell) -->
+          <!-- STEP 3: Vehicle Selection -->
           <div class="step-card" id="step-panel-3" style="display: none;">
             <div class="step-header">
               <h2 class="step-title">Choose your truck type</h2>
               <p class="step-subtitle">Compare payload capacity, enclosed space, and upfront rates across our Addis Ababa fleet.</p>
             </div>
-            <div style="padding: 2rem; text-align: center; color: #71717A; background: #F8FAFC; border-radius: 8px;">
-              <p style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; color: #142553;">Fleet Tier Comparison</p>
-              <p style="font-size: 0.875rem;">Small Pickup, Cargo Van, Box Truck, and Medium Flatbed tier cards will appear here in Phase 3.</p>
+
+            <!-- Smart Fit Notification -->
+            <div style="background: #FDF3E8; border: 1px solid #FFAD61; border-radius: 8px; padding: 0.875rem 1rem; margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.75rem;">
+              <span style="font-size: 1.25rem;">✨</span>
+              <div style="font-size: 0.8125rem; color: #142553;">
+                <strong>Smart Load Calculation Active:</strong> We evaluated your cargo inventory to recommend the optimal vehicle tier for maximum transit safety and lowest trip cost.
+              </div>
+            </div>
+
+            <!-- Vehicle Fleet Selection Grid -->
+            <div class="truck-selection-grid" id="vehicle-cards-container">
+              <!-- Dynamically populated by BookingWizardController -->
+            </div>
+
+            <!-- Fleet Guarantees (Curri & Uber Freight Inspired) -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #F4F4F5;">
+              <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: #475569;">
+                <span>🛡️</span> <strong>100% Vetted Drivers</strong> (ID &amp; Background checked)
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: #475569;">
+                <span>📦</span> <strong>Straps &amp; Tarpaulins</strong> included on all trucks
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: #475569;">
+                <span>⚡</span> <strong>Live GPS Tracking</strong> &amp; direct phone contact
+              </div>
             </div>
           </div>
 
-          <!-- STEP 4: Access & Schedule (Shell) -->
+          <!-- STEP 4: Access & Schedule -->
           <div class="step-card" id="step-panel-4" style="display: none;">
             <div class="step-header">
               <h2 class="step-title">Loading details &amp; schedule</h2>
               <p class="step-subtitle">Specify building floors, elevator availability, loading helpers, and pickup timing.</p>
             </div>
-            <div style="padding: 2rem; text-align: center; color: #71717A; background: #F8FAFC; border-radius: 8px;">
-              <p style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; color: #142553;">Loading Assistance &amp; Scheduling</p>
-              <p style="font-size: 0.875rem;">Helper add-ons, stairs/elevator settings, and scheduling options will appear here in Phase 3.</p>
+
+            <!-- Section 1: Building Access & Floors -->
+            <div style="margin-bottom: 1.5rem;">
+              <span class="section-label-bold" style="display: block; margin-bottom: 0.75rem;">1. Building Access &amp; Floor Levels:</span>
+              <div class="access-cards-grid">
+                <!-- Origin Access -->
+                <div class="access-location-card">
+                  <div class="access-card-header">
+                    <span class="access-card-title">Pickup Building (Origin)</span>
+                    <span style="font-size: 0.75rem; color: #15803D; font-weight: 600;">Pickup Spot</span>
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label for="pickup-floor" class="form-label">Floor Level</label>
+                    <select id="pickup-floor" class="form-input">
+                      <option value="0">Ground Floor / Level with Street</option>
+                      <option value="1">1st Floor</option>
+                      <option value="2">2nd Floor (Standard)</option>
+                      <option value="3">3rd Floor (+100 ETB if stairs only)</option>
+                      <option value="4">4th Floor (+200 ETB if stairs only)</option>
+                      <option value="5">5th Floor (+300 ETB if stairs only)</option>
+                      <option value="6">6th+ Floor (+400 ETB if stairs only)</option>
+                    </select>
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; color: #142553; cursor: pointer;">
+                      <input type="checkbox" id="pickup-elevator" />
+                      <span>Elevator available for cargo</span>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Destination Access -->
+                <div class="access-location-card">
+                  <div class="access-card-header">
+                    <span class="access-card-title">Drop-off Building (Destination)</span>
+                    <span style="font-size: 0.75rem; color: #B91C1C; font-weight: 600;">Drop-off Spot</span>
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label for="dropoff-floor" class="form-label">Floor Level</label>
+                    <select id="dropoff-floor" class="form-input">
+                      <option value="0">Ground Floor / Level with Street</option>
+                      <option value="1" selected>1st Floor</option>
+                      <option value="2">2nd Floor (Standard)</option>
+                      <option value="3">3rd Floor (+100 ETB if stairs only)</option>
+                      <option value="4">4th Floor (+200 ETB if stairs only)</option>
+                      <option value="5">5th Floor (+300 ETB if stairs only)</option>
+                      <option value="6">6th+ Floor (+400 ETB if stairs only)</option>
+                    </select>
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; color: #142553; cursor: pointer;">
+                      <input type="checkbox" id="dropoff-elevator" />
+                      <span>Elevator available for cargo</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
             </div>
+
+            <!-- Section 2: Loading & Unloading Labor (Lalamove Inspired) -->
+            <div style="margin-bottom: 1.5rem;">
+              <span class="section-label-bold" style="display: block; margin-bottom: 0.25rem;">2. Loading &amp; Unloading Assistance:</span>
+              <p style="font-size: 0.75rem; color: #71717A; margin-bottom: 0.75rem;">Trained porters help carry goods from your doorstep, up stairs, and into the vehicle.</p>
+
+              <div class="helpers-tier-grid">
+                <div class="helper-card" data-helper-tier="0">
+                  <div>
+                    <div class="helper-title">Driver Only</div>
+                    <div class="helper-desc">Driver assists with curbside tailgate loading only. Client handles loading into building.</div>
+                  </div>
+                  <div class="helper-fee">Included (+0 ETB)</div>
+                </div>
+
+                <div class="helper-card is-selected" data-helper-tier="1">
+                  <span class="helper-card-badge">Most Popular</span>
+                  <div>
+                    <div class="helper-title">Driver + 1 Helper</div>
+                    <div class="helper-desc">1 dedicated porter carries items into rooms, elevators, and handles furniture placement.</div>
+                  </div>
+                  <div class="helper-fee">+350 ETB</div>
+                </div>
+
+                <div class="helper-card" data-helper-tier="2">
+                  <div>
+                    <div class="helper-title">Driver + 2 Helpers</div>
+                    <div class="helper-desc">2 porters for heavy appliances, large sofas, commercial cartons, or buildings without elevators.</div>
+                  </div>
+                  <div class="helper-fee">+700 ETB</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Section 3: Schedule & Pickup Timing -->
+            <div style="margin-bottom: 1.5rem;">
+              <span class="section-label-bold" style="display: block; margin-bottom: 0.75rem;">3. Pickup Timing &amp; Schedule:</span>
+
+              <div class="schedule-segmented-wrap">
+                <button type="button" class="schedule-segment-btn is-active" id="btn-sched-immediate">
+                  ⚡ Immediate Pickup (~30-45 min)
+                </button>
+                <button type="button" class="schedule-segment-btn" id="btn-sched-later">
+                  📅 Schedule for Later
+                </button>
+              </div>
+
+              <div id="scheduled-later-fields" style="display: none; background: #F8FAFC; padding: 1rem; border-radius: 8px; border: 1px solid #E2E8F0;">
+                <div class="form-group" style="margin-bottom: 0.75rem;">
+                  <label for="scheduled-date-input" class="form-label">Pickup Date</label>
+                  <input type="date" id="scheduled-date-input" class="form-input" />
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label">Preferred Time Window</label>
+                  <div class="time-slots-grid">
+                    <button type="button" class="time-slot-btn" data-time-slot="morning">Morning (08:00 - 12:00)</button>
+                    <button type="button" class="time-slot-btn is-selected" data-time-slot="afternoon">Afternoon (12:00 - 17:00)</button>
+                    <button type="button" class="time-slot-btn" data-time-slot="evening">Evening (17:00 - 20:00)</button>
+                    <button type="button" class="time-slot-btn" data-time-slot="night">Night (20:00 - 23:00)</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Section 4: Contact Information -->
+            <div style="margin-bottom: 1rem;">
+              <span class="section-label-bold" style="display: block; margin-bottom: 0.75rem;">4. Delivery Contacts &amp; Special Instructions:</span>
+
+              <div class="contacts-split-grid">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="sender-name" class="form-label">Sender / Pickup Contact Name</label>
+                  <input type="text" id="sender-name" class="form-input" placeholder="e.g. Dawit Haile" value="Dawit Haile" />
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="sender-phone" class="form-label">Sender Phone Number</label>
+                  <input type="tel" id="sender-phone" class="form-input" placeholder="e.g. 0911234567" value="0911234567" />
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="recipient-name" class="form-label">Recipient / Drop-off Contact Name</label>
+                  <input type="text" id="recipient-name" class="form-input" placeholder="e.g. Meron Tadesse" value="Meron Tadesse" />
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="recipient-phone" class="form-label">Recipient Phone Number</label>
+                  <input type="tel" id="recipient-phone" class="form-input" placeholder="e.g. 0922345678" value="0922345678" />
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-top: 0.75rem; margin-bottom: 0;">
+                <label for="special-delivery-instructions" class="form-label">Special Driver Instructions (Optional)</label>
+                <textarea
+                  id="special-delivery-instructions"
+                  class="form-input"
+                  rows="2"
+                  placeholder="e.g. Compound security gate code #4102, entrance behind commercial bank, call 10 mins before arrival..."
+                ></textarea>
+              </div>
+            </div>
+
           </div>
 
           <!-- STEP 5: Review & Confirm (Shell) -->
@@ -431,7 +605,7 @@
                 <span id="summary-cargo-tally">13 items (5.6 m³)</span>
               </div>
               <div class="receipt-row">
-                <span>Base Fare (Medium Truck)</span>
+                <span id="summary-base-label">Base Fare (Medium Truck)</span>
                 <span id="summary-base-fare">1,200 ETB</span>
               </div>
               <div class="receipt-row">
@@ -439,8 +613,12 @@
                 <span id="summary-distance-fare">1,110 ETB</span>
               </div>
               <div class="receipt-row">
-                <span>Loading Assistance (1 Helper)</span>
+                <span id="summary-helpers-label">Loading Assistance (1 Helper)</span>
                 <span id="summary-helpers-fare">350 ETB</span>
+              </div>
+              <div class="receipt-row" id="summary-stairs-row" style="display: none; color: #D97706;">
+                <span>Stairs Surcharge (No Elevator)</span>
+                <span id="summary-stairs-fare">0 ETB</span>
               </div>
               <div class="receipt-row is-total">
                 <span>Total Estimate</span>
