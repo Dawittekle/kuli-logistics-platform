@@ -6,7 +6,7 @@ services:
     staticPublishPath: ./apps/landing/dist
     envVars:
       - key: NODE_VERSION
-        value: 20.18.0
+        value: "22"
     headers:
       - path: /*
         name: X-Frame-Options
