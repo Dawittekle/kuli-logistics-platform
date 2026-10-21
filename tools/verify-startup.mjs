@@ -30,13 +30,14 @@ const runToCompletion = (name, command, args) =>
     });
   });
 
-const waitForOutput = (name, command, args, expectedOutput) =>
+const waitForOutput = (name, command, args, expectedOutput, extraEnv = {}) =>
   new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
-        MONGODB_SERVER_SELECTION_TIMEOUT_MS: process.env.MONGODB_SERVER_SELECTION_TIMEOUT_MS ?? '5000'
+        MONGODB_SERVER_SELECTION_TIMEOUT_MS: process.env.MONGODB_SERVER_SELECTION_TIMEOUT_MS ?? '5000',
+        ...extraEnv
       }
     });
 
@@ -92,6 +93,8 @@ const waitForOutput = (name, command, args, expectedOutput) =>
 await runToCompletion('admin frontend foundation', 'npm', ['run', 'verify', '--workspace', '@kuli/admin']);
 await runToCompletion('admin production build', 'npm', ['run', 'build', '--workspace', '@kuli/admin']);
 await runToCompletion('mobile Expo foundation', 'npm', ['run', 'verify', '--workspace', '@kuli/mobile']);
-await waitForOutput('api', 'node', ['apps/api/src/main.mjs'], '@kuli/api listening');
+await waitForOutput('api', 'node', ['apps/api/src/main.mjs'], '@kuli/api listening', {
+  PORT: process.env.VERIFY_API_PORT ?? '4099'
+});
 
 console.log('verify: all Phase 0 app startup checks passed');
