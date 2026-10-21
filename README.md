@@ -2,8 +2,9 @@
 
 KULI is a peer-to-peer logistics marketplace for Addis Ababa. It connects clients who need truck transport with verified truck owners, and includes an admin/call-assistant dashboard for verification, support, pricing, and operations.
 
-The repository is a JavaScript/TypeScript monorepo with three application surfaces:
+The repository is a JavaScript/TypeScript monorepo with four application surfaces:
 
+- `apps/landing` - Lightweight, accessible, high-converting marketing landing page, vehicle catalog, FAQ, and app download portal (Vite + TypeScript + modern CSS).
 - `apps/api` - Node.js REST API, modular domain services, MongoDB persistence, Supabase Auth token verification.
 - `apps/mobile` - Expo React Native app for clients and truck owners.
 - `apps/admin` - Vite React dashboard for administrators and call-center assistants.
@@ -69,13 +70,26 @@ Docker exposes:
 Start each service in a separate terminal:
 
 ```bash
-npm run dev:api
-npm run dev:admin
-npm run dev:mobile
+npm run dev:landing   # Landing page (http://localhost:5175)
+npm run dev:api       # REST API (http://127.0.0.1:4000/api/v1)
+npm run dev:admin     # Admin dashboard (http://localhost:5174)
+npm run dev:mobile    # Expo mobile app
+```
+
+### Landing Page Build & Preview
+
+```bash
+# Build production bundle to apps/landing/dist
+npm run build:landing
+
+# Preview production build locally (http://localhost:4175)
+npm run preview --workspace @kuli/landing
 ```
 
 Default URLs:
 
+- Landing page (Dev): `http://localhost:5175`
+- Landing page (Preview): `http://localhost:4175`
 - API: `http://127.0.0.1:4000/api/v1`
 - Admin dashboard: `http://localhost:5174`
 - Mobile: Expo Dev Tools/Metro from `npm run dev:mobile`
