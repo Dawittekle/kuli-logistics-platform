@@ -9,7 +9,11 @@
 .about-hero {
   background-color: var(--color-navy-dark, #142553);
   color: #FFFFFF;
-  padding: clamp(4.5rem, 7vh, 6.5rem) 0 clamp(3.5rem, 5vh, 5rem);
+  min-height: clamp(420px, 52vh, 560px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(6.5rem, 10vh, 9rem) 0;
   text-align: center;
 }
 
@@ -286,3 +290,4 @@
     gap: var(--space-6);
   }
 }
+

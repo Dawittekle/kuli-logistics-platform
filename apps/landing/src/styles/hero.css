@@ -120,23 +120,60 @@
 
 /* Right Illustration Box */
 .hero-image-box {
-  flex: 1 1 48%;
+  flex: 1 1 52%;
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   position: relative;
 }
 
 .hero-image {
   width: 100%;
-  max-width: 580px;
-  max-height: 520px;
+  max-width: 660px;
   height: auto;
+  min-height: 480px;
+  max-height: 580px;
   object-fit: cover;
   border-radius: 48px;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
   display: block;
+  animation: heroGlideIn 1s cubic-bezier(0.16, 1, 0.3, 1) backwards,
+             heroFloat 6s ease-in-out 1s infinite;
+  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.4s ease;
+  will-change: transform;
+}
+
+.hero-image:hover {
+  transform: translateY(-16px) scale(1.02);
+  box-shadow: 0 36px 80px rgba(0, 0, 0, 0.45);
+}
+
+@keyframes heroGlideIn {
+  0% {
+    opacity: 0;
+    transform: translateX(50px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes heroFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-image {
+    animation: none;
+  }
 }
 
 /* Responsive adjustments */
@@ -157,7 +194,9 @@
   }
 
   .hero-image {
-    max-width: 460px;
+    max-width: 100%;
+    min-height: auto;
+    max-height: 440px;
   }
 }
 
