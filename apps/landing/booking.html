@@ -222,16 +222,124 @@
             </div>
           </div>
 
-          <!-- STEP 2: Cargo Inventory (Shell) -->
+          <!-- STEP 2: Nextories-Style Cargo Inventory -->
           <div class="step-card" id="step-panel-2" style="display: none;">
             <div class="step-header">
               <h2 class="step-title">What items are you shipping?</h2>
               <p class="step-subtitle">Select moving items or cargo categories to calculate volume and find the best truck.</p>
             </div>
-            <div style="padding: 2rem; text-align: center; color: #71717A; background: #F8FAFC; border-radius: 8px;">
-              <p style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; color: #142553;">Cargo Inventory Selector</p>
-              <p style="font-size: 0.875rem;">Nextories-style item selector with categories (Living Room, Bedroom, Appliances, Boxes) will appear here in Phase 2.</p>
+
+            <!-- Search & Category Filters -->
+            <div class="inventory-controls-bar">
+              <div class="inventory-search-wrap">
+                <span class="inventory-search-icon" aria-hidden="true">🔍</span>
+                <input
+                  type="text"
+                  id="inventory-search-input"
+                  class="inventory-search-input"
+                  placeholder="Search furniture, appliances, boxes, pallets..."
+                  autocomplete="off"
+                />
+              </div>
+
+              <!-- Category Filter Pills -->
+              <div class="category-filter-pills" id="category-filter-pills" role="tablist" aria-label="Cargo Categories"></div>
             </div>
+
+            <!-- Live Inventory Running Metrics Bar -->
+            <div class="inventory-metrics-bar">
+              <div class="inv-metric-group">
+                <div class="inv-metric-item">
+                  <span class="inv-metric-val" id="inv-total-count">0 items</span>
+                  <span class="inv-metric-lbl">Total</span>
+                </div>
+                <div style="width: 1px; height: 20px; background: #E4E4E7;"></div>
+                <div class="inv-metric-item">
+                  <span class="inv-metric-val" id="inv-total-vol">0.0 m³</span>
+                  <span class="inv-metric-lbl">Volume</span>
+                </div>
+                <div style="width: 1px; height: 20px; background: #E4E4E7;"></div>
+                <div class="inv-metric-item">
+                  <span class="inv-metric-val" id="inv-total-weight">~0 kg</span>
+                  <span class="inv-metric-lbl">Est. Weight</span>
+                </div>
+              </div>
+              <button type="button" class="btn-reset-inventory" id="btn-reset-inventory">
+                Reset All Items
+              </button>
+            </div>
+
+            <!-- Cargo Items Grid -->
+            <div class="cargo-items-grid" id="cargo-items-grid"></div>
+
+            <!-- Custom Item Section -->
+            <div class="custom-item-section">
+              <div class="custom-item-header">
+                <span class="custom-item-title">
+                  <span>➕</span> Can't find your item? Add Custom Cargo
+                </span>
+                <span style="font-size:0.75rem; color:#71717A;">Unlisted items</span>
+              </div>
+              <div class="custom-item-grid">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="custom-item-name" class="form-label">Item Description</label>
+                  <input type="text" id="custom-item-name" class="form-input" placeholder="e.g. Traditional Mitad stove, Safe..." />
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="custom-item-vol" class="form-label">Est. Volume (m³)</label>
+                  <input type="number" id="custom-item-vol" class="form-input" placeholder="0.5" step="0.1" min="0.1" value="0.5" />
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="custom-item-weight" class="form-label">Est. Weight (kg)</label>
+                  <input type="number" id="custom-item-weight" class="form-input" placeholder="20" step="5" min="1" value="20" />
+                </div>
+                <button type="button" id="btn-add-custom-item" class="btn btn-secondary" style="height: 44px; white-space: nowrap;">
+                  + Add Item
+                </button>
+              </div>
+              <div id="custom-items-list" class="custom-items-list"></div>
+            </div>
+
+            <!-- Special Handling Flags (Curri & Lalamove inspired) -->
+            <div class="handling-flags-section">
+              <span class="section-label-bold">Special Cargo Handling Requirements:</span>
+              <div class="handling-flags-grid">
+                <label class="flag-toggle-card" for="flag-fragile">
+                  <input type="checkbox" id="flag-fragile" />
+                  <div class="flag-content">
+                    <span class="flag-name">Fragile Handling</span>
+                    <span class="flag-desc">Glass, mirrors, electronics</span>
+                  </div>
+                </label>
+                <label class="flag-toggle-card is-checked" for="flag-heavy">
+                  <input type="checkbox" id="flag-heavy" checked />
+                  <div class="flag-content">
+                    <span class="flag-name">Heavy Cargo (&gt;50kg)</span>
+                    <span class="flag-desc">Requires 1-2 helpers</span>
+                  </div>
+                </label>
+                <label class="flag-toggle-card is-checked" for="flag-weather">
+                  <input type="checkbox" id="flag-weather" checked />
+                  <div class="flag-content">
+                    <span class="flag-name">Weather-sensitive</span>
+                    <span class="flag-desc">Needs closed truck or tarpaulin</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Cargo Photo Dropzone -->
+            <div class="photo-upload-section">
+              <span class="section-label-bold">Optional: Attach Cargo Photos (Up to 4)</span>
+              <div class="photo-dropzone" id="cargo-photo-dropzone">
+                <input type="file" id="cargo-photo-input" accept="image/*" multiple style="display: none;" />
+                <div class="photo-dropzone-icon">📷</div>
+                <p class="photo-dropzone-title">Click to upload or drag cargo photos here</p>
+                <p class="photo-dropzone-subtitle">Helps drivers prepare appropriate straps, blankets, and moving equipment.</p>
+              </div>
+              <div class="photo-thumbnails-strip" id="photo-thumbnails-strip"></div>
+            </div>
+
           </div>
 
           <!-- STEP 3: Vehicle Selection (Shell) -->
@@ -289,10 +397,10 @@
                 <!-- Route Polyline (Simulated Addis Arterial Route) -->
                 <path d="M 80 180 Q 200 90 320 60" class="map-route-line" />
                 <!-- Origin Pin (Bole Area) -->
-                <circle cx="80" cy="180" r="8" fill="#15803D" class="map-pin" />
+                <circle cx="80" cy="180" r="8" fill="#15803D" class="map-pin" id="map-pin-origin" />
                 <circle cx="80" cy="180" r="16" fill="#15803D" fill-opacity="0.2" />
                 <!-- Destination Pin (Merkato Area) -->
-                <rect x="312" y="52" width="16" height="16" rx="3" fill="#B91C1C" class="map-pin" />
+                <rect x="312" y="52" width="16" height="16" rx="3" fill="#B91C1C" class="map-pin" id="map-pin-dest" />
                 <rect x="306" y="46" width="28" height="28" rx="6" fill="#B91C1C" fill-opacity="0.15" />
               </svg>
             </div>
@@ -318,6 +426,10 @@
             </div>
 
             <div class="receipt-breakdown" id="booking-fare-breakdown">
+              <div class="receipt-row" style="color: var(--color-navy-dark, #142553); font-weight: 600;">
+                <span>Selected Cargo</span>
+                <span id="summary-cargo-tally">13 items (5.6 m³)</span>
+              </div>
               <div class="receipt-row">
                 <span>Base Fare (Medium Truck)</span>
                 <span id="summary-base-fare">1,200 ETB</span>

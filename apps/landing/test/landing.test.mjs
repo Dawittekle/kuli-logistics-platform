@@ -234,10 +234,29 @@ describe('Kulli Landing Page Production Suite', () => {
     assert.match(html, /class="booking-stepper-card"/);
     assert.match(html, /id="input-origin"/);
     assert.match(html, /id="input-destination"/);
+    assert.match(html, /id="map-pin-origin"/);
+    assert.match(html, /id="map-pin-dest"/);
     assert.match(html, /id="route-map-preview"/);
     assert.match(html, /id="booking-live-summary"/);
+    assert.match(html, /id="summary-cargo-tally"/);
     assert.match(html, /id="btn-booking-next"/);
     assert.match(html, /id="btn-mobile-next"/);
+
+    // Phase 2 Nextories cargo inventory landmarks
+    assert.match(html, /id="inventory-search-input"/);
+    assert.match(html, /id="category-filter-pills"/);
+    assert.match(html, /id="inv-total-count"/);
+    assert.match(html, /id="inv-total-vol"/);
+    assert.match(html, /id="inv-total-weight"/);
+    assert.match(html, /id="btn-reset-inventory"/);
+    assert.match(html, /id="cargo-items-grid"/);
+    assert.match(html, /id="btn-add-custom-item"/);
+    assert.match(html, /id="custom-item-name"/);
+    assert.match(html, /id="flag-fragile"/);
+    assert.match(html, /id="flag-heavy"/);
+    assert.match(html, /id="flag-weather"/);
+    assert.match(html, /id="cargo-photo-dropzone"/);
+    assert.match(html, /id="photo-thumbnails-strip"/);
   });
 
   it('dist/tracking.html is compiled and contains real-time status tracker and driver card', () => {
