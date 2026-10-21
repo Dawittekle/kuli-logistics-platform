@@ -1,12 +1,12 @@
 # Kulli Brand System
 
-Welcome to the production-ready brand system and design assets repository for **Kulli (ኩሊ)** — the on-demand peer-to-peer logistics marketplace for Addis Ababa.
+Welcome to the brand system and design assets repository for **Kulli (ኩሊ)** — the on-demand logistics and cargo transportation platform.
 
-This package provides everything required to build consistent, accessible, and distinctive visual experiences across:
-1. **Client Mobile App** (Expo / React Native)
-2. **Truck-Owner Mobile App** (Expo / React Native)
-3. **Operations & Admin Dashboard** (React / Vite)
-4. **Marketing Landing Pages** (Web)
+This brand documentation provides the authentic, production-ready visual foundation across:
+1. **Marketing Landing Pages** (`apps/landing`)
+2. **Customer Mobile App** (Expo / React Native)
+3. **Truck-Owner Mobile App** (Expo / React Native)
+4. **Operations & Admin Dashboard** (React / Vite)
 
 ---
 
@@ -14,131 +14,87 @@ This package provides everything required to build consistent, accessible, and d
 
 ```
 docs/brand/
-├── README.md                  # This quick-start guide
-├── BRAND_GUIDELINES.md        # Comprehensive 12-section design specification
-├── design-tokens.json         # W3C Design Token Community Group JSON specification
-├── showcase.html              # Standalone interactive showcase (Light + Dark mode)
+├── README.md                  # Brand quick-start guide
+├── BRAND_GUIDELINES.md        # Complete visual identity and usage specifications
+├── design-tokens.json         # W3C standard JSON design tokens
+├── showcase.html              # Standalone visual showcase
 │
-├── logos/                     # Production-ready vector SVGs
-│   ├── kulli-logo-primary.svg     # Primary horizontal lockup (mark + wordmark)
-│   ├── kulli-logo-stacked.svg     # Stacked vertical lockup
-│   ├── kulli-logo-mark.svg        # Standalone Kinetic K mark
-│   ├── kulli-logo-wordmark.svg    # Typography-only wordmark
-│   ├── kulli-logo-mono-dark.svg   # Monochrome dark for light backgrounds
-│   ├── kulli-logo-mono-light.svg  # Monochrome white for dark navy backgrounds
+├── logos/                     # Production vector SVGs
+│   ├── kulli-logo-primary.svg     # Primary horizontal lockup (truck + wordmark)
+│   ├── kulli-logo-stacked.svg     # Stacked centered lockup
+│   ├── kulli-logo-mark.svg        # Standalone Delivery Truck mark
+│   ├── kulli-logo-wordmark.svg    # Standalone KULLI wordmark (Orange K + Navy ULLI)
+│   ├── kulli-logo-mono-dark.svg   # Monochrome dark version (single-ink dark)
+│   ├── kulli-logo-mono-light.svg  # Monochrome white version (reversed)
 │   ├── favicon.svg                # 32×32 browser favicon
-│   └── app-icon.svg               # 1024×1024 master app icon
+│   └── app-icon.svg               # Mobile app icon (squircle base)
 │
-├── fonts/                     # Licensed .woff2 variable web fonts
-│   ├── PlusJakartaSans-Variable.woff2  # Body & UI font (wght 200..800)
-│   ├── SpaceGrotesk-Variable.woff2     # Display & brand font (wght 300..700)
-│   ├── LICENSE-PlusJakartaSans.txt     # SIL Open Font License 1.1
-│   └── LICENSE-SpaceGrotesk.txt        # SIL Open Font License 1.1
+├── fonts/                     # Licensed variable web fonts & offline fallbacks
+│   ├── PlusJakartaSans-Variable.woff2
+│   ├── SpaceGrotesk-Variable.woff2
+│   ├── LICENSE-PlusJakartaSans.txt
+│   └── LICENSE-SpaceGrotesk.txt
 │
 ├── css/                       # Modular CSS stylesheets
-│   ├── fonts.css              # Local @font-face declarations
-│   ├── typography.css         # Complete type scale utility classes
-│   ├── theme-light.css        # Light theme CSS custom properties
-│   └── theme-dark.css         # Dark theme CSS custom properties
+│   ├── fonts.css              # Local font declarations & offline fallbacks
+│   ├── typography.css         # Authentic typography classes & scales
+│   ├── theme-light.css        # Core light theme CSS custom properties
+│   └── theme-dark.css         # Single unified light palette (dark mode disabled)
 │
 └── icons/                     # Iconography documentation
-    └── icon-guidelines.md     # Lucide icon sizing, stroke, and touch targets
+    └── icon-guidelines.md     # Stroke, sizing, and touch target rules
 ```
 
 ---
 
-## Quick Start
+## Core Brand Identity
 
-### 1. View the Interactive Brand Showcase
-Open `showcase.html` directly in any web browser to see the complete brand system in action with live Light / Dark mode switching:
-```bash
-# Example with Python simple server or direct browser open:
-xdg-open docs/brand/showcase.html
-# or
-npx serve docs/brand
-```
+### The Authentic Logo System
+- **Delivery Truck Mark:** The iconic delivery truck silhouette in Royal Navy Blue (`#1F3B87`) carrying a Sky Blue parcel (`#77ACF1`).
+- **Wordmark (`KULLI`):** Geometric uppercase sans in `Urbanist` (weight 800, letter-spacing `0.25em`). The initial letter **`K`** is highlighted in **Warm Amber Orange (`#FFAD61`)**, while **`ULLI`** is set in **Royal Navy Blue (`#1F3B87`)**.
 
-### 2. Web & Dashboard Integration (CSS Variables)
-Include the brand stylesheets in your HTML head or bundler:
+### Color Palette
+| Color Name | Token | HEX | Role |
+|------------|-------|-----|------|
+| **Royal Navy Blue** | `--color-primary` | `#1F3B87` | Primary brand blue, headers, logos, primary links |
+| **Midnight Navy** | `--color-navy-dark` | `#142553` | Primary button background, dark text, footers |
+| **Warm Amber Orange** | `--color-orange` | `#FFAD61` | Initial 'K' accent, secondary button hover, highlights |
+| **Cargo Sky Blue** | `--color-sky-blue` | `#77ACF1` | Truck parcel fill, status badges |
+| **Powder Blue** | `--color-powder-blue` | `#B0E0E6` | Subtle badge backgrounds, soft borders |
+| **Page Background** | `--color-background` | `#FBFAF9` | Warm off-white base canvas |
+| **Surface White** | `--color-surface` | `#FFFFFF` | Cards, navbar, dialog containers |
+| **Neutral Dark** | `--color-text-primary` | `#191818` | Primary body typography (15.2:1 contrast) |
+
+### Design Philosophy
+- **Crisp & Light:** Clean white and warm off-white surfaces (`#FFFFFF` and `#FBFAF9`). No dark mode and no glowing neon artifacts.
+- **Pill Buttons:** Primary buttons in Midnight Navy (`#142553`) and secondary buttons in white with navy border transitioning to Warm Orange hover (`#FFAD61`), with rounded 24px-32px pill radii.
+- **Readable Typography:** Geometric pairing of `Urbanist` for brand/body and `Lexend` for UI controls and headings.
+
+---
+
+## Web Integration
+
 ```html
+<!-- Include Kulli CSS in <head> -->
 <link rel="stylesheet" href="/docs/brand/css/fonts.css">
 <link rel="stylesheet" href="/docs/brand/css/typography.css">
 <link rel="stylesheet" href="/docs/brand/css/theme-light.css">
-<link rel="stylesheet" href="/docs/brand/css/theme-dark.css">
 ```
 
-Toggle between light and dark themes using the `data-theme` attribute:
-```javascript
-// Switch theme
-document.documentElement.setAttribute('data-theme', 'dark'); // or 'light'
-```
-
-### 3. Mobile App Integration (React Native / Expo)
-Import tokens into your React Native theme provider:
-```typescript
-import tokens from './docs/brand/design-tokens.json';
-
-export const theme = {
-  colors: {
-    primary: tokens.kulli.color.brand['navy-600'].$value,       // #1F3B87
-    primaryDark: tokens.kulli.color.brand['navy-900'].$value,   // #0C1A3A
-    accent: tokens.kulli.color.brand['orange-500'].$value,      // #F97316
-    accentText: tokens.kulli.color.brand['navy-900'].$value,    // #0C1A3A (6.12:1 WCAG AA)
-    background: tokens.kulli.color.neutral['50'].$value,        // #F8FAFC
-    surface: tokens.kulli.color.neutral['0'].$value,            // #FFFFFF
-    text: tokens.kulli.color.neutral['900'].$value,             // #0F172A
-    muted: tokens.kulli.color.neutral['500'].$value,            // #64748B
-    border: tokens.kulli.color.neutral['200'].$value,           // #E2E8F0
-    success: tokens.kulli.color.status.success.$value,          // #10B981
-    warning: tokens.kulli.color.status.warning.$value,          // #F59E0B
-    error: tokens.kulli.color.status.error.$value               // #EF4444
-  },
-  spacing: {
-    xs: 4,
-    sm: 8,
-    md: 12,
-    lg: 16,
-    xl: 24,
-    xxl: 32
-  },
-  radii: {
-    sm: 4,
-    md: 8,
-    lg: 12,
-    xl: 16,
-    full: 9999
-  }
-};
+### Brand Logo Lockup Example
+```html
+<div class="home-logo">
+  <img src="/docs/brand/logos/kulli-logo-mark.svg" alt="Kulli Truck" width="28" height="28">
+  <span class="brandName">
+    <span class="brand-accent-k">K</span>ulli
+  </span>
+</div>
 ```
 
 ---
 
-## Core Brand Tokens Cheat Sheet
-
-### Colors
-| Name | Token | HEX | Role | WCAG Contrast on White |
-|------|-------|-----|------|------------------------|
-| **Navy 900** | `brand.navy-900` | `#0C1A3A` | Deep dark, headers, sidebars | 17.15:1 (AAA) |
-| **Navy 600** | `brand.navy-600` | `#1F3B87` | Primary interactive brand | 10.33:1 (AAA) |
-| **Orange 500** | `brand.orange-500`| `#F97316` | Kinetic energy, buttons, dispatch | 6.12:1 (with Navy 900 text) |
-| **Slate 900** | `neutral.900` | `#0F172A` | Primary body text | 17.06:1 (AAA) |
-| **Slate 500** | `neutral.500` | `#64748B` | Secondary muted text | 4.55:1 (AA) |
-| **Slate 50** | `neutral.50` | `#F8FAFC` | Main canvas background | N/A |
-
-### Typography
-- **Headings & Display:** `Space Grotesk` (weights 600, 700)
-- **Body & Interface:** `Plus Jakarta Sans` (weights 400, 500, 600, 700)
-- **Code & Tracking IDs:** Monospace / JetBrains Mono
-
----
-
-## Verification & Validation
-
-All files have been verified:
-- [x] **8 SVGs validated:** Passed XML parser check (`xml.etree.ElementTree`)
-- [x] **2 Font binaries verified:** WOFF2 Variable format checked via `file` utility
-- [x] **Design Tokens validated:** Validated against W3C Community Group schema
-- [x] **Contrast Matrix validated:** 21 color combinations mathematically tested against WCAG 2.1 AA/AAA
-- [x] **Accessibility:** High-contrast text rule established for Orange buttons (`#0C1A3A` on `#F97316` = 6.12:1)
-
-For deep technical details, refer to [`BRAND_GUIDELINES.md`](./BRAND_GUIDELINES.md).
+## Verification & Status
+- [x] All 8 SVGs validated with strict XML parser and headless Chrome rasterizer.
+- [x] CSS tokens aligned directly with authentic `guide/Kulli` specification.
+- [x] Dark mode disabled in favor of unified, accessible light theme.
+- [x] Full visual showcase available at `docs/brand/showcase.html`.

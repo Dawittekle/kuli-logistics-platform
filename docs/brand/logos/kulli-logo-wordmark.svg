@@ -1,34 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 48" width="200" height="48">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 48" width="150" height="48" role="img" aria-label="Kulli">
   <title>Kulli Wordmark</title>
-  <!--
-    KULLI wordmark — geometric uppercase letterforms as paths.
-    "K" in orange (#F97316), "ULLI" in navy (#0C1A3A).
-    Space Grotesk-inspired with generous tracking.
-    Stroke weight ~5.5, rounded caps.
-    Baseline at y=40, cap-height at y=8.
-  -->
-  <!-- K (orange) -->
-  <g stroke="#F97316" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <line x1="8" y1="8" x2="8" y2="40"/>
-    <line x1="14" y1="25" x2="30" y2="8"/>
-    <line x1="14" y1="25" x2="30" y2="40"/>
+  <!-- K (Warm Amber Orange) -->
+  <g transform="translate(16, 35) scale(0.032, -0.032)">
+    <path fill="#FFAD61" d="M66 0V745H221V372L178 387L476 745H670L375 389L384 499L676 0H495L313 315L221 204V0Z"/>
   </g>
-  <!-- U (navy) -->
-  <g stroke="#0C1A3A" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M42,8 L42,32 Q42,40 50,40 Q58,40 58,32 L58,8"/>
+  <!-- ULLI (Royal Navy Blue) -->
+  <g transform="translate(45, 35) scale(0.032, -0.032)">
+    <path fill="#1F3B87" d="M362 -12Q274 -12 205.0 25.0Q136 62 96.5 126.5Q57 191 57 273V745H212V283Q212 239 231.5 203.5Q251 168 285.0 148.0Q319 128 362 128Q406 128 439.5 148.0Q473 168 492.5 203.5Q512 239 512 283V745H667V273Q667 191 627.5 126.5Q588 62 519.0 25.0Q450 -12 362 -12Z"/>
   </g>
-  <!-- L (navy) -->
-  <g stroke="#0C1A3A" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <line x1="72" y1="8" x2="72" y2="40"/>
-    <line x1="72" y1="40" x2="90" y2="40"/>
+  <g transform="translate(75, 35) scale(0.032, -0.032)">
+    <path fill="#1F3B87" d="M66 0V745H221V135H536V0Z"/>
   </g>
-  <!-- L (navy) -->
-  <g stroke="#0C1A3A" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <line x1="102" y1="8" x2="102" y2="40"/>
-    <line x1="102" y1="40" x2="120" y2="40"/>
+  <g transform="translate(100, 35) scale(0.032, -0.032)">
+    <path fill="#1F3B87" d="M66 0V745H221V135H536V0Z"/>
   </g>
-  <!-- I (navy) -->
-  <g stroke="#0C1A3A" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <line x1="134" y1="8" x2="134" y2="40"/>
+  <g transform="translate(125, 35) scale(0.032, -0.032)">
+    <path fill="#1F3B87" d="M66 0V745H221V0Z"/>
   </g>
 </svg>

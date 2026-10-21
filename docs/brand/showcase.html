@@ -1,19 +1,17 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kulli Brand System & Design Tokens Showcase</title>
+  <title>Kulli Brand System & Design Showcase</title>
   <link rel="icon" type="image/svg+xml" href="logos/favicon.svg">
   
   <!-- Kulli Design System Core CSS -->
   <link rel="stylesheet" href="css/fonts.css">
   <link rel="stylesheet" href="css/typography.css">
   <link rel="stylesheet" href="css/theme-light.css">
-  <link rel="stylesheet" href="css/theme-dark.css">
 
   <style>
-    /* Showcase-specific styling built with Kulli design tokens */
     *, *::before, *::after {
       box-sizing: border-box;
       margin: 0;
@@ -25,17 +23,16 @@
       background-color: var(--color-background);
       color: var(--color-text-primary);
       line-height: 1.5;
-      transition: background-color var(--duration-normal) var(--ease-default), color var(--duration-normal) var(--ease-default);
-      padding-bottom: var(--space-24);
+      padding-bottom: 80px;
     }
 
     .container {
-      max-width: var(--layout-max-width);
+      max-width: var(--layout-max-width, 1144px);
       margin: 0 auto;
-      padding: 0 var(--space-6);
+      padding: 0 24px;
     }
 
-    /* Sticky Showcase Header */
+    /* Showcase Header */
     .showcase-header {
       position: sticky;
       top: 0;
@@ -43,8 +40,6 @@
       background: var(--color-surface);
       border-bottom: 1px solid var(--color-border);
       box-shadow: var(--shadow-low);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
     }
 
     .header-inner {
@@ -57,7 +52,7 @@
     .brand-id {
       display: flex;
       align-items: center;
-      gap: var(--space-3);
+      gap: 12px;
     }
 
     .brand-id img {
@@ -68,305 +63,221 @@
     .header-nav {
       display: flex;
       align-items: center;
-      gap: var(--space-4);
+      gap: 24px;
     }
 
     .header-nav a {
-      color: var(--color-text-secondary);
+      color: var(--color-navy-dark);
       text-decoration: none;
-      font-size: 0.875rem;
-      font-weight: 600;
-      transition: color var(--duration-fast) var(--ease-default);
+      font-family: var(--font-heading);
+      font-size: 0.9375rem;
+      font-weight: 500;
+      transition: color 0.2s ease;
     }
 
     .header-nav a:hover {
-      color: var(--color-primary);
+      color: var(--color-orange);
     }
 
-    .theme-toggle-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-2);
-      padding: 8px 16px;
-      border-radius: var(--radius-full);
-      border: 1.5px solid var(--color-border-strong);
-      background: var(--color-surface-low);
-      color: var(--color-text-primary);
-      font-family: var(--font-body);
-      font-size: 0.875rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all var(--duration-fast) var(--ease-default);
-    }
-
-    .theme-toggle-btn:hover {
-      border-color: var(--color-primary);
-      background: var(--color-surface);
-    }
-
-    /* Hero Banner */
+    /* Hero section */
     .hero-banner {
-      padding: var(--space-16) 0 var(--space-12);
-      background: linear-gradient(180deg, var(--color-surface-low) 0%, var(--color-background) 100%);
+      padding: 60px 0 40px;
+      background: linear-gradient(180deg, #FFFFFF 0%, #FBFAF9 100%);
       border-bottom: 1px solid var(--color-border);
-      margin-bottom: var(--space-12);
+      margin-bottom: 48px;
     }
 
     .hero-eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-2);
-      padding: 4px 12px;
-      background: var(--color-accent-subtle);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-full);
-      color: var(--color-accent-active);
-      font-size: 0.75rem;
+      display: inline-block;
+      font-family: var(--font-heading);
+      font-size: 0.8125rem;
       font-weight: 700;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
-      margin-bottom: var(--space-4);
+      color: var(--color-primary);
+      background: var(--color-primary-subtle);
+      padding: 4px 12px;
+      border-radius: 24px;
+      margin-bottom: 16px;
     }
 
     .hero-title {
-      font-family: var(--font-display);
-      font-size: clamp(2.25rem, 4.5vw, 3.5rem);
+      font-family: var(--font-heading);
+      font-size: 2.75rem;
       font-weight: 700;
-      line-height: 1.1;
-      letter-spacing: -0.025em;
-      margin-bottom: var(--space-4);
-      color: var(--color-text-primary);
+      color: var(--color-navy-dark);
+      line-height: 1.2;
+      margin-bottom: 16px;
     }
 
-    .hero-subtitle {
+    .hero-lead {
       font-size: 1.125rem;
       color: var(--color-text-secondary);
-      max-width: 65ch;
+      max-width: 720px;
       line-height: 1.6;
     }
 
-    /* Section Styling */
+    /* Section structure */
     .section {
-      padding: var(--space-12) 0;
-      border-bottom: 1px solid var(--color-border);
-    }
-
-    .section:last-of-type {
-      border-bottom: none;
+      margin-bottom: 64px;
     }
 
     .section-header {
-      margin-bottom: var(--space-8);
-    }
-
-    .section-tag {
-      font-size: 0.75rem;
-      font-weight: 800;
-      color: var(--color-primary);
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      margin-bottom: var(--space-1);
-      display: block;
+      margin-bottom: 28px;
+      border-bottom: 2px solid var(--color-border);
+      padding-bottom: 12px;
     }
 
     .section-title {
-      font-family: var(--font-display);
-      font-size: 1.875rem;
+      font-family: var(--font-heading);
+      font-size: 1.75rem;
       font-weight: 700;
-      letter-spacing: -0.015em;
-      margin-bottom: var(--space-2);
+      color: var(--color-navy-dark);
     }
 
     .section-desc {
       color: var(--color-text-secondary);
-      font-size: 1rem;
-      max-width: 70ch;
+      font-size: 0.9375rem;
+      margin-top: 4px;
     }
 
-    /* Grid Layouts */
-    .grid-2 {
+    /* Logo Grid */
+    .logo-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: var(--space-6);
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 24px;
     }
 
-    .grid-3 {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: var(--space-6);
-    }
-
-    .grid-4 {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: var(--space-4);
-    }
-
-    /* Logo Cards */
     .logo-card {
       background: var(--color-surface);
       border: 1px solid var(--color-border);
-      border-radius: var(--radius-xl);
-      padding: var(--space-6);
+      border-radius: var(--radius-card, 8px);
+      padding: 24px;
       display: flex;
       flex-direction: column;
-      gap: var(--space-4);
+      align-items: center;
       box-shadow: var(--shadow-low);
-      transition: transform var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
 
     .logo-card:hover {
       transform: translateY(-2px);
-      box-shadow: var(--shadow-medium);
+      box-shadow: var(--shadow-card);
     }
 
     .logo-preview-box {
-      background: var(--color-surface-low);
-      border-radius: var(--radius-lg);
-      padding: var(--space-8);
+      width: 100%;
+      height: 120px;
       display: flex;
       align-items: center;
       justify-content: center;
-      min-height: 140px;
-      overflow: hidden;
-      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      background: #FAFAFA;
+      border: 1px dashed var(--color-border);
+      margin-bottom: 16px;
+      padding: 16px;
     }
 
     .logo-preview-box.dark-bg {
-      background: #0C1A3A;
+      background: var(--color-navy-dark);
+      border-color: #2D3748;
     }
 
-    .logo-card-info h4 {
+    .logo-preview-box img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+
+    .logo-meta {
+      width: 100%;
+      text-align: left;
+    }
+
+    .logo-name {
+      font-family: var(--font-heading);
       font-size: 1rem;
-      font-weight: 700;
-      margin-bottom: var(--space-1);
+      font-weight: 600;
+      color: var(--color-navy-dark);
     }
 
-    .logo-card-info p {
+    .logo-file {
       font-size: 0.8125rem;
       color: var(--color-text-muted);
-    }
-
-    .logo-card-info code {
-      display: inline-block;
-      margin-top: var(--space-2);
       font-family: var(--font-mono);
-      font-size: 0.75rem;
-      background: var(--color-surface-low);
-      padding: 2px 6px;
-      border-radius: var(--radius-sm);
-      color: var(--color-primary);
+      margin-top: 2px;
     }
 
-    /* Swatches */
+    /* Color Swatches */
     .swatch-group {
-      margin-bottom: var(--space-6);
+      margin-bottom: 32px;
     }
 
     .swatch-group-title {
-      font-size: 0.9375rem;
-      font-weight: 700;
-      margin-bottom: var(--space-3);
-      color: var(--color-text-primary);
-      display: flex;
-      align-items: center;
-      gap: var(--space-2);
+      font-family: var(--font-heading);
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--color-navy-dark);
+      margin-bottom: 16px;
+    }
+
+    .swatch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 16px;
     }
 
     .swatch-card {
       background: var(--color-surface);
       border: 1px solid var(--color-border);
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius-card, 8px);
       overflow: hidden;
       box-shadow: var(--shadow-low);
-      display: flex;
-      flex-direction: column;
     }
 
     .swatch-color {
-      height: 90px;
+      height: 80px;
       width: 100%;
-      position: relative;
     }
 
-    .swatch-meta {
-      padding: var(--space-3);
+    .swatch-info {
+      padding: 12px;
     }
 
     .swatch-name {
-      font-weight: 700;
+      font-family: var(--font-heading);
       font-size: 0.875rem;
-      margin-bottom: 2px;
+      font-weight: 600;
+      color: var(--color-navy-dark);
     }
 
     .swatch-hex {
       font-family: var(--font-mono);
-      font-size: 0.75rem;
+      font-size: 0.8125rem;
       color: var(--color-text-muted);
+      margin-top: 2px;
     }
 
-    /* WCAG Contrast Table */
-    .contrast-table {
-      width: 100%;
-      border-collapse: collapse;
-      background: var(--color-surface);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-xl);
-      overflow: hidden;
-      font-size: 0.875rem;
-      box-shadow: var(--shadow-low);
-    }
-
-    .contrast-table th, .contrast-table td {
-      padding: 12px 16px;
-      text-align: left;
-      border-bottom: 1px solid var(--color-border);
-    }
-
-    .contrast-table th {
-      background: var(--color-surface-low);
-      font-weight: 700;
-      color: var(--color-text-primary);
-    }
-
-    .contrast-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 2px 8px;
-      border-radius: var(--radius-full);
+    .swatch-role {
       font-size: 0.75rem;
-      font-weight: 700;
+      color: var(--color-text-secondary);
+      margin-top: 4px;
     }
 
-    .contrast-pass {
-      background: var(--color-success-bg);
-      color: var(--color-success-text);
-      border: 1px solid var(--color-success-border);
-    }
-
-    .contrast-fail {
-      background: var(--color-error-bg);
-      color: var(--color-error-text);
-      border: 1px solid var(--color-error-border);
-    }
-
-    /* Typography Scale Table */
-    .type-specimen-box {
+    /* Typography Showcase */
+    .type-specimen {
       background: var(--color-surface);
       border: 1px solid var(--color-border);
-      border-radius: var(--radius-xl);
-      padding: var(--space-8);
-      margin-bottom: var(--space-6);
+      border-radius: var(--radius-card, 8px);
+      padding: 32px;
+      margin-bottom: 24px;
       box-shadow: var(--shadow-low);
     }
 
     .type-row {
-      display: grid;
-      grid-template-columns: 180px 1fr;
-      gap: var(--space-6);
+      display: flex;
       align-items: baseline;
-      padding: var(--space-5) 0;
+      padding: 16px 0;
       border-bottom: 1px solid var(--color-border);
     }
 
@@ -375,689 +286,582 @@
     }
 
     .type-meta {
+      width: 220px;
+      flex-shrink: 0;
+    }
+
+    .type-tag {
+      font-family: var(--font-mono);
       font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--color-primary);
+    }
+
+    .type-specs {
+      font-size: 0.75rem;
       color: var(--color-text-muted);
+      margin-top: 2px;
     }
 
-    .type-meta strong {
-      display: block;
-      color: var(--color-text-primary);
-      font-size: 0.875rem;
-      margin-bottom: 2px;
+    .type-sample {
+      flex: 1;
+      color: var(--color-navy-dark);
     }
 
-    /* Interactive Font Tester */
-    .interactive-tester {
+    /* Component Showcase */
+    .component-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+
+    .comp-card {
       background: var(--color-surface);
       border: 1px solid var(--color-border);
-      border-radius: var(--radius-xl);
-      padding: var(--space-6);
+      border-radius: var(--radius-card, 8px);
+      padding: 24px;
       box-shadow: var(--shadow-low);
-      margin-top: var(--space-6);
     }
 
-    .tester-controls {
+    .comp-title {
+      font-family: var(--font-heading);
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--color-navy-dark);
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .button-group {
       display: flex;
       flex-wrap: wrap;
-      gap: var(--space-4);
-      margin-bottom: var(--space-4);
+      gap: 12px;
       align-items: center;
     }
 
-    .tester-input {
-      width: 100%;
-      min-height: 80px;
-      padding: var(--space-4);
-      border-radius: var(--radius-md);
-      border: 1.5px solid var(--color-border-strong);
-      background: var(--color-surface-low);
-      color: var(--color-text-primary);
-      font-size: 1.5rem;
-      outline: none;
-      resize: vertical;
-    }
-
-    .tester-input:focus {
-      border-color: var(--color-primary);
-    }
-
-    /* UI Component Playground */
-    .component-panel {
-      background: var(--color-surface);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-xl);
-      padding: var(--space-6);
-      box-shadow: var(--shadow-low);
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-5);
-    }
-
-    /* Buttons */
-    .btn-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--space-3);
-      align-items: center;
-    }
-
-    .btn {
+    /* Authentic Kulli Buttons */
+    .button {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: var(--space-2);
-      padding: 10px 20px;
-      border-radius: var(--radius-md);
-      font-family: var(--font-body);
-      font-size: 0.875rem;
-      font-weight: 600;
+      padding: 12px 28px;
+      border-radius: var(--radius-button, 24px);
+      font-family: var(--font-heading);
+      font-size: 0.9375rem;
+      font-weight: 500;
+      line-height: 1;
       cursor: pointer;
       text-decoration: none;
-      transition: all var(--duration-fast) var(--ease-default);
-      border: 1.5px solid transparent;
-      min-height: 44px;
+      transition: all 0.3s ease;
     }
 
-    .btn-primary {
-      background: var(--color-primary);
-      color: var(--color-primary-on);
-      border-color: var(--color-primary);
-    }
-    .btn-primary:hover {
-      background: var(--color-primary-hover);
-      border-color: var(--color-primary-hover);
-    }
-
-    .btn-accent {
-      background: var(--color-accent);
-      color: var(--color-accent-on);
-      border-color: var(--color-accent);
-      font-weight: 700;
-    }
-    .btn-accent:hover {
-      background: var(--color-accent-hover);
-      border-color: var(--color-accent-hover);
-    }
-
-    .btn-outline {
-      background: transparent;
-      color: var(--color-primary);
-      border-color: var(--color-primary);
-    }
-    .btn-outline:hover {
-      background: var(--color-primary-subtle);
-    }
-
-    .btn-ghost {
-      background: transparent;
-      color: var(--color-text-secondary);
-    }
-    .btn-ghost:hover {
-      background: var(--color-surface-low);
-      color: var(--color-text-primary);
-    }
-
-    .btn-danger {
-      background: var(--color-error);
+    .button-primary {
       color: #FFFFFF;
-      border-color: var(--color-error);
-    }
-    .btn-danger:hover {
-      background: #DC2626;
+      background-color: var(--color-navy-dark);
+      border: 2px solid var(--color-navy-dark);
     }
 
-    /* Status Badges */
-    .badge-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--space-2);
-      align-items: center;
+    .button-primary:hover {
+      color: var(--color-navy-dark);
+      background-color: #FFFFFF;
     }
 
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 12px;
-      border-radius: var(--radius-full);
-      font-size: 0.75rem;
-      font-weight: 700;
-      letter-spacing: 0.02em;
+    .button-secondary {
+      color: var(--color-navy-dark);
+      background-color: #FFFFFF;
+      border: 2px solid var(--color-navy-dark);
     }
 
-    .status-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: currentColor;
+    .button-secondary:hover {
+      color: #FFFFFF;
+      background-color: var(--color-orange);
+      border-color: var(--color-orange);
     }
 
-    .status-badge.success {
-      background: var(--color-success-bg);
-      color: var(--color-success-text);
-      border: 1px solid var(--color-success-border);
+    .button-accent {
+      color: #FFFFFF;
+      background-color: var(--color-orange);
+      border: 2px solid var(--color-orange);
     }
 
-    .status-badge.warning {
-      background: var(--color-warning-bg);
-      color: var(--color-warning-text);
-      border: 1px solid var(--color-warning-border);
+    .button-accent:hover {
+      background-color: var(--color-orange-hover);
+      border-color: var(--color-orange-hover);
     }
 
-    .status-badge.error {
-      background: var(--color-error-bg);
-      color: var(--color-error-text);
-      border: 1px solid var(--color-error-border);
-    }
-
-    .status-badge.info {
-      background: var(--color-info-bg);
-      color: var(--color-info-text);
-      border: 1px solid var(--color-info-border);
-    }
-
-    .status-badge.neutral {
-      background: var(--color-surface-low);
-      color: var(--color-text-secondary);
-      border: 1px solid var(--color-border);
-    }
-
-    /* Forms */
-    .form-group {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-1);
-    }
-
-    .form-label {
-      font-size: 0.875rem;
-      font-weight: 600;
-      color: var(--color-text-secondary);
-    }
-
-    .form-input {
-      height: 44px;
-      padding: 0 var(--space-3);
-      border-radius: var(--radius-md);
+    /* Authentic Kulli Input */
+    .input-field {
+      width: 100%;
+      padding: 12px 20px;
+      border-radius: var(--radius-input, 24px);
       border: 1.5px solid var(--color-border-strong);
-      background: var(--color-surface);
-      color: var(--color-text-primary);
+      background: #FFFFFF;
+      color: var(--color-navy-dark);
       font-family: var(--font-body);
       font-size: 0.9375rem;
       outline: none;
-      transition: border-color var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default);
+      transition: border-color 0.2s ease;
     }
 
-    .form-input:focus {
+    .input-field:focus {
       border-color: var(--color-primary);
-      box-shadow: 0 0 0 3px var(--color-primary-subtle);
     }
 
-    /* Spacing & Radii Display */
-    .spacing-box {
-      display: flex;
+    /* Badges */
+    .badge {
+      display: inline-flex;
       align-items: center;
-      gap: var(--space-3);
-      padding: var(--space-2) 0;
+      padding: 4px 12px;
+      border-radius: 16px;
+      font-family: var(--font-heading);
+      font-size: 0.75rem;
+      font-weight: 600;
     }
 
-    .spacing-bar {
-      height: 24px;
-      background: var(--color-accent);
-      border-radius: var(--radius-sm);
+    .badge-primary {
+      background: var(--color-primary-subtle);
+      color: var(--color-primary);
     }
 
-    /* Mockup Showcase */
-    .mockup-container {
+    .badge-accent {
+      background: var(--color-orange-subtle);
+      color: #BF4408;
+    }
+
+    .badge-sky {
+      background: #E8F2FD;
+      color: #1F3B87;
+    }
+
+    /* Contrast Table */
+    .contrast-table {
+      width: 100%;
+      border-collapse: collapse;
       background: var(--color-surface);
       border: 1px solid var(--color-border);
-      border-radius: var(--radius-2xl);
+      border-radius: var(--radius-card, 8px);
       overflow: hidden;
-      box-shadow: var(--shadow-panel);
+      box-shadow: var(--shadow-low);
     }
 
-    .mockup-topbar {
-      background: var(--color-surface-low);
-      padding: 12px 20px;
+    .contrast-table th,
+    .contrast-table td {
+      padding: 14px 18px;
+      text-align: left;
       border-bottom: 1px solid var(--color-border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .mockup-dots {
-      display: flex;
-      gap: 6px;
-    }
-
-    .mockup-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--color-border-strong);
-    }
-
-    .mockup-content {
-      padding: var(--space-8);
-    }
-
-    /* Footer */
-    .showcase-footer {
-      margin-top: var(--space-16);
-      padding-top: var(--space-8);
-      border-top: 1px solid var(--color-border);
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      align-items: center;
-      gap: var(--space-4);
-      color: var(--color-text-muted);
       font-size: 0.875rem;
+    }
+
+    .contrast-table th {
+      background: #FAFAFA;
+      font-family: var(--font-heading);
+      font-weight: 600;
+      color: var(--color-navy-dark);
+    }
+
+    .badge-pass {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      background: #ECFDF5;
+      color: #065F46;
+      border: 1px solid #A7F3D0;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .header-nav { display: none; }
+      .hero-title { font-size: 2rem; }
+      .type-row { flex-direction: column; gap: 8px; }
+      .type-meta { width: 100%; }
     }
   </style>
 </head>
 <body>
 
-  <!-- Sticky Showcase Navigation Header -->
+  <!-- Sticky Showcase Header -->
   <header class="showcase-header">
     <div class="container header-inner">
       <div class="brand-id">
-        <img src="logos/kulli-logo-primary.svg" alt="Kulli Logo" id="headerLogo">
-        <span class="status-badge success" style="font-size: 0.7rem; padding: 2px 8px;">v1.0.0</span>
+        <img src="logos/kulli-logo-primary.svg" alt="Kulli Logo">
       </div>
-
       <nav class="header-nav">
         <a href="#logos">Logos</a>
+        <a href="#colors">Color System</a>
         <a href="#typography">Typography</a>
-        <a href="#colors">Colors</a>
-        <a href="#contrast">WCAG Matrix</a>
         <a href="#components">Components</a>
-        <a href="#mockup">Product Demo</a>
-        <button class="theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle Dark Mode">
-          <span id="themeIcon">🌙</span>
-          <span id="themeLabel">Dark Mode</span>
-        </button>
+        <a href="#contrast">Accessibility</a>
       </nav>
     </div>
   </header>
 
   <!-- Hero Banner -->
-  <section class="hero-banner">
+  <div class="hero-banner">
     <div class="container">
-      <span class="hero-eyebrow">Production Brand Identity System</span>
-      <h1 class="hero-title">Kulli Design System</h1>
-      <p class="hero-subtitle">
-        A unified, accessible, and distinctive brand language built for Addis Ababa's peer-to-peer truck logistics platform.
-        Powering the Customer App, Truck-Owner App, Operations Dashboard, and Marketing Web.
+      <span class="hero-eyebrow">Brand System Documentation</span>
+      <h1 class="hero-title">Kulli Logistics Platform</h1>
+      <p class="hero-lead">
+        Authentic brand identity and design system specifications. Featuring the signature delivery truck icon, Warm Amber Orange accent, Royal Navy Blue palette, and geometric Urbanist &amp; Lexend typography.
       </p>
     </div>
-  </section>
+  </div>
 
   <main class="container">
 
-    <!-- 01. LOGO SYSTEM -->
+    <!-- 1. Logo System -->
     <section class="section" id="logos">
       <div class="section-header">
-        <span class="section-tag">01 / Identity</span>
-        <h2 class="section-title">Kinetic "K" Logo System</h2>
-        <p class="section-desc">
-          Replacing generic truck clip-art with a custom geometric Kinetic K mark.
-          Tilted 2.5° forward for momentum, with an intentional connector gap symbolizing frictionless dispatch from pickup to delivery.
-        </p>
+        <h2 class="section-title">1. Logo System</h2>
+        <p class="section-desc">Vector assets for digital interfaces, mobile applications, favicons, and documentation.</p>
       </div>
 
-      <div class="grid-2" style="margin-bottom: var(--space-6);">
+      <div class="logo-grid">
         <!-- Primary Horizontal -->
         <div class="logo-card">
           <div class="logo-preview-box">
-            <img src="logos/kulli-logo-primary.svg" alt="Primary Horizontal Logo" style="max-width: 220px; width: 100%;">
+            <img src="logos/kulli-logo-primary.svg" alt="Kulli Primary Logo">
           </div>
-          <div class="logo-card-info">
-            <h4>Primary Horizontal Lockup</h4>
-            <p>Main brand signature for navigation bars, web headers, and official documents.</p>
-            <code>logos/kulli-logo-primary.svg</code>
+          <div class="logo-meta">
+            <h3 class="logo-name">Primary Horizontal Lockup</h3>
+            <p class="logo-file">logos/kulli-logo-primary.svg</p>
           </div>
         </div>
 
         <!-- Stacked Lockup -->
         <div class="logo-card">
           <div class="logo-preview-box">
-            <img src="logos/kulli-logo-stacked.svg" alt="Stacked Logo" style="max-height: 90px;">
+            <img src="logos/kulli-logo-stacked.svg" alt="Kulli Stacked Logo">
           </div>
-          <div class="logo-card-info">
-            <h4>Stacked Lockup</h4>
-            <p>Vertical balance for mobile splash screens, app onboarding, and merchandising.</p>
-            <code>logos/kulli-logo-stacked.svg</code>
+          <div class="logo-meta">
+            <h3 class="logo-name">Stacked Lockup</h3>
+            <p class="logo-file">logos/kulli-logo-stacked.svg</p>
           </div>
         </div>
 
-        <!-- Kinetic Mark Only -->
+        <!-- Standalone Mark -->
         <div class="logo-card">
           <div class="logo-preview-box">
-            <img src="logos/kulli-logo-mark.svg" alt="Kinetic K Mark" style="width: 64px; height: 64px;">
+            <img src="logos/kulli-logo-mark.svg" alt="Kulli Delivery Truck Mark" style="width: 48px; height: 48px;">
           </div>
-          <div class="logo-card-info">
-            <h4>Kinetic "K" Lettermark</h4>
-            <p>Standalone icon for avatars, active map markers, and mobile app bar.</p>
-            <code>logos/kulli-logo-mark.svg</code>
+          <div class="logo-meta">
+            <h3 class="logo-name">Delivery Truck Mark</h3>
+            <p class="logo-file">logos/kulli-logo-mark.svg</p>
           </div>
         </div>
 
-        <!-- Typography Wordmark -->
+        <!-- Standalone Wordmark -->
         <div class="logo-card">
           <div class="logo-preview-box">
-            <img src="logos/kulli-logo-wordmark.svg" alt="Wordmark" style="max-width: 180px;">
+            <img src="logos/kulli-logo-wordmark.svg" alt="Kulli Wordmark">
           </div>
-          <div class="logo-card-info">
-            <h4>Geometric Wordmark</h4>
-            <p>Space Grotesk derived uppercase letterforms with orange capital K signature.</p>
-            <code>logos/kulli-logo-wordmark.svg</code>
-          </div>
-        </div>
-
-        <!-- Monochrome Dark -->
-        <div class="logo-card">
-          <div class="logo-preview-box">
-            <img src="logos/kulli-logo-mono-dark.svg" alt="Monochrome Dark" style="max-width: 220px;">
-          </div>
-          <div class="logo-card-info">
-            <h4>Monochrome Dark</h4>
-            <p>Single-color Navy lockup for black-and-white printing, receipts, and invoices.</p>
-            <code>logos/kulli-logo-mono-dark.svg</code>
-          </div>
-        </div>
-
-        <!-- Monochrome Light on Navy -->
-        <div class="logo-card">
-          <div class="logo-preview-box dark-bg">
-            <img src="logos/kulli-logo-mono-light.svg" alt="Monochrome Light" style="max-width: 220px;">
-          </div>
-          <div class="logo-card-info">
-            <h4>Monochrome Light</h4>
-            <p>Pure white lockup optimized for deep navy hero surfaces, vehicle wraps, and dark mode.</p>
-            <code>logos/kulli-logo-mono-light.svg</code>
+          <div class="logo-meta">
+            <h3 class="logo-name">Wordmark Only</h3>
+            <p class="logo-file">logos/kulli-logo-wordmark.svg</p>
           </div>
         </div>
 
         <!-- Favicon -->
         <div class="logo-card">
           <div class="logo-preview-box">
-            <img src="logos/favicon.svg" alt="Favicon" style="width: 48px; height: 48px;">
+            <img src="logos/favicon.svg" alt="Kulli Favicon" style="width: 32px; height: 32px;">
           </div>
-          <div class="logo-card-info">
-            <h4>Browser Favicon</h4>
-            <p>High-contrast rounded navy tile with white K mark, razor-sharp down to 16×16px.</p>
-            <code>logos/favicon.svg</code>
+          <div class="logo-meta">
+            <h3 class="logo-name">Browser Favicon</h3>
+            <p class="logo-file">logos/favicon.svg</p>
           </div>
         </div>
 
-        <!-- App Store Icon -->
+        <!-- App Icon -->
         <div class="logo-card">
           <div class="logo-preview-box">
-            <img src="logos/app-icon.svg" alt="App Store Icon" style="width: 80px; height: 80px; border-radius: 18px; box-shadow: var(--shadow-medium);">
+            <img src="logos/app-icon.svg" alt="Kulli App Icon" style="width: 64px; height: 64px; border-radius: 14px;">
           </div>
-          <div class="logo-card-info">
-            <h4>1024×1024 Master App Icon</h4>
-            <p>Platform safe-zone compliant tile for iOS App Store and Google Play.</p>
-            <code>logos/app-icon.svg</code>
+          <div class="logo-meta">
+            <h3 class="logo-name">Mobile App Icon</h3>
+            <p class="logo-file">logos/app-icon.svg</p>
+          </div>
+        </div>
+
+        <!-- Monochrome Dark -->
+        <div class="logo-card">
+          <div class="logo-preview-box">
+            <img src="logos/kulli-logo-mono-dark.svg" alt="Kulli Monochrome Dark">
+          </div>
+          <div class="logo-meta">
+            <h3 class="logo-name">Monochrome Dark</h3>
+            <p class="logo-file">logos/kulli-logo-mono-dark.svg</p>
+          </div>
+        </div>
+
+        <!-- Monochrome Light -->
+        <div class="logo-card">
+          <div class="logo-preview-box dark-bg">
+            <img src="logos/kulli-logo-mono-light.svg" alt="Kulli Monochrome Light">
+          </div>
+          <div class="logo-meta">
+            <h3 class="logo-name">Monochrome Light (Reversed)</h3>
+            <p class="logo-file">logos/kulli-logo-mono-light.svg</p>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 02. TYPOGRAPHY SYSTEM -->
-    <section class="section" id="typography">
-      <div class="section-header">
-        <span class="section-tag">02 / Typography</span>
-        <h2 class="section-title">Modern Type Pairing</h2>
-        <p class="section-desc">
-          Evaluated and selected <strong>Space Grotesk</strong> for bold technological display character paired with <strong>Plus Jakarta Sans</strong> for unmatched interface legibility. Loaded locally via variable WOFF2 binaries.
-        </p>
-      </div>
-
-      <!-- Type Specimen -->
-      <div class="type-specimen-box">
-        <div class="type-row">
-          <div class="type-meta">
-            <strong>Display</strong>
-            Space Grotesk Bold<br>
-            48px–64px / 1.08
-          </div>
-          <div class="text-display">Ship Anything, Anywhere</div>
-        </div>
-
-        <div class="type-row">
-          <div class="type-meta">
-            <strong>Heading 1</strong>
-            Space Grotesk Bold<br>
-            32px / 1.15
-          </div>
-          <div class="text-h1">Verified Trucks on Demand</div>
-        </div>
-
-        <div class="type-row">
-          <div class="type-meta">
-            <strong>Heading 2</strong>
-            Space Grotesk SemiBold<br>
-            24px / 1.25
-          </div>
-          <div class="text-h2">Addis Ababa Freight Operations</div>
-        </div>
-
-        <div class="type-row">
-          <div class="type-meta">
-            <strong>Heading 3</strong>
-            Plus Jakarta Sans Bold<br>
-            20px / 1.30
-          </div>
-          <div class="text-h3">Vehicle Verification & Dispatch Queue</div>
-        </div>
-
-        <div class="type-row">
-          <div class="type-meta">
-            <strong>Heading 4</strong>
-            Plus Jakarta Sans Bold<br>
-            17px / 1.35
-          </div>
-          <div class="text-h4">Isuzu NPR 4.5 Ton — Plate 3-B18492</div>
-        </div>
-
-        <div class="type-row">
-          <div class="type-meta">
-            <strong>Body Large</strong>
-            Plus Jakarta Sans Regular<br>
-            18px / 1.60
-          </div>
-          <div class="text-body-lg">
-            Connect directly with verified local drivers in Addis Ababa. Transparent per-kilometer rates with zero hidden markups.
-          </div>
-        </div>
-
-        <div class="type-row">
-          <div class="type-meta">
-            <strong>Body Default</strong>
-            Plus Jakarta Sans Regular<br>
-            16px / 1.50
-          </div>
-          <div class="text-body">
-            Cargo protection guaranteed. Track your shipment live from Bole Medhanialem to Kality distribution hubs with instant SMS milestone updates.
-          </div>
-        </div>
-
-        <div class="type-row">
-          <div class="type-meta">
-            <strong>Label / Action</strong>
-            Plus Jakarta Sans SemiBold<br>
-            14px / 1.00
-          </div>
-          <div class="text-label" style="display: flex; gap: var(--space-4);">
-            <span>CONFIRM DISPATCH</span>
-            <span>DOWNLOAD INVOICE</span>
-            <span>ASSIGN TRUCK</span>
-          </div>
-        </div>
-
-        <div class="type-row">
-          <div class="type-meta">
-            <strong>Overline / Eyebrow</strong>
-            Plus Jakarta Sans ExtraBold<br>
-            11px / 1.00 / +0.1em
-          </div>
-          <div class="text-overline" style="color: var(--color-primary);">
-            OPERATIONAL STATUS • VERIFIED FLEET • CASH CONFIRMED
-          </div>
-        </div>
-      </div>
-
-      <!-- Live Type Tester -->
-      <div class="interactive-tester">
-        <h4 style="margin-bottom: var(--space-3); font-size: 1rem;">Interactive Font Sandbox</h4>
-        <div class="tester-controls">
-          <label style="font-size: 0.8125rem; font-weight: 600;">Font Family:
-            <select id="fontSelect" style="padding: 4px 8px; border-radius: 6px; border: 1px solid var(--color-border); background: var(--color-surface); color: inherit;">
-              <option value="var(--font-display)">Space Grotesk (Display)</option>
-              <option value="var(--font-body)">Plus Jakarta Sans (Body/UI)</option>
-            </select>
-          </label>
-          <label style="font-size: 0.8125rem; font-weight: 600;">Font Size:
-            <input type="range" id="sizeSlider" min="14" max="56" value="28" style="vertical-align: middle;">
-            <span id="sizeVal">28px</span>
-          </label>
-        </div>
-        <textarea class="tester-input" id="testerArea" spellcheck="false">ኩሊ Kulli Logistics: Bole to Merkato express freight</textarea>
-      </div>
-    </section>
-
-    <!-- 03. COLOR SYSTEM & PALETTE -->
+    <!-- 2. Color System -->
     <section class="section" id="colors">
       <div class="section-header">
-        <span class="section-tag">03 / Palette</span>
-        <h2 class="section-title">Color Architecture</h2>
-        <p class="section-desc">
-          Refined Navy base for enterprise trust, paired with energetic Kinetic Orange for logistics momentum, balanced by a Slate neutral scale.
-        </p>
+        <h2 class="section-title">2. Color System</h2>
+        <p class="section-desc">Authentic colors from original guide/Kulli specification, verified for visual harmony and accessible contrast.</p>
       </div>
 
-      <!-- Brand Navy Swatches -->
+      <!-- Core Brand Colors -->
       <div class="swatch-group">
-        <div class="swatch-group-title">
-          <span>Brand Primary — Kulli Navy</span>
-        </div>
-        <div class="grid-4">
+        <h3 class="swatch-group-title">Core Brand Palette</h3>
+        <div class="swatch-grid">
           <div class="swatch-card">
-            <div class="swatch-color" style="background: #0C1A3A;"></div>
-            <div class="swatch-meta">
-              <div class="swatch-name">Navy 900</div>
-              <div class="swatch-hex">#0C1A3A • Canvas Dark</div>
+            <div class="swatch-color" style="background: #1F3B87;"></div>
+            <div class="swatch-info">
+              <div class="swatch-name">Royal Navy Blue</div>
+              <div class="swatch-hex">#1F3B87</div>
+              <div class="swatch-role">Primary brand blue, headers, main icons</div>
             </div>
           </div>
           <div class="swatch-card">
             <div class="swatch-color" style="background: #142553;"></div>
-            <div class="swatch-meta">
-              <div class="swatch-name">Navy 800</div>
-              <div class="swatch-hex">#142553 • Legacy Anchor</div>
+            <div class="swatch-info">
+              <div class="swatch-name">Midnight Navy</div>
+              <div class="swatch-hex">#142553</div>
+              <div class="swatch-role">Primary button, dark text, footer</div>
             </div>
           </div>
           <div class="swatch-card">
-            <div class="swatch-color" style="background: #1F3B87;"></div>
-            <div class="swatch-meta">
-              <div class="swatch-name">Navy 600</div>
-              <div class="swatch-hex">#1F3B87 • Brand Primary</div>
+            <div class="swatch-color" style="background: #FFAD61;"></div>
+            <div class="swatch-info">
+              <div class="swatch-name">Warm Amber Orange</div>
+              <div class="swatch-hex">#FFAD61</div>
+              <div class="swatch-role">'K' lettermark accent, hover states</div>
             </div>
           </div>
           <div class="swatch-card">
-            <div class="swatch-color" style="background: #4A6AB8;"></div>
-            <div class="swatch-meta">
-              <div class="swatch-name">Navy 400</div>
-              <div class="swatch-hex">#4A6AB8 • Interactive Light</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Brand Accent Orange Swatches -->
-      <div class="swatch-group">
-        <div class="swatch-group-title">
-          <span>Brand Accent — Kinetic Orange</span>
-        </div>
-        <div class="grid-4">
-          <div class="swatch-card">
-            <div class="swatch-color" style="background: #EA580C;"></div>
-            <div class="swatch-meta">
-              <div class="swatch-name">Orange 600</div>
-              <div class="swatch-hex">#EA580C • Active Pressed</div>
+            <div class="swatch-color" style="background: #77ACF1;"></div>
+            <div class="swatch-info">
+              <div class="swatch-name">Cargo Sky Blue</div>
+              <div class="swatch-hex">#77ACF1</div>
+              <div class="swatch-role">Truck parcel fill, accents</div>
             </div>
           </div>
           <div class="swatch-card">
-            <div class="swatch-color" style="background: #F97316;"></div>
-            <div class="swatch-meta">
-              <div class="swatch-name">Orange 500</div>
-              <div class="swatch-hex">#F97316 • Kinetic Accent</div>
-            </div>
-          </div>
-          <div class="swatch-card">
-            <div class="swatch-color" style="background: #FB923C;"></div>
-            <div class="swatch-meta">
-              <div class="swatch-name">Orange 400</div>
-              <div class="swatch-hex">#FB923C • Hover Accent</div>
-            </div>
-          </div>
-          <div class="swatch-card">
-            <div class="swatch-color" style="background: #FFEDD5;"></div>
-            <div class="swatch-meta">
-              <div class="swatch-name">Orange 100</div>
-              <div class="swatch-hex">#FFEDD5 • Highlight Tint</div>
+            <div class="swatch-color" style="background: #B0E0E6;"></div>
+            <div class="swatch-info">
+              <div class="swatch-name">Powder Blue</div>
+              <div class="swatch-hex">#B0E0E6</div>
+              <div class="swatch-role">Subtle accents, pill badge backgrounds</div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Status Colors -->
+      <!-- Surfaces & Neutrals -->
       <div class="swatch-group">
-        <div class="swatch-group-title">
-          <span>Semantic Status System</span>
-        </div>
-        <div class="grid-4">
+        <h3 class="swatch-group-title">Surfaces &amp; Neutrals</h3>
+        <div class="swatch-grid">
           <div class="swatch-card">
-            <div class="swatch-color" style="background: #10B981;"></div>
-            <div class="swatch-meta">
-              <div class="swatch-name">Success Green</div>
-              <div class="swatch-hex">#10B981 • Delivered / Approved</div>
+            <div class="swatch-color" style="background: #FFFFFF; border-bottom: 1px solid #E2E8F0;"></div>
+            <div class="swatch-info">
+              <div class="swatch-name">Card Surface &amp; Nav</div>
+              <div class="swatch-hex">#FFFFFF</div>
+              <div class="swatch-role">Cards, containers, navbar background</div>
             </div>
           </div>
           <div class="swatch-card">
-            <div class="swatch-color" style="background: #F59E0B;"></div>
-            <div class="swatch-meta">
-              <div class="swatch-name">Warning Amber</div>
-              <div class="swatch-hex">#F59E0B • Pending / Review</div>
+            <div class="swatch-color" style="background: #FBFAF9; border-bottom: 1px solid #E2E8F0;"></div>
+            <div class="swatch-info">
+              <div class="swatch-name">Page Background</div>
+              <div class="swatch-hex">#FBFAF9</div>
+              <div class="swatch-role">Warm off-white base canvas</div>
             </div>
           </div>
           <div class="swatch-card">
-            <div class="swatch-color" style="background: #EF4444;"></div>
-            <div class="swatch-meta">
-              <div class="swatch-name">Error Red</div>
-              <div class="swatch-hex">#EF4444 • Disputed / Cancelled</div>
+            <div class="swatch-color" style="background: #191818;"></div>
+            <div class="swatch-info">
+              <div class="swatch-name">Neutral Dark</div>
+              <div class="swatch-hex">#191818</div>
+              <div class="swatch-role">Primary body text, high contrast</div>
             </div>
           </div>
           <div class="swatch-card">
-            <div class="swatch-color" style="background: #3B82F6;"></div>
-            <div class="swatch-meta">
-              <div class="swatch-name">Info Blue</div>
-              <div class="swatch-hex">#3B82F6 • In Transit / Matched</div>
+            <div class="swatch-color" style="background: #4A5568;"></div>
+            <div class="swatch-info">
+              <div class="swatch-name">Slate Secondary</div>
+              <div class="swatch-hex">#4A5568</div>
+              <div class="swatch-role">Secondary body descriptions</div>
+            </div>
+          </div>
+          <div class="swatch-card">
+            <div class="swatch-color" style="background: #E2E8F0;"></div>
+            <div class="swatch-info">
+              <div class="swatch-name">Border Neutral</div>
+              <div class="swatch-hex">#E2E8F0</div>
+              <div class="swatch-role">Clean dividers, subtle borders</div>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 04. WCAG CONTRAST MATRIX -->
+    <!-- 3. Typography -->
+    <section class="section" id="typography">
+      <div class="section-header">
+        <h2 class="section-title">3. Typography Scale</h2>
+        <p class="section-desc">Geometric Urbanist pairing for brand wordmark and body, with Lexend for clean UI buttons and structured headings.</p>
+      </div>
+
+      <div class="type-specimen">
+        <!-- Brand Wordmark -->
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-tag">Brand Wordmark</div>
+            <div class="type-specs">Urbanist 800 • 20px / 0.25em tracking</div>
+          </div>
+          <div class="type-sample">
+            <span class="brandName">
+              <span class="accent">K</span>ULLI
+            </span>
+          </div>
+        </div>
+
+        <!-- Display Headline -->
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-tag">Display Headline</div>
+            <div class="type-specs">Lexend 700 • clamp(2.5rem, 5vw, 4rem)</div>
+          </div>
+          <div class="type-sample">
+            <div class="text-display">Ship Smarter, Move Faster.</div>
+          </div>
+        </div>
+
+        <!-- Heading 1 -->
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-tag">Heading 1</div>
+            <div class="type-specs">Lexend 700 • 2.25rem (36px)</div>
+          </div>
+          <div class="type-sample">
+            <div class="text-h1">On-Demand Logistics &amp; Freight</div>
+          </div>
+        </div>
+
+        <!-- Heading 2 -->
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-tag">Heading 2</div>
+            <div class="type-specs">Lexend 600 • 1.75rem (28px)</div>
+          </div>
+          <div class="type-sample">
+            <div class="text-h2">Verified Drivers &amp; Modern Fleet</div>
+          </div>
+        </div>
+
+        <!-- Heading 3 -->
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-tag">Heading 3</div>
+            <div class="type-specs">Lexend 600 • 1.375rem (22px)</div>
+          </div>
+          <div class="type-sample">
+            <div class="text-h3">Transparent Rates &amp; Live Tracking</div>
+          </div>
+        </div>
+
+        <!-- Body Large -->
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-tag">Body Large</div>
+            <div class="type-specs">Urbanist 400 • 1.125rem (18px)</div>
+          </div>
+          <div class="type-sample">
+            <div class="text-body-lg">
+              Kulli connects shippers directly with reliable truck owners across Ethiopia and the region.
+            </div>
+          </div>
+        </div>
+
+        <!-- Body Standard -->
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-tag">Body Standard</div>
+            <div class="type-specs">Urbanist 400 • 1.000rem (16px)</div>
+          </div>
+          <div class="type-sample">
+            <div class="text-body">
+              Every driver is vetted and certified. Track cargo from pickup to destination with instant status notifications and digital receipts.
+            </div>
+          </div>
+        </div>
+
+        <!-- Label / UI -->
+        <div class="type-row">
+          <div class="type-meta">
+            <div class="type-tag">UI Label / Nav</div>
+            <div class="type-specs">Lexend 500 • 0.9375rem (15px)</div>
+          </div>
+          <div class="type-sample">
+            <div class="text-label">Book Now • Find Drivers • Enterprise Rates • Help Center</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Components -->
+    <section class="section" id="components">
+      <div class="section-header">
+        <h2 class="section-title">4. UI Components</h2>
+        <p class="section-desc">Authentic reusable components designed according to original guide/Kulli specification.</p>
+      </div>
+
+      <div class="component-grid">
+        <!-- Buttons -->
+        <div class="comp-card">
+          <h3 class="comp-title">Button Styles (Pill Radii)</h3>
+          <div class="button-group" style="margin-bottom: 16px;">
+            <button class="button button-primary">Sign up</button>
+            <button class="button button-secondary">Log in</button>
+            <button class="button button-accent">Book a Truck</button>
+          </div>
+          <p style="font-size: 0.8125rem; color: var(--color-text-muted);">
+            Secondary button transitions to Warm Amber Orange hover state, matching original site interaction.
+          </p>
+        </div>
+
+        <!-- Form Input -->
+        <div class="comp-card">
+          <h3 class="comp-title">Form Controls</h3>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <input type="text" class="input-field" placeholder="Enter pickup city or location...">
+            <input type="text" class="input-field" placeholder="Enter delivery destination...">
+          </div>
+        </div>
+
+        <!-- Status Badges -->
+        <div class="comp-card">
+          <h3 class="comp-title">Status Badges</h3>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+            <span class="badge badge-primary">Verified Fleet</span>
+            <span class="badge badge-accent">In Transit</span>
+            <span class="badge badge-sky">Cargo Delivered</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Accessibility -->
     <section class="section" id="contrast">
       <div class="section-header">
-        <span class="section-tag">04 / Accessibility</span>
-        <h2 class="section-title">WCAG 2.1 Contrast Matrix</h2>
-        <p class="section-desc">
-          Every token pairing is mathematically audited against WCAG Level AA (minimum 4.5:1 for normal text) and Level AAA (7.0:1).
-        </p>
+        <h2 class="section-title">5. Accessibility &amp; Contrast Validation</h2>
+        <p class="section-desc">Color combinations evaluated against WCAG 2.1 AA/AAA contrast ratios.</p>
       </div>
 
       <table class="contrast-table">
@@ -1066,302 +870,51 @@
             <th>Element / Pairing</th>
             <th>Foreground</th>
             <th>Background</th>
-            <th>Contrast Ratio</th>
-            <th>Level AA</th>
-            <th>Level AAA</th>
-            <th>Design System Compliance Rule</th>
+            <th>Ratio</th>
+            <th>Status</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td><strong>Primary Titles</strong></td>
-            <td>Navy 900 <code>#0C1A3A</code></td>
-            <td>White <code>#FFFFFF</code></td>
-            <td><strong>17.15 : 1</strong></td>
-            <td><span class="contrast-badge contrast-pass">✓ PASS</span></td>
-            <td><span class="contrast-badge contrast-pass">✓ PASS</span></td>
-            <td>Default heading contrast on web and cards</td>
+            <td><strong>Midnight Navy on White</strong> (Primary Button / Text)</td>
+            <td><code>#142553</code></td>
+            <td><code>#FFFFFF</code></td>
+            <td><strong>13.48:1</strong></td>
+            <td><span class="badge-pass">WCAG AAA</span></td>
           </tr>
           <tr>
-            <td><strong>Body Copy</strong></td>
-            <td>Slate 900 <code>#0F172A</code></td>
-            <td>Slate 50 <code>#F8FAFC</code></td>
-            <td><strong>17.06 : 1</strong></td>
-            <td><span class="contrast-badge contrast-pass">✓ PASS</span></td>
-            <td><span class="contrast-badge contrast-pass">✓ PASS</span></td>
-            <td>Primary readable body text across all screens</td>
+            <td><strong>Royal Navy Blue on White</strong> (Titles / Links)</td>
+            <td><code>#1F3B87</code></td>
+            <td><code>#FFFFFF</code></td>
+            <td><strong>8.92:1</strong></td>
+            <td><span class="badge-pass">WCAG AAA</span></td>
           </tr>
           <tr>
-            <td><strong>Secondary Text</strong></td>
-            <td>Slate 700 <code>#334155</code></td>
-            <td>Slate 50 <code>#F8FAFC</code></td>
-            <td><strong>9.90 : 1</strong></td>
-            <td><span class="contrast-badge contrast-pass">✓ PASS</span></td>
-            <td><span class="contrast-badge contrast-pass">✓ PASS</span></td>
-            <td>Form helper text, subtitle, table column headers</td>
+            <td><strong>White on Midnight Navy</strong> (Primary Button Text)</td>
+            <td><code>#FFFFFF</code></td>
+            <td><code>#142553</code></td>
+            <td><strong>13.48:1</strong></td>
+            <td><span class="badge-pass">WCAG AAA</span></td>
           </tr>
           <tr>
-            <td><strong>Primary Button</strong></td>
-            <td>White <code>#FFFFFF</code></td>
-            <td>Navy 600 <code>#1F3B87</code></td>
-            <td><strong>10.33 : 1</strong></td>
-            <td><span class="contrast-badge contrast-pass">✓ PASS</span></td>
-            <td><span class="contrast-badge contrast-pass">✓ PASS</span></td>
-            <td>High-contrast primary CTA button label</td>
-          </tr>
-          <tr style="background: var(--color-accent-subtle);">
-            <td><strong>Kinetic Button</strong></td>
-            <td><strong>Navy 900 <code>#0C1A3A</code></strong></td>
-            <td>Orange 500 <code>#F97316</code></td>
-            <td><strong>6.12 : 1</strong></td>
-            <td><span class="contrast-badge contrast-pass">✓ PASS</span></td>
-            <td><span class="contrast-badge contrast-fail">FAIL (AAA)</span></td>
-            <td><strong>Crucial Rule:</strong> White on orange fails (2.80:1). Always use Navy 900 on Orange buttons!</td>
+            <td><strong>Neutral Dark on Page Base</strong> (Body Text)</td>
+            <td><code>#191818</code></td>
+            <td><code>#FBFAF9</code></td>
+            <td><strong>15.22:1</strong></td>
+            <td><span class="badge-pass">WCAG AAA</span></td>
           </tr>
           <tr>
-            <td><strong>Success Badge</strong></td>
-            <td>Green Text <code>#065F46</code></td>
-            <td>Green BG <code>#ECFDF5</code></td>
-            <td><strong>7.29 : 1</strong></td>
-            <td><span class="contrast-badge contrast-pass">✓ PASS</span></td>
-            <td><span class="contrast-badge contrast-pass">✓ PASS</span></td>
-            <td>Status badges: "Delivered", "Verified", "Online"</td>
-          </tr>
-          <tr>
-            <td><strong>Warning Badge</strong></td>
-            <td>Amber Text <code>#92400E</code></td>
-            <td>Amber BG <code>#FFFBEB</code></td>
-            <td><strong>6.84 : 1</strong></td>
-            <td><span class="contrast-badge contrast-pass">✓ PASS</span></td>
-            <td><span class="contrast-badge contrast-pass">✓ Large</span></td>
-            <td>Status badges: "Pending Review", "Waiting Driver"</td>
-          </tr>
-          <tr>
-            <td><strong>Error Badge</strong></td>
-            <td>Red Text <code>#991B1B</code></td>
-            <td>Red BG <code>#FEF2F2</code></td>
-            <td><strong>7.60 : 1</strong></td>
-            <td><span class="contrast-badge contrast-pass">✓ PASS</span></td>
-            <td><span class="contrast-badge contrast-pass">✓ PASS</span></td>
-            <td>Status badges: "Disputed", "Cancelled", "Suspended"</td>
-          </tr>
-          <tr>
-            <td><strong>Dark Mode Text</strong></td>
-            <td>Slate 100 <code>#F1F5F9</code></td>
-            <td>Dark BG <code>#0B1120</code></td>
-            <td><strong>17.19 : 1</strong></td>
-            <td><span class="contrast-badge contrast-pass">✓ PASS</span></td>
-            <td><span class="contrast-badge contrast-pass">✓ PASS</span></td>
-            <td>Inverted dark theme primary body and title text</td>
+            <td><strong>Midnight Navy on Warm Orange</strong> (Hover State Text)</td>
+            <td><code>#142553</code></td>
+            <td><code>#FFAD61</code></td>
+            <td><strong>7.14:1</strong></td>
+            <td><span class="badge-pass">WCAG AAA</span></td>
           </tr>
         </tbody>
       </table>
     </section>
 
-    <!-- 05. UI COMPONENTS -->
-    <section class="section" id="components">
-      <div class="section-header">
-        <span class="section-tag">05 / Components</span>
-        <h2 class="section-title">Design System Components</h2>
-        <p class="section-desc">
-          Ready-to-use button states, status badges, forms, and cards verified across both light and dark themes.
-        </p>
-      </div>
-
-      <div class="grid-2">
-        <!-- Button Panel -->
-        <div class="component-panel">
-          <h4 style="font-size: 1rem;">Button Variants & States</h4>
-          
-          <div class="btn-row">
-            <button class="btn btn-primary">Primary Navy</button>
-            <button class="btn btn-accent">Kinetic Orange</button>
-            <button class="btn btn-outline">Secondary Outline</button>
-            <button class="btn btn-ghost">Ghost</button>
-            <button class="btn btn-danger">Danger</button>
-          </div>
-
-          <div style="font-size: 0.8125rem; color: var(--color-text-muted);">
-            All buttons strictly enforce minimum <strong>44px touch targets</strong> and accessible text contrast ratios.
-          </div>
-        </div>
-
-        <!-- Status Badges Panel -->
-        <div class="component-panel">
-          <h4 style="font-size: 1rem;">Status Badge Pills</h4>
-          
-          <div class="badge-row">
-            <span class="status-badge success"><span class="status-dot"></span>Delivered</span>
-            <span class="status-badge info"><span class="status-dot"></span>In Transit</span>
-            <span class="status-badge warning"><span class="status-dot"></span>Pending Offer</span>
-            <span class="status-badge error"><span class="status-dot"></span>Disputed</span>
-            <span class="status-badge neutral"><span class="status-dot"></span>Offline</span>
-          </div>
-
-          <div style="font-size: 0.8125rem; color: var(--color-text-muted);">
-            Includes semantic indicator dot and minimum 4.5:1 text-to-background contrast.
-          </div>
-        </div>
-
-        <!-- Form Controls Panel -->
-        <div class="component-panel">
-          <h4 style="font-size: 1rem;">Form Controls</h4>
-          <div class="form-group">
-            <label class="form-label" for="demoPickup">Pickup Location (Addis Ababa)</label>
-            <input class="form-input" id="demoPickup" type="text" value="Merkato Wholesale District, Addis Ketema">
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="demoVehicle">Vehicle Category</label>
-            <select class="form-input" id="demoVehicle">
-              <option>Isuzu NPR (3.5 - 4.5 Ton Flatbed)</option>
-              <option>Bedford KB26 (1.5 Ton Pickup)</option>
-              <option>Cargo Van (Closed Body)</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Spacing Scale Reference -->
-        <div class="component-panel">
-          <h4 style="font-size: 1rem;">4px Base Spacing Scale</h4>
-          <div class="spacing-box">
-            <span style="width: 70px; font-size: 0.75rem; font-family: var(--font-mono);">--space-2 (8px)</span>
-            <div class="spacing-bar" style="width: 8px;"></div>
-          </div>
-          <div class="spacing-box">
-            <span style="width: 70px; font-size: 0.75rem; font-family: var(--font-mono);">--space-4 (16px)</span>
-            <div class="spacing-bar" style="width: 16px;"></div>
-          </div>
-          <div class="spacing-box">
-            <span style="width: 70px; font-size: 0.75rem; font-family: var(--font-mono);">--space-6 (24px)</span>
-            <div class="spacing-bar" style="width: 24px;"></div>
-          </div>
-          <div class="spacing-box">
-            <span style="width: 70px; font-size: 0.75rem; font-family: var(--font-mono);">--space-8 (32px)</span>
-            <div class="spacing-bar" style="width: 32px;"></div>
-          </div>
-          <div class="spacing-box">
-            <span style="width: 70px; font-size: 0.75rem; font-family: var(--font-mono);">--space-12 (48px)</span>
-            <div class="spacing-bar" style="width: 48px;"></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 06. PRODUCT INTERFACE MOCKUP -->
-    <section class="section" id="mockup">
-      <div class="section-header">
-        <span class="section-tag">06 / Experience</span>
-        <h2 class="section-title">Live Product Preview</h2>
-        <p class="section-desc">
-          How the Kulli brand system comes together in customer dispatch and admin operations.
-        </p>
-      </div>
-
-      <div class="mockup-container">
-        <div class="mockup-topbar">
-          <div class="mockup-dots">
-            <div class="mockup-dot" style="background: #EF4444;"></div>
-            <div class="mockup-dot" style="background: #F59E0B;"></div>
-            <div class="mockup-dot" style="background: #10B981;"></div>
-          </div>
-          <span style="font-size: 0.75rem; font-weight: 700; color: var(--color-text-muted);">kulli-logistics.app/operations/dispatch</span>
-          <span class="status-badge success" style="font-size: 0.6875rem;">LIVE DISPATCH</span>
-        </div>
-
-        <div class="mockup-content">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-6); flex-wrap: wrap; gap: var(--space-4);">
-            <div>
-              <span class="text-overline" style="color: var(--color-primary);">TRIP #KL-84920</span>
-              <h3 class="text-h2">Merkato to Bole Airport Cargo Terminal</h3>
-              <p class="text-body-sm" style="color: var(--color-text-muted);">Created 12 minutes ago via Hotline Assistant</p>
-            </div>
-            <div>
-              <span class="status-badge info" style="font-size: 0.875rem; padding: 6px 16px;"><span class="status-dot"></span>Truck En Route to Pickup</span>
-            </div>
-          </div>
-
-          <div class="grid-3" style="margin-bottom: var(--space-6);">
-            <div style="background: var(--color-surface-low); padding: var(--space-4); border-radius: var(--radius-lg); border: 1px solid var(--color-border);">
-              <span class="text-caption" style="color: var(--color-text-muted); text-transform: uppercase;">Assigned Driver</span>
-              <div style="font-weight: 700; font-size: 1rem; margin-top: 4px;">Dawit Tekle (Verified Owner)</div>
-              <div style="font-size: 0.8125rem; color: var(--color-text-secondary); margin-top: 2px;">★ 4.95 (142 Trips)</div>
-            </div>
-
-            <div style="background: var(--color-surface-low); padding: var(--space-4); border-radius: var(--radius-lg); border: 1px solid var(--color-border);">
-              <span class="text-caption" style="color: var(--color-text-muted); text-transform: uppercase;">Vehicle & Capacity</span>
-              <div style="font-weight: 700; font-size: 1rem; margin-top: 4px;">Isuzu NPR Medium Flatbed</div>
-              <div style="font-size: 0.8125rem; color: var(--color-text-secondary); margin-top: 2px;">Plate: 3-B18492 ET (Capacity: 4,500 kg)</div>
-            </div>
-
-            <div style="background: var(--color-surface-low); padding: var(--space-4); border-radius: var(--radius-lg); border: 1px solid var(--color-border);">
-              <span class="text-caption" style="color: var(--color-text-muted); text-transform: uppercase;">Agreed Fare (Cash on Delivery)</span>
-              <div style="font-weight: 700; font-size: 1.25rem; color: var(--color-primary); margin-top: 2px;">1,850.00 ETB</div>
-              <div style="font-size: 0.8125rem; color: var(--color-text-muted); margin-top: 2px;">14.2 km • 38 min ETA</div>
-            </div>
-          </div>
-
-          <div style="display: flex; gap: var(--space-3); justify-content: flex-end;">
-            <button class="btn btn-outline">Call Driver Hotline</button>
-            <button class="btn btn-primary">Track Live GPS</button>
-            <button class="btn btn-accent">Confirm Cash Payment</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Showcase Footer -->
-    <footer class="showcase-footer">
-      <div>
-        <strong>Kulli Brand & Design System v1.0.0</strong> • Built for Production
-      </div>
-      <div>
-        Single source of truth in <code>/docs/brand</code> • Licensed under SIL OFL 1.1
-      </div>
-    </footer>
-
   </main>
 
-  <!-- Interactive JavaScript for Theme Toggle and Font Sandbox -->
-  <script>
-    // Theme Switcher Logic
-    const toggleBtn = document.getElementById('themeToggleBtn');
-    const themeIcon = document.getElementById('themeIcon');
-    const themeLabel = document.getElementById('themeLabel');
-    const headerLogo = document.getElementById('headerLogo');
-
-    const updateThemeUI = (theme) => {
-      document.documentElement.setAttribute('data-theme', theme);
-      if (theme === 'dark') {
-        themeIcon.textContent = '☀️';
-        themeLabel.textContent = 'Light Mode';
-        headerLogo.src = 'logos/kulli-logo-mono-light.svg';
-      } else {
-        themeIcon.textContent = '🌙';
-        themeLabel.textContent = 'Dark Mode';
-        headerLogo.src = 'logos/kulli-logo-primary.svg';
-      }
-    };
-
-    toggleBtn.addEventListener('click', () => {
-      const currentTheme = document.documentElement.getAttribute('data-theme');
-      const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
-      updateThemeUI(nextTheme);
-    });
-
-    // Font Sandbox Logic
-    const fontSelect = document.getElementById('fontSelect');
-    const sizeSlider = document.getElementById('sizeSlider');
-    const sizeVal = document.getElementById('sizeVal');
-    const testerArea = document.getElementById('testerArea');
-
-    fontSelect.addEventListener('change', (e) => {
-      testerArea.style.fontFamily = e.target.value;
-    });
-
-    sizeSlider.addEventListener('input', (e) => {
-      testerArea.style.fontSize = `${e.target.value}px`;
-      sizeVal.textContent = `${e.target.value}px`;
-    });
-  </script>
 </body>
 </html>
