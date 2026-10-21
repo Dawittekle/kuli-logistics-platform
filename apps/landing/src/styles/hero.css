@@ -16,7 +16,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: clamp(6.5rem, 11vh, 8.5rem) 0 clamp(4rem, 7vh, 6rem);
+  padding: clamp(5rem, 8.5vh, 7rem) 0 clamp(3rem, 5vh, 4.5rem);
   color: #FFFFFF;
   overflow: hidden;
 }
@@ -170,7 +170,7 @@
 @media (max-width: 640px) {
   .hero-section {
     min-height: auto;
-    padding: calc(72px + var(--space-6)) 0 var(--space-10);
+    padding: calc(54px + var(--space-6)) 0 var(--space-10);
   }
 
   .hero-title {

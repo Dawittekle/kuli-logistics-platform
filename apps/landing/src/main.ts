@@ -42,19 +42,19 @@ function initNavbarScroll(): void {
   const updateNavbar = (): void => {
     const currentScrollY = window.scrollY;
 
-    // 1. Morph to floating pill when scrolled past 50px
-    if (currentScrollY > 50) {
+    // 1. Morph to floating pill when scrolled past 40px
+    if (currentScrollY > 40) {
       navbar.classList.add('is-floating');
     } else {
       navbar.classList.remove('is-floating');
     }
 
     // 2. Smart Hide on Scroll Down / Reveal on Scroll Up
-    if (currentScrollY > 160) {
-      if (currentScrollY > lastScrollY + 6) {
+    if (currentScrollY > 180) {
+      if (currentScrollY > lastScrollY + 8) {
         // Scrolling DOWN -> hide navbar to maximize view
         navbar.classList.add('is-hidden');
-      } else if (currentScrollY < lastScrollY - 6) {
+      } else if (currentScrollY < lastScrollY - 8) {
         // Scrolling UP -> reveal navbar smoothly
         navbar.classList.remove('is-hidden');
       }
