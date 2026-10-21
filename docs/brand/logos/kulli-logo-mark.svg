@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>Kulli Logo Mark</title>
+  <!--
+    Kulli "K" Mark
+    Geometric lettermark: vertical stem + two dynamic diagonal arms
+    with a gap between stem and arms. Forward-leaning 2.5° for motion.
+    Rounded line caps for modern feel.
+  -->
+  <g transform="rotate(2.5, 32, 32)" stroke="#F97316" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Vertical stem -->
+    <line x1="18.5" y1="10" x2="18.5" y2="54" stroke-width="9.5"/>
+    <!-- Upper arm: starts near mid-stem, goes to upper right -->
+    <line x1="26" y1="33" x2="48" y2="10" stroke-width="9"/>
+    <!-- Lower arm: starts near mid-stem, goes to lower right -->
+    <line x1="26" y1="33" x2="48" y2="54" stroke-width="9"/>
+  </g>
+</svg>

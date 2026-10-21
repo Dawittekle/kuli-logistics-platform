@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 64" width="240" height="64">
+  <title>Kulli Logo — Monochrome Light (for dark backgrounds)</title>
+  <!--
+    Full horizontal lockup entirely in white (#FFFFFF).
+    For use on dark/navy backgrounds.
+  -->
+
+  <!-- === K MARK === -->
+  <g transform="rotate(2.5, 32, 32)" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <line x1="18.5" y1="10" x2="18.5" y2="54" stroke-width="9.5"/>
+    <line x1="26" y1="33" x2="48" y2="10" stroke-width="9"/>
+    <line x1="26" y1="33" x2="48" y2="54" stroke-width="9"/>
+  </g>
+
+  <!-- === WORDMARK (all white) === -->
+  <!-- K -->
+  <g stroke="#FFFFFF" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <line x1="76" y1="14" x2="76" y2="50"/>
+    <line x1="82" y1="33" x2="98" y2="14"/>
+    <line x1="82" y1="33" x2="98" y2="50"/>
+  </g>
+  <!-- U -->
+  <g stroke="#FFFFFF" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M110,14 L110,40 Q110,50 119,50 Q128,50 128,40 L128,14"/>
+  </g>
+  <!-- L -->
+  <g stroke="#FFFFFF" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <line x1="142" y1="14" x2="142" y2="50"/>
+    <line x1="142" y1="50" x2="160" y2="50"/>
+  </g>
+  <!-- L -->
+  <g stroke="#FFFFFF" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <line x1="172" y1="14" x2="172" y2="50"/>
+    <line x1="172" y1="50" x2="190" y2="50"/>
+  </g>
+  <!-- I -->
+  <g stroke="#FFFFFF" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <line x1="204" y1="14" x2="204" y2="50"/>
+  </g>
+</svg>

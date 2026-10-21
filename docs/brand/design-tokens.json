@@ -1,0 +1,134 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "kulli": {
+    "color": {
+      "brand": {
+        "navy-900": { "$value": "#0C1A3A", "$type": "color", "$description": "Deepest navy — sidebars, hero backgrounds" },
+        "navy-800": { "$value": "#142553", "$type": "color", "$description": "Primary navy dark" },
+        "navy-700": { "$value": "#1B3270", "$type": "color", "$description": "Interactive primary dark" },
+        "navy-600": { "$value": "#1F3B87", "$type": "color", "$description": "Primary brand blue" },
+        "navy-500": { "$value": "#2D4EA0", "$type": "color", "$description": "Lighter interactive navy" },
+        "navy-400": { "$value": "#4A6AB8", "$type": "color", "$description": "Hover/focus navy" },
+        "navy-300": { "$value": "#7B93CC", "$type": "color", "$description": "Muted navy for decorative" },
+        "orange-600": { "$value": "#EA580C", "$type": "color", "$description": "Pressed/active orange" },
+        "orange-500": { "$value": "#F97316", "$type": "color", "$description": "Primary accent orange" },
+        "orange-400": { "$value": "#FB923C", "$type": "color", "$description": "Hover orange" },
+        "orange-300": { "$value": "#FDBA74", "$type": "color", "$description": "Light accent" },
+        "orange-200": { "$value": "#FED7AA", "$type": "color", "$description": "Subtle accent background" },
+        "orange-100": { "$value": "#FFEDD5", "$type": "color", "$description": "Tint background" },
+        "orange-50":  { "$value": "#FFF7ED", "$type": "color", "$description": "Lightest orange tint" }
+      },
+      "neutral": {
+        "900": { "$value": "#0F172A", "$type": "color", "$description": "Text primary / darkest" },
+        "800": { "$value": "#1E293B", "$type": "color", "$description": "Near-black surface" },
+        "700": { "$value": "#334155", "$type": "color", "$description": "Text secondary" },
+        "600": { "$value": "#475569", "$type": "color", "$description": "Muted text strong" },
+        "500": { "$value": "#64748B", "$type": "color", "$description": "Muted text" },
+        "400": { "$value": "#94A3B8", "$type": "color", "$description": "Placeholder text" },
+        "300": { "$value": "#CBD5E1", "$type": "color", "$description": "Borders strong" },
+        "200": { "$value": "#E2E8F0", "$type": "color", "$description": "Borders light" },
+        "100": { "$value": "#F1F5F9", "$type": "color", "$description": "Surface low" },
+        "50":  { "$value": "#F8FAFC", "$type": "color", "$description": "Background" },
+        "0":   { "$value": "#FFFFFF", "$type": "color", "$description": "White / card surface" }
+      },
+      "status": {
+        "success":        { "$value": "#10B981", "$type": "color" },
+        "success-bg":     { "$value": "#ECFDF5", "$type": "color" },
+        "success-border": { "$value": "#A7F3D0", "$type": "color" },
+        "success-text":   { "$value": "#065F46", "$type": "color" },
+        "warning":        { "$value": "#F59E0B", "$type": "color" },
+        "warning-bg":     { "$value": "#FFFBEB", "$type": "color" },
+        "warning-border": { "$value": "#FDE68A", "$type": "color" },
+        "warning-text":   { "$value": "#92400E", "$type": "color" },
+        "error":          { "$value": "#EF4444", "$type": "color" },
+        "error-bg":       { "$value": "#FEF2F2", "$type": "color" },
+        "error-border":   { "$value": "#FECACA", "$type": "color" },
+        "error-text":     { "$value": "#991B1B", "$type": "color" },
+        "info":           { "$value": "#3B82F6", "$type": "color" },
+        "info-bg":        { "$value": "#EFF6FF", "$type": "color" },
+        "info-border":    { "$value": "#BFDBFE", "$type": "color" },
+        "info-text":      { "$value": "#1E40AF", "$type": "color" }
+      }
+    },
+    "typography": {
+      "font-family": {
+        "body":    { "$value": "'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", "$type": "fontFamily" },
+        "display": { "$value": "'Space Grotesk', 'Plus Jakarta Sans', system-ui, sans-serif", "$type": "fontFamily" },
+        "mono":    { "$value": "'JetBrains Mono', 'Fira Code', 'SF Mono', monospace", "$type": "fontFamily" }
+      },
+      "scale": {
+        "display":  { "$value": { "fontSize": "clamp(2.5rem, 5vw, 4rem)", "fontWeight": 700, "lineHeight": 1.08, "letterSpacing": "-0.025em", "fontFamily": "{kulli.typography.font-family.display}" }, "$type": "typography" },
+        "h1":       { "$value": { "fontSize": "2rem", "fontWeight": 700, "lineHeight": 1.15, "letterSpacing": "-0.02em", "fontFamily": "{kulli.typography.font-family.display}" }, "$type": "typography" },
+        "h2":       { "$value": { "fontSize": "1.5rem", "fontWeight": 600, "lineHeight": 1.25, "letterSpacing": "-0.015em", "fontFamily": "{kulli.typography.font-family.display}" }, "$type": "typography" },
+        "h3":       { "$value": { "fontSize": "1.25rem", "fontWeight": 700, "lineHeight": 1.3, "letterSpacing": "-0.01em", "fontFamily": "{kulli.typography.font-family.body}" }, "$type": "typography" },
+        "h4":       { "$value": { "fontSize": "1.0625rem", "fontWeight": 700, "lineHeight": 1.35, "letterSpacing": "-0.005em", "fontFamily": "{kulli.typography.font-family.body}" }, "$type": "typography" },
+        "body-lg":  { "$value": { "fontSize": "1.125rem", "fontWeight": 400, "lineHeight": 1.6, "fontFamily": "{kulli.typography.font-family.body}" }, "$type": "typography" },
+        "body":     { "$value": { "fontSize": "1rem", "fontWeight": 400, "lineHeight": 1.5, "fontFamily": "{kulli.typography.font-family.body}" }, "$type": "typography" },
+        "body-sm":  { "$value": { "fontSize": "0.875rem", "fontWeight": 400, "lineHeight": 1.45, "fontFamily": "{kulli.typography.font-family.body}" }, "$type": "typography" },
+        "label":    { "$value": { "fontSize": "0.875rem", "fontWeight": 600, "lineHeight": 1, "letterSpacing": "0.01em", "fontFamily": "{kulli.typography.font-family.body}" }, "$type": "typography" },
+        "caption":  { "$value": { "fontSize": "0.75rem", "fontWeight": 500, "lineHeight": 1.35, "fontFamily": "{kulli.typography.font-family.body}" }, "$type": "typography" },
+        "overline": { "$value": { "fontSize": "0.6875rem", "fontWeight": 800, "lineHeight": 1, "letterSpacing": "0.1em", "textTransform": "uppercase", "fontFamily": "{kulli.typography.font-family.body}" }, "$type": "typography" }
+      }
+    },
+    "spacing": {
+      "0":   { "$value": "0px", "$type": "dimension" },
+      "1":   { "$value": "4px", "$type": "dimension", "$description": "xs" },
+      "2":   { "$value": "8px", "$type": "dimension", "$description": "sm" },
+      "3":   { "$value": "12px", "$type": "dimension", "$description": "md" },
+      "4":   { "$value": "16px", "$type": "dimension", "$description": "lg" },
+      "5":   { "$value": "20px", "$type": "dimension" },
+      "6":   { "$value": "24px", "$type": "dimension", "$description": "xl" },
+      "8":   { "$value": "32px", "$type": "dimension", "$description": "xxl" },
+      "10":  { "$value": "40px", "$type": "dimension" },
+      "12":  { "$value": "48px", "$type": "dimension", "$description": "3xl" },
+      "16":  { "$value": "64px", "$type": "dimension", "$description": "4xl" },
+      "20":  { "$value": "80px", "$type": "dimension" },
+      "24":  { "$value": "96px", "$type": "dimension" },
+      "32":  { "$value": "128px", "$type": "dimension" }
+    },
+    "radius": {
+      "none": { "$value": "0px", "$type": "dimension" },
+      "sm":   { "$value": "4px", "$type": "dimension" },
+      "md":   { "$value": "8px", "$type": "dimension" },
+      "lg":   { "$value": "12px", "$type": "dimension" },
+      "xl":   { "$value": "16px", "$type": "dimension" },
+      "2xl":  { "$value": "20px", "$type": "dimension" },
+      "3xl":  { "$value": "24px", "$type": "dimension" },
+      "full": { "$value": "9999px", "$type": "dimension" }
+    },
+    "shadow": {
+      "low":    { "$value": "0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05)", "$type": "shadow" },
+      "medium": { "$value": "0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05)", "$type": "shadow" },
+      "panel":  { "$value": "0 10px 15px -3px rgb(0 0 0 / 0.04), 0 4px 6px -4px rgb(0 0 0 / 0.04)", "$type": "shadow" },
+      "high":   { "$value": "0 20px 25px -5px rgb(0 0 0 / 0.06), 0 8px 10px -6px rgb(0 0 0 / 0.06)", "$type": "shadow" }
+    },
+    "breakpoint": {
+      "sm":  { "$value": "640px", "$type": "dimension" },
+      "md":  { "$value": "768px", "$type": "dimension" },
+      "lg":  { "$value": "1024px", "$type": "dimension" },
+      "xl":  { "$value": "1280px", "$type": "dimension" },
+      "2xl": { "$value": "1440px", "$type": "dimension" }
+    },
+    "layout": {
+      "max-width": { "$value": "1144px", "$type": "dimension", "$description": "Content max-width (preserved from existing)" },
+      "grid-columns": { "$value": 12, "$type": "number" },
+      "grid-gap": { "$value": "24px", "$type": "dimension" }
+    },
+    "motion": {
+      "duration": {
+        "instant":  { "$value": "100ms", "$type": "duration" },
+        "fast":     { "$value": "150ms", "$type": "duration" },
+        "normal":   { "$value": "200ms", "$type": "duration" },
+        "slow":     { "$value": "300ms", "$type": "duration" },
+        "slower":   { "$value": "500ms", "$type": "duration" }
+      },
+      "easing": {
+        "default":    { "$value": "cubic-bezier(0.4, 0, 0.2, 1)", "$type": "cubicBezier" },
+        "in":         { "$value": "cubic-bezier(0.4, 0, 1, 1)", "$type": "cubicBezier" },
+        "out":        { "$value": "cubic-bezier(0, 0, 0.2, 1)", "$type": "cubicBezier" },
+        "in-out":     { "$value": "cubic-bezier(0.4, 0, 0.2, 1)", "$type": "cubicBezier" },
+        "spring":     { "$value": "cubic-bezier(0.34, 1.56, 0.64, 1)", "$type": "cubicBezier" }
+      }
+    }
+  }
+}
