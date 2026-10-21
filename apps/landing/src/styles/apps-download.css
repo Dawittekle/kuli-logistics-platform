@@ -1,13 +1,13 @@
 /* ============================================================
    Kulli Landing Page — App Download Center (#apps)
-   Phase 5 Implementation
+   Phase 5 Implementation — Compact & Sleek Height
    ============================================================ */
 
 .apps-section {
-  min-height: 640px;
+  min-height: auto;
   display: flex;
   align-items: center;
-  padding: clamp(6.5rem, 9vw, 9.5rem) 0;
+  padding: clamp(3.5rem, 5.5vw, 5rem) 0;
   background-color: var(--color-primary, #1F3B87);
   border-top: none;
   color: #FFFFFF;
@@ -15,12 +15,12 @@
 
 .apps-header {
   text-align: center;
-  margin-bottom: var(--space-12);
+  margin-bottom: var(--space-8);
 }
 
 .apps-title {
   font-family: var(--font-heading);
-  font-size: clamp(2.25rem, 4.2vw, 3.25rem);
+  font-size: clamp(2rem, 3.2vw, 2.75rem);
   font-weight: 700;
   line-height: 1.2;
   color: #FFFFFF;
@@ -30,69 +30,69 @@
   display: flex;
   justify-content: center;
   align-items: stretch;
-  gap: clamp(2rem, 4vw, 3.5rem);
+  gap: clamp(1.5rem, 3vw, 2.5rem);
   flex-wrap: wrap;
 }
 
 .app-card {
-  flex: 1 1 380px;
-  max-width: 460px;
+  flex: 1 1 320px;
+  max-width: 400px;
   background-color: #FFFFFF;
   border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 40px;
-  padding: var(--space-10) var(--space-8);
-  min-height: 540px;
+  border-radius: 30px;
+  padding: var(--space-7) var(--space-6);
+  min-height: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
   transition: transform var(--transition-fast, 150ms ease), box-shadow var(--transition-fast, 150ms ease);
 }
 
 .app-card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 26px 60px rgba(0, 0, 0, 0.35);
+  transform: translateY(-4px);
+  box-shadow: 0 22px 50px rgba(0, 0, 0, 0.3);
 }
 
 .app-card-qr-wrap {
-  width: 230px;
-  height: 230px;
+  width: 160px;
+  height: 160px;
+  background-color: var(--color-surface-low, #F7FAFC);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: var(--space-6);
-  background-color: #F7F9FC;
-  border-radius: 28px;
-  padding: var(--space-4);
-  border: 1px solid var(--color-border);
+  margin-bottom: var(--space-4);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.04);
 }
 
-.app-card-qr-img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+.app-qr-image {
+  width: 130px;
+  height: 130px;
+  display: block;
 }
 
 .app-card-title {
   font-family: var(--font-heading);
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: var(--color-text-primary);
-  margin-bottom: var(--space-2);
+  margin-bottom: 2px;
 }
 
 .app-card-subtitle {
   font-family: var(--font-body);
-  font-size: 1.0625rem;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--color-orange);
-  margin-bottom: var(--space-8);
+  margin-bottom: var(--space-5);
 }
 
 .app-card-actions {
   display: flex;
-  gap: var(--space-3);
+  gap: var(--space-2);
   width: 100%;
   justify-content: center;
   flex-wrap: wrap;
@@ -103,34 +103,37 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 12px 24px;
+  padding: 10px 20px;
+  min-height: 42px;
   background-color: var(--color-navy-dark, #142553);
   color: #FFFFFF;
   border-radius: var(--radius-pill, 9999px);
   text-decoration: none;
   font-family: var(--font-heading);
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 700;
-  transition: background-color var(--transition-fast, 150ms ease);
+  transition: background-color var(--transition-fast, 150ms ease), transform var(--transition-fast, 150ms ease);
 }
 
 .store-badge-btn:hover {
   background-color: var(--color-orange);
   color: #FFFFFF;
+  transform: translateY(-2px);
 }
 
 .direct-apk-btn {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 12px 24px;
+  padding: 10px 20px;
+  min-height: 42px;
   background-color: transparent;
   color: var(--color-primary);
   border: 2px solid var(--color-primary);
   border-radius: var(--radius-pill, 9999px);
   text-decoration: none;
   font-family: var(--font-heading);
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 700;
   transition: all var(--transition-fast, 150ms ease);
 }
@@ -138,16 +141,17 @@
 .direct-apk-btn:hover {
   background-color: var(--color-primary);
   color: #FFFFFF;
+  transform: translateY(-2px);
 }
 
 @media (max-width: 640px) {
   .apps-section {
-    padding: var(--space-12) 0 var(--space-14);
+    padding: var(--space-10) 0 var(--space-12);
     min-height: auto;
   }
 
   .apps-header {
-    margin-bottom: var(--space-8);
+    margin-bottom: var(--space-6);
   }
 
   .apps-title {
@@ -155,45 +159,45 @@
   }
 
   .apps-cards-grid {
-    gap: var(--space-6);
+    gap: var(--space-5);
   }
 
   .app-card {
     max-width: 100%;
     min-height: auto;
-    padding: var(--space-8) var(--space-5);
-    border-radius: 28px;
+    padding: var(--space-6) var(--space-5);
+    border-radius: 24px;
   }
 
   .app-card-qr-wrap {
-    width: 160px;
-    height: 160px;
-    margin-bottom: var(--space-5);
+    width: 150px;
+    height: 150px;
+    margin-bottom: var(--space-4);
   }
 
   .app-qr-image {
-    width: 130px;
-    height: 130px;
+    width: 120px;
+    height: 120px;
   }
 
   .app-card-title {
-    font-size: 1.25rem;
+    font-size: 1.125rem;
   }
 
   .app-card-subtitle {
-    font-size: 0.9375rem;
-    margin-bottom: var(--space-6);
+    font-size: 0.875rem;
+    margin-bottom: var(--space-4);
   }
 
   .app-card-actions {
-    gap: var(--space-3);
+    gap: var(--space-2);
   }
 
   .store-badge-btn,
   .direct-apk-btn {
     width: 100%;
     justify-content: center;
-    padding: 12px 20px;
-    font-size: 0.9375rem;
+    padding: 10px 18px;
+    font-size: 0.875rem;
   }
 }

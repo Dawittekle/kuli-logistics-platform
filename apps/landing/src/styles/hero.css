@@ -11,12 +11,12 @@
 .hero-section {
   position: relative;
   background-color: var(--color-navy-dark);
-  min-height: clamp(640px, calc(100vh - 72px), 980px);
-  min-height: clamp(640px, calc(100dvh - 72px), 980px);
+  min-height: clamp(640px, 100vh, 980px);
+  min-height: clamp(640px, 100dvh, 980px);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: clamp(3.5rem, 6vh, 6rem) 0;
+  padding: clamp(6.5rem, 11vh, 8.5rem) 0 clamp(4rem, 7vh, 6rem);
   color: #FFFFFF;
   overflow: hidden;
 }
@@ -170,7 +170,7 @@
 @media (max-width: 640px) {
   .hero-section {
     min-height: auto;
-    padding: var(--space-8) 0 var(--space-10);
+    padding: calc(72px + var(--space-6)) 0 var(--space-10);
   }
 
   .hero-title {

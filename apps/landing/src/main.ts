@@ -30,22 +30,80 @@ function initTheme(): void {
 }
 
 // ------------------------------------------------------------
-// Sticky Navbar Elevation & Scroll State
+// Master Fixed Floating Navbar (WorldQuant Foundry Architecture)
 // ------------------------------------------------------------
 function initNavbarScroll(): void {
   const navbar = document.querySelector<HTMLElement>('.kulli-navbar');
   if (!navbar) return;
 
-  const handleScroll = (): void => {
-    if (window.scrollY > 20) {
-      navbar.classList.add('is-scrolled');
+  let lastScrollY = window.scrollY;
+  let ticking = false;
+
+  const updateNavbar = (): void => {
+    const currentScrollY = window.scrollY;
+
+    // 1. Morph to floating pill when scrolled past 50px
+    if (currentScrollY > 50) {
+      navbar.classList.add('is-floating');
     } else {
-      navbar.classList.remove('is-scrolled');
+      navbar.classList.remove('is-floating');
+    }
+
+    // 2. Smart Hide on Scroll Down / Reveal on Scroll Up
+    if (currentScrollY > 160) {
+      if (currentScrollY > lastScrollY + 6) {
+        // Scrolling DOWN -> hide navbar to maximize view
+        navbar.classList.add('is-hidden');
+      } else if (currentScrollY < lastScrollY - 6) {
+        // Scrolling UP -> reveal navbar smoothly
+        navbar.classList.remove('is-hidden');
+      }
+    } else {
+      // Near top of page -> always show
+      navbar.classList.remove('is-hidden');
+    }
+
+    lastScrollY = currentScrollY;
+    ticking = false;
+  };
+
+  const onScroll = (): void => {
+    if (!ticking) {
+      window.requestAnimationFrame(updateNavbar);
+      ticking = true;
     }
   };
 
-  window.addEventListener('scroll', handleScroll, { passive: true });
-  handleScroll();
+  window.addEventListener('scroll', onScroll, { passive: true });
+  updateNavbar();
+}
+
+// ------------------------------------------------------------
+// Scroll Reveal Animations (Intersection Observer)
+// ------------------------------------------------------------
+function initScrollReveals(): void {
+  const elements = document.querySelectorAll<HTMLElement>('.reveal-on-scroll');
+  if (!elements.length) return;
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-revealed');
+          observer.unobserve(entry.target);
+        }
+      });
+    },
+    { threshold: 0.08, rootMargin: '0px 0px -30px 0px' }
+  );
+
+  elements.forEach((el, idx) => {
+    const delay = (idx % 3) * 0.08;
+    if (delay > 0) {
+      el.style.transitionDelay = `${delay}s`;
+    }
+    observer.observe(el);
+  });
 }
 
 // ------------------------------------------------------------
@@ -371,6 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   initNavbarScroll();
   initMobileDrawer();
+  initScrollReveals();
   initHeroInteractive();
   initFleetCatalogInteractions();
   initFaqAccordion();
