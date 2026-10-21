@@ -11,6 +11,7 @@ import './styles/landing.css';
 import './styles/hero.css';
 import './styles/features.css';
 import './styles/b2b-faq.css';
+import './styles/apps-download.css';
 
 // Import Data & Calculator Engines
 import { ADDIS_LOCATIONS } from './data/addis-locations';
@@ -414,5 +415,5 @@ document.addEventListener('DOMContentLoaded', () => {
   initFleetCatalogInteractions();
   initFaqAccordion();
   initDriverPartnerCtas();
-  console.log('Kulli Landing Page: Phase 1, 2, 3 & 4 fully loaded.');
+  console.log('Kulli Landing Page: All Phases (1, 2, 3, 4 & 5) fully loaded.');
 });

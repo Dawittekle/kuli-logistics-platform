@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%" fill="none">
+  <!-- Background Card -->
+  <rect width="200" height="200" rx="16" fill="#FFFFFF"/>
+  <rect x="2" y="2" width="196" height="196" rx="14" stroke="#E2E8F0" stroke-width="2"/>
+  
+  <!-- Finder Pattern: Top-Left -->
+  <rect x="20" y="20" width="46" height="46" rx="8" fill="#0C1A3A"/>
+  <rect x="28" y="28" width="30" height="30" rx="4" fill="#FFFFFF"/>
+  <rect x="34" y="34" width="18" height="18" rx="2" fill="#2563EB"/>
+  
+  <!-- Finder Pattern: Top-Right -->
+  <rect x="134" y="20" width="46" height="46" rx="8" fill="#0C1A3A"/>
+  <rect x="142" y="28" width="30" height="30" rx="4" fill="#FFFFFF"/>
+  <rect x="148" y="34" width="18" height="18" rx="2" fill="#2563EB"/>
+  
+  <!-- Finder Pattern: Bottom-Left -->
+  <rect x="20" y="134" width="46" height="46" rx="8" fill="#0C1A3A"/>
+  <rect x="28" y="142" width="30" height="30" rx="4" fill="#FFFFFF"/>
+  <rect x="34" y="148" width="18" height="18" rx="2" fill="#2563EB"/>
+  
+  <!-- Stylized Matrix Data Dots (QR pattern) -->
+  <g fill="#0C1A3A">
+    <rect x="74" y="22" width="8" height="8" rx="1.5"/>
+    <rect x="88" y="22" width="8" height="8" rx="1.5"/>
+    <rect x="102" y="22" width="8" height="8" rx="1.5"/>
+    <rect x="116" y="22" width="8" height="8" rx="1.5"/>
+    
+    <rect x="74" y="36" width="8" height="8" rx="1.5"/>
+    <rect x="102" y="36" width="8" height="8" rx="1.5"/>
+    
+    <rect x="88" y="50" width="8" height="8" rx="1.5"/>
+    <rect x="116" y="50" width="8" height="8" rx="1.5"/>
+    
+    <rect x="22" y="74" width="8" height="8" rx="1.5"/>
+    <rect x="36" y="74" width="8" height="8" rx="1.5"/>
+    <rect x="50" y="74" width="8" height="8" rx="1.5"/>
+    <rect x="64" y="74" width="8" height="8" rx="1.5"/>
+    
+    <rect x="22" y="88" width="8" height="8" rx="1.5"/>
+    <rect x="50" y="88" width="8" height="8" rx="1.5"/>
+    <rect x="64" y="88" width="8" height="8" rx="1.5"/>
+    
+    <rect x="22" y="102" width="8" height="8" rx="1.5"/>
+    <rect x="36" y="102" width="8" height="8" rx="1.5"/>
+    
+    <rect x="134" y="74" width="8" height="8" rx="1.5"/>
+    <rect x="148" y="74" width="8" height="8" rx="1.5"/>
+    <rect x="162" y="74" width="8" height="8" rx="1.5"/>
+    <rect x="176" y="74" width="8" height="8" rx="1.5"/>
+    
+    <rect x="148" y="88" width="8" height="8" rx="1.5"/>
+    <rect x="176" y="88" width="8" height="8" rx="1.5"/>
+    
+    <rect x="134" y="102" width="8" height="8" rx="1.5"/>
+    <rect x="162" y="102" width="8" height="8" rx="1.5"/>
+    
+    <rect x="74" y="134" width="8" height="8" rx="1.5"/>
+    <rect x="102" y="134" width="8" height="8" rx="1.5"/>
+    <rect x="116" y="134" width="8" height="8" rx="1.5"/>
+    
+    <rect x="88" y="148" width="8" height="8" rx="1.5"/>
+    <rect x="102" y="148" width="8" height="8" rx="1.5"/>
+    
+    <rect x="74" y="162" width="8" height="8" rx="1.5"/>
+    <rect x="88" y="162" width="8" height="8" rx="1.5"/>
+    <rect x="116" y="162" width="8" height="8" rx="1.5"/>
+    
+    <rect x="134" y="134" width="8" height="8" rx="1.5"/>
+    <rect x="162" y="134" width="8" height="8" rx="1.5"/>
+    <rect x="148" y="148" width="8" height="8" rx="1.5"/>
+    <rect x="176" y="148" width="8" height="8" rx="1.5"/>
+    <rect x="134" y="162" width="8" height="8" rx="1.5"/>
+    <rect x="162" y="162" width="8" height="8" rx="1.5"/>
+    <rect x="176" y="162" width="8" height="8" rx="1.5"/>
+  </g>
+  
+  <!-- Center Badge / Kinetic K Mark -->
+  <rect x="78" y="78" width="44" height="44" rx="10" fill="#0C1A3A"/>
+  <rect x="80" y="80" width="40" height="40" rx="8" fill="#F8FAFC"/>
+  <!-- Kinetic Orange K mark -->
+  <path d="M89 88V112H93.5V102.5L102.5 112H108.5L98 100.5L107.5 88H101.5L93.5 98.5V88H89Z" fill="#F97316"/>
+</svg>
