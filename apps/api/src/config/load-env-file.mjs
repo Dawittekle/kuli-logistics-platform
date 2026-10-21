@@ -26,6 +26,11 @@ const parseEnvLine = (line) => {
     (value.startsWith("'") && value.endsWith("'"))
   ) {
     value = value.slice(1, -1);
+  } else {
+    const hashIndex = value.indexOf(' #');
+    if (hashIndex !== -1) {
+      value = value.slice(0, hashIndex).trim();
+    }
   }
 
   return key ? [key, value] : null;
