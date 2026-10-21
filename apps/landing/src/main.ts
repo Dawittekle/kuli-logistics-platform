@@ -10,6 +10,7 @@ import './styles/layout.css';
 import './styles/landing.css';
 import './styles/hero.css';
 import './styles/features.css';
+import './styles/b2b-faq.css';
 
 // Import Data & Calculator Engines
 import { ADDIS_LOCATIONS } from './data/addis-locations';
@@ -302,6 +303,107 @@ function initFleetCatalogInteractions(): void {
 }
 
 // ------------------------------------------------------------
+// Accessible FAQ Accordion with Full Keyboard Navigation
+// ------------------------------------------------------------
+function initFaqAccordion(): void {
+  const faqItems = document.querySelectorAll<HTMLElement>('.faq-item');
+  const questionButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.faq-question-btn'));
+
+  if (!faqItems.length || !questionButtons.length) return;
+
+  const toggleItem = (item: HTMLElement, open?: boolean): void => {
+    const btn = item.querySelector<HTMLButtonElement>('.faq-question-btn');
+    const panel = item.querySelector<HTMLElement>('.faq-answer-panel');
+    if (!btn || !panel) return;
+
+    const isCurrentlyOpen = item.classList.contains('is-open');
+    const shouldOpen = open !== undefined ? open : !isCurrentlyOpen;
+
+    if (shouldOpen) {
+      // Close other accordion items for clean focus
+      faqItems.forEach((other) => {
+        if (other !== item && other.classList.contains('is-open')) {
+          toggleItem(other, false);
+        }
+      });
+
+      item.classList.add('is-open');
+      btn.setAttribute('aria-expanded', 'true');
+      panel.removeAttribute('hidden');
+    } else {
+      item.classList.remove('is-open');
+      btn.setAttribute('aria-expanded', 'false');
+      panel.setAttribute('hidden', '');
+    }
+  };
+
+  questionButtons.forEach((btn, index) => {
+    const parentItem = btn.closest<HTMLElement>('.faq-item');
+    if (!parentItem) return;
+
+    btn.addEventListener('click', () => {
+      toggleItem(parentItem);
+    });
+
+    btn.addEventListener('keydown', (e: KeyboardEvent) => {
+      let targetIndex = index;
+
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          targetIndex = (index + 1) % questionButtons.length;
+          questionButtons[targetIndex]?.focus();
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          targetIndex = (index - 1 + questionButtons.length) % questionButtons.length;
+          questionButtons[targetIndex]?.focus();
+          break;
+        case 'Home':
+          e.preventDefault();
+          questionButtons[0]?.focus();
+          break;
+        case 'End':
+          e.preventDefault();
+          questionButtons[questionButtons.length - 1]?.focus();
+          break;
+        case 'Escape':
+          if (parentItem.classList.contains('is-open')) {
+            toggleItem(parentItem, false);
+          }
+          break;
+      }
+    });
+  });
+
+  // Open first FAQ item by default
+  if (faqItems[0]) {
+    toggleItem(faqItems[0], true);
+  }
+}
+
+// ------------------------------------------------------------
+// Driver Partner CTAs Cross-Section Navigation
+// ------------------------------------------------------------
+function initDriverPartnerCtas(): void {
+  const driverCtas = document.querySelectorAll<HTMLElement>('[data-action="open-driver-signup"]');
+  const driverTabBtn = document.querySelector<HTMLButtonElement>('[data-hero-tab="driver"]');
+  const heroSection = document.getElementById('hero');
+
+  driverCtas.forEach((cta) => {
+    cta.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (driverTabBtn && !driverTabBtn.classList.contains('is-active')) {
+        driverTabBtn.click();
+      }
+      if (heroSection) {
+        heroSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+}
+
+// ------------------------------------------------------------
 // DOM Ready Lifecycle Initialization
 // ------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
@@ -310,5 +412,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initMobileDrawer();
   initHeroInteractive();
   initFleetCatalogInteractions();
-  console.log('Kulli Landing Page: Phase 1, 2 & 3 fully loaded.');
+  initFaqAccordion();
+  initDriverPartnerCtas();
+  console.log('Kulli Landing Page: Phase 1, 2, 3 & 4 fully loaded.');
 });
