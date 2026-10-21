@@ -19,53 +19,13 @@ import { VEHICLE_TIERS } from './data/vehicle-classes';
 import { calculateQuote, calculateDriverEarnings } from './scripts/rate-calculator';
 
 // ------------------------------------------------------------
-// Theme Switcher Logic (Light / Dark Mode with Persistence)
+// Theme Initialization (Clean Light Identity)
 // ------------------------------------------------------------
 function initTheme(): void {
-  const themeToggleBtns = document.querySelectorAll<HTMLButtonElement>('[data-theme-toggle]');
+  document.documentElement.setAttribute('data-theme', 'light');
   const brandLogos = document.querySelectorAll<HTMLImageElement>('[data-brand-logo]');
-
-  const getSavedTheme = (): 'light' | 'dark' => {
-    const saved = localStorage.getItem('kulli-theme');
-    if (saved === 'light' || saved === 'dark') return saved;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  };
-
-  const applyTheme = (theme: 'light' | 'dark'): void => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('kulli-theme', theme);
-
-    themeToggleBtns.forEach((btn) => {
-      const icon = btn.querySelector('.theme-icon');
-      if (icon) {
-        icon.textContent = theme === 'dark' ? '☀️' : '🌙';
-      }
-      btn.setAttribute('aria-label', `Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`);
-    });
-
-    brandLogos.forEach((logo) => {
-      if (theme === 'dark') {
-        logo.src = '/logos/kulli-logo-mono-light.svg';
-      } else {
-        logo.src = '/logos/kulli-logo-primary.svg';
-      }
-    });
-  };
-
-  const currentTheme = getSavedTheme();
-  applyTheme(currentTheme);
-
-  themeToggleBtns.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const active = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-      applyTheme(active);
-    });
-  });
-
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-    if (!localStorage.getItem('kulli-theme')) {
-      applyTheme(e.matches ? 'dark' : 'light');
-    }
+  brandLogos.forEach((logo) => {
+    logo.src = '/logos/kulli-logo-primary.svg';
   });
 }
 

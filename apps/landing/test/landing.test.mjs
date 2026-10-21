@@ -17,21 +17,20 @@ describe('Kulli Landing Page Production Suite', () => {
     assert.match(html, /name="description"/);
     assert.match(html, /property="og:title"/);
     assert.match(html, /name="twitter:card"/);
-    assert.match(html, /name="theme-color" content="#0C1A3A"/);
+    assert.match(html, /name="theme-color" content="#1F3B87"/);
 
     // Section 1: Navigation
     assert.match(html, /class="kulli-navbar"/);
     assert.match(html, /data-brand-logo/);
-    assert.match(html, /href="tel:8492"/);
+    assert.match(html, /Log in/);
+    assert.match(html, /Sign up/);
 
-    // Section 2: Split Hero
+    // Section 2: Authentic Hero Section
     assert.match(html, /id="hero"/);
-    assert.match(html, /id="panel-shipper"/);
-    assert.match(html, /id="panel-driver"/);
-    assert.match(html, /id="calcPickup"/);
-    assert.match(html, /id="calcDestination"/);
-    assert.match(html, /id="calcFareTotal"/);
-    assert.match(html, /id="driverTripsSlider"/);
+    assert.match(html, /Ship Anything, Anytime, Everywhere with/);
+    assert.match(html, /hero-accent-orange/);
+    assert.match(html, /hero-home-moving\.jpg/);
+    assert.match(html, /Book Now/);
 
     // Section 3: Trust Strip
     assert.match(html, /id="trust"/);
