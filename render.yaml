@@ -21,3 +21,4 @@ services:
       - type: rewrite
         source: /about
         destination: /about.html
+
