@@ -89,6 +89,36 @@
   }
 }
 
+@media (max-width: 640px) {
+  .drive-earn-section {
+    min-height: auto;
+    padding: var(--space-12) 0;
+  }
+  .driver-cabin-img {
+    max-height: 280px;
+    border-radius: 28px;
+  }
+  .drive-earn-title {
+    font-size: clamp(1.75rem, 5.5vw, 2.25rem);
+    margin-bottom: var(--space-4);
+  }
+  .drive-earn-desc {
+    font-size: 1rem;
+    margin-bottom: var(--space-6);
+  }
+  .drive-earn-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+  .drive-earn-actions .button {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+  }
+}
+
 /* ------------------------------------------------------------
    2. OUR SERVICES SECTION (#services)
    ------------------------------------------------------------ */
@@ -218,13 +248,30 @@
 }
 
 @media (max-width: 640px) {
+  .services-section {
+    min-height: auto;
+    padding: var(--space-12) 0;
+  }
+  .services-image-box {
+    border-radius: 28px;
+    padding: var(--space-5);
+  }
+  .services-title {
+    font-size: clamp(1.75rem, 5.5vw, 2.25rem);
+    margin-bottom: var(--space-6);
+  }
   .services-step-item {
     gap: var(--space-4);
   }
   .services-step-num {
     width: 44px;
     height: 44px;
+    min-width: 44px;
     font-size: 1.25rem;
+  }
+  .services-learn-btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 
@@ -387,11 +434,21 @@
 }
 
 @media (max-width: 640px) {
+  .truck-types-section {
+    min-height: auto;
+    padding: var(--space-12) 0;
+  }
   .truck-types-grid {
     grid-template-columns: 1fr;
     gap: var(--space-6);
   }
   .truck-card {
-    min-height: 440px;
+    min-height: 400px;
+    padding: var(--space-4);
+    border-radius: 28px;
+  }
+  .truck-card-info {
+    padding: var(--space-5) var(--space-4);
+    border-radius: 20px;
   }
 }

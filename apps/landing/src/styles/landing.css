@@ -109,6 +109,9 @@
   .navbar-links {
     display: none;
   }
+  .navbar-actions > .button {
+    display: none;
+  }
   .navbar-burger {
     display: flex;
   }
@@ -147,11 +150,13 @@
   flex-direction: column;
   padding: var(--space-6);
   transform: translateX(100%);
-  transition: transform var(--duration-normal) var(--ease-out);
+  visibility: hidden;
+  transition: transform var(--duration-normal) var(--ease-out), visibility var(--duration-normal);
 }
 
 .mobile-drawer.is-open {
   transform: translateX(0);
+  visibility: visible;
 }
 
 .mobile-drawer-header {
@@ -228,9 +233,9 @@
    5. MASTER GLOBAL FOOTER (Matching Guide/Kulli)
    ------------------------------------------------------------ */
 .kulli-footer {
-  background-color: #FFFFFF;
-  border-top: 1px solid var(--color-border);
-  padding: clamp(4.5rem, 7vh, 6rem) 0 var(--space-8);
+  background-color: var(--color-footer-bg, #FDF3E8);
+  border-top: 1px solid var(--color-footer-border, #F2DECC);
+  padding: clamp(4rem, 6vh, 5.5rem) 0 var(--space-8);
   margin-top: auto;
 }
 
@@ -264,13 +269,13 @@
   font-family: var(--font-heading);
   font-size: 0.9375rem;
   font-weight: 600;
-  color: var(--color-text-secondary);
+  color: var(--color-navy-dark, #142553);
   text-decoration: none;
   transition: color var(--transition-fast, 150ms ease);
 }
 
 .footer-link:hover {
-  color: var(--color-primary);
+  color: var(--color-orange, #FFAD61);
 }
 
 .footer-social-links {
@@ -280,29 +285,30 @@
 }
 
 .footer-social-icon {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--radius-full, 9999px);
-  background-color: var(--color-background);
-  border: 1px solid var(--color-border);
+  background-color: #FFFFFF;
+  border: 1px solid var(--color-footer-border, #F2DECC);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-primary);
+  color: var(--color-navy-dark, #142553);
   text-decoration: none;
+  box-shadow: 0 2px 6px rgba(20, 37, 83, 0.05);
   transition: all var(--transition-fast, 150ms ease);
 }
 
 .footer-social-icon:hover {
-  background-color: var(--color-primary);
-  border-color: var(--color-primary);
+  background-color: var(--color-navy-dark, #142553);
+  border-color: var(--color-navy-dark, #142553);
   color: #FFFFFF;
   transform: translateY(-2px);
 }
 
 .footer-divider {
   height: 1px;
-  background-color: var(--color-border);
+  background-color: var(--color-footer-border, #F2DECC);
   margin-bottom: var(--space-6);
 }
 
@@ -312,14 +318,14 @@
   justify-content: space-between;
   gap: var(--space-4);
   font-size: 0.875rem;
-  color: var(--color-text-secondary);
+  color: #5A6A85;
   flex-wrap: wrap;
 }
 
 .footer-copy {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
+  display: block;
+  text-align: left;
+  line-height: 1.5;
 }
 
 .footer-brand-text {
@@ -339,17 +345,20 @@
 }
 
 .footer-legal-link {
-  color: var(--color-text-secondary);
+  color: #5A6A85;
   text-decoration: none;
   font-size: 0.875rem;
   transition: color var(--transition-fast, 150ms ease);
 }
 
 .footer-legal-link:hover {
-  color: var(--color-primary);
+  color: var(--color-navy-dark, #142553);
 }
 
 @media (max-width: 900px) {
+  .kulli-footer {
+    padding: var(--space-10) 0 var(--space-8);
+  }
   .footer-main-content {
     flex-direction: column;
     align-items: center;
@@ -365,5 +374,8 @@
     align-items: center;
     text-align: center;
     gap: var(--space-4);
+  }
+  .footer-copy {
+    text-align: center;
   }
 }

@@ -49,12 +49,39 @@
 
         <!-- Right Action Buttons -->
         <div class="navbar-actions">
-          <a href="/#hero" class="btn btn-secondary btn-sm">Log in</a>
-          <a href="/#hero" class="btn btn-primary btn-sm">Sign up</a>
+          <a href="/#hero" class="button button-secondary">Log in</a>
+          <a href="/#hero" class="button button-primary">Sign up</a>
+
+          <button type="button" class="navbar-burger" data-drawer-trigger aria-label="Open mobile menu" aria-expanded="false">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
         </div>
       </div>
     </div>
   </header>
+
+  <!-- Mobile Drawer Scrim & Panel -->
+  <div class="mobile-scrim" aria-hidden="true"></div>
+  <aside class="mobile-drawer" role="dialog" aria-modal="true" aria-label="Mobile Navigation Menu">
+    <div class="mobile-drawer-header">
+      <img src="/logos/kulli-logo-primary.svg" alt="Kulli" style="height: 32px;" data-brand-logo>
+      <button type="button" class="drawer-close-btn" data-drawer-close aria-label="Close mobile menu">✕</button>
+    </div>
+
+    <ul class="mobile-drawer-links">
+      <li><a href="/#hero" class="mobile-drawer-link">Book</a></li>
+      <li><a href="/#drivers" class="mobile-drawer-link">Drivers</a></li>
+      <li><a href="/about.html" class="mobile-drawer-link">About</a></li>
+      <li><a href="/#faq" class="mobile-drawer-link">FAQ</a></li>
+    </ul>
+
+    <div style="display: flex; flex-direction: column; gap: var(--space-3); margin-top: auto;">
+      <a href="/#hero" class="button button-secondary" style="width: 100%; text-align: center;">Log in</a>
+      <a href="/#hero" class="button button-primary" style="width: 100%; text-align: center;">Sign up</a>
+    </div>
+  </aside>
 
   <main id="main-content">
     <!-- ============================================================
@@ -343,5 +370,7 @@
       </div>
     </div>
   </footer>
+
+  <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

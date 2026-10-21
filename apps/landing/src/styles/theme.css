@@ -38,6 +38,10 @@
   --color-orange-subtle:      #FFF3E8;
   --color-orange-on:          #142553;
 
+  /* ---- Footer Tokens (Soft Dimmed Amber matching user preference) ---- */
+  --color-footer-bg:          #FDF3E8;
+  --color-footer-border:      #F2DECC;
+
   --color-accent:             #FFAD61;
   --color-accent-hover:       #FFA24B;
   --color-accent-active:      #F59436;
