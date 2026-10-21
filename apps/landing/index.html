@@ -207,225 +207,73 @@
       </div>
     </section>
 
-    <!-- 05. VEHICLE FLEET (PHASE 3 IMPLEMENTATION) -->
-    <section id="fleet" class="landing-section" style="background: var(--color-surface-low);" aria-labelledby="fleet-heading">
+    <!-- ============================================================
+         05. TRUCK TYPES CATALOG (PHASE 4)
+         ============================================================ -->
+    <section id="fleet" class="truck-types-section" aria-labelledby="fleet-heading">
       <div class="kulli-container">
-        <div class="section-header-block">
-          <span class="section-eyebrow">VERIFIED ETHIOPIAN FLEET</span>
-          <h2 id="fleet-heading" class="text-h2 section-main-title">Right-Sized Trucks for Every Move</h2>
-          <p class="section-subtitle">From light urban pickups to heavy multi-ton flatbeds operating across all Addis Ababa sub-cities.</p>
+        <div class="truck-types-header">
+          <span class="truck-types-eyebrow">Truck Types</span>
+          <h2 id="fleet-heading" class="truck-types-title">Delivery &amp; Moving on Demand</h2>
         </div>
 
-        <div class="fleet-catalog-grid">
-          <!-- Card 1: Small Pickup -->
-          <div class="fleet-card" data-vehicle-tier="small-pickup">
-            <div class="fleet-visual-container">
-              <div class="fleet-vehicle-svg-wrap">
-                <img src="/images/fleet-pickup.svg" alt="Small Pickup truck illustration" width="240" height="120" loading="lazy" />
-              </div>
+        <div class="truck-types-grid">
+          <!-- Card 1: Box Truck -->
+          <div class="truck-card">
+            <div class="truck-card-media">
+              <img
+                src="/images/box-truck.jpg"
+                alt="Kulli Box Truck for large moves"
+                class="truck-card-img"
+                loading="lazy"
+              />
             </div>
-            <div class="fleet-card-body">
-              <div class="fleet-tier-header">
-                <span class="fleet-tonnage-tag">1.0 – 1.5 TON PAYLOAD</span>
-                <h3 class="fleet-vehicle-name">Small Pickup</h3>
-                <p class="fleet-vehicle-models">Bedford KB26 • Toyota Hilux • Carry</p>
-              </div>
-
-              <div class="fleet-price-box">
-                <div>
-                  <div class="fleet-price-label">Starting Fare</div>
-                  <div class="fleet-price-value">From 600 ETB</div>
-                </div>
-                <div class="fleet-price-rate">45 ETB / km</div>
-              </div>
-
-              <div class="fleet-specs-grid">
-                <div class="fleet-spec-item">
-                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  <span><strong>Payload:</strong> Up to 1,500 kg</span>
-                </div>
-                <div class="fleet-spec-item">
-                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  <span><strong>Bed:</strong> 2.4m × 1.6m open bed</span>
-                </div>
-                <div class="fleet-spec-item">
-                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  <span><strong>Access:</strong> Fits narrow market lanes</span>
-                </div>
-              </div>
-
-              <div class="fleet-ideal-section">
-                <div class="fleet-ideal-heading">Best Suited For</div>
-                <div class="fleet-ideal-tags">
-                  <span class="fleet-ideal-pill">Single furniture / Sofa</span>
-                  <span class="fleet-ideal-pill">Studio apartment</span>
-                  <span class="fleet-ideal-pill">Market stock</span>
-                </div>
-              </div>
-
-              <button type="button" class="btn btn-outline fleet-book-btn" data-select-tier="small-pickup">
-                Select &amp; Calculate →
-              </button>
+            <div class="truck-card-info">
+              <h3 class="truck-card-title">Box Truck</h3>
+              <p class="truck-card-desc">
+                Ideal for 2-3 bedroom apartment moves, large appliances, office relocations, and full-volume commercial deliveries.
+              </p>
+              <a href="#hero" class="truck-card-btn">Book Now →</a>
             </div>
           </div>
 
-          <!-- Card 2: Closed Cargo Van -->
-          <div class="fleet-card" data-vehicle-tier="small-pickup">
-            <div class="fleet-visual-container">
-              <div class="fleet-vehicle-svg-wrap">
-                <img src="/images/fleet-van.svg" alt="Closed Cargo Van illustration" width="240" height="120" loading="lazy" />
-              </div>
+          <!-- Card 2: Cargo Van -->
+          <div class="truck-card">
+            <div class="truck-card-media">
+              <img
+                src="/images/delivery-van.png"
+                alt="Kulli Closed Cargo Van"
+                class="truck-card-img is-contain"
+                loading="lazy"
+              />
             </div>
-            <div class="fleet-card-body">
-              <div class="fleet-tier-header">
-                <span class="fleet-tonnage-tag">1.5 – 2.0 TON PAYLOAD</span>
-                <h3 class="fleet-vehicle-name">Closed Cargo Van</h3>
-                <p class="fleet-vehicle-models">Toyota HiAce • Sprinter Box Van</p>
-              </div>
-
-              <div class="fleet-price-box">
-                <div>
-                  <div class="fleet-price-label">Starting Fare</div>
-                  <div class="fleet-price-value">From 800 ETB</div>
-                </div>
-                <div class="fleet-price-rate">55 ETB / km</div>
-              </div>
-
-              <div class="fleet-specs-grid">
-                <div class="fleet-spec-item">
-                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  <span><strong>Payload:</strong> Up to 2,000 kg</span>
-                </div>
-                <div class="fleet-spec-item">
-                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  <span><strong>Volume:</strong> 9.2 m³ weatherproof hold</span>
-                </div>
-                <div class="fleet-spec-item">
-                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  <span><strong>Security:</strong> Lockable doors (Rain-safe)</span>
-                </div>
-              </div>
-
-              <div class="fleet-ideal-section">
-                <div class="fleet-ideal-heading">Best Suited For</div>
-                <div class="fleet-ideal-tags">
-                  <span class="fleet-ideal-pill">Electronics &amp; TV</span>
-                  <span class="fleet-ideal-pill">Rainy season transit</span>
-                  <span class="fleet-ideal-pill">Retail cartons</span>
-                </div>
-              </div>
-
-              <button type="button" class="btn btn-outline fleet-book-btn" data-select-tier="small-pickup">
-                Select &amp; Calculate →
-              </button>
+            <div class="truck-card-info">
+              <h3 class="truck-card-title">Cargo Van</h3>
+              <p class="truck-card-desc">
+                Great for cargo that need to be kept dry, 1-4 big box items, studio apartments, queen mattress w/ box.
+              </p>
+              <a href="#hero" class="truck-card-btn">Book Now →</a>
             </div>
           </div>
 
-          <!-- Card 3: Medium Flatbed (Isuzu NPR) [Most Popular] -->
-          <div class="fleet-card is-popular" data-vehicle-tier="medium-truck">
-            <span class="fleet-popular-ribbon">★ Most Popular</span>
-            <div class="fleet-visual-container">
-              <div class="fleet-vehicle-svg-wrap">
-                <img src="/images/fleet-medium-flatbed.svg" alt="Medium Flatbed Isuzu NPR truck illustration" width="240" height="120" loading="lazy" />
-              </div>
+          <!-- Card 3: Pickup Truck -->
+          <div class="truck-card">
+            <div class="truck-card-media">
+              <img
+                src="/images/bedford-kb26.png"
+                alt="Kulli Bedford KB26 Pickup Truck"
+                class="truck-card-img is-contain"
+                loading="lazy"
+              />
             </div>
-            <div class="fleet-card-body">
-              <div class="fleet-tier-header">
-                <span class="fleet-tonnage-tag" style="background-color: var(--color-accent-subtle); color: var(--color-accent);">3.5 – 4.5 TON PAYLOAD</span>
-                <h3 class="fleet-vehicle-name">Medium Flatbed</h3>
-                <p class="fleet-vehicle-models">Isuzu NPR • Mitsubishi Canter</p>
-              </div>
-
-              <div class="fleet-price-box" style="border-color: var(--color-accent-subtle);">
-                <div>
-                  <div class="fleet-price-label">Starting Fare</div>
-                  <div class="fleet-price-value" style="color: var(--color-primary);">From 1,200 ETB</div>
-                </div>
-                <div class="fleet-price-rate">75 ETB / km</div>
-              </div>
-
-              <div class="fleet-specs-grid">
-                <div class="fleet-spec-item">
-                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  <span><strong>Payload:</strong> Up to 4,500 kg</span>
-                </div>
-                <div class="fleet-spec-item">
-                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  <span><strong>Bed:</strong> 4.5m × 2.1m high-sided</span>
-                </div>
-                <div class="fleet-spec-item">
-                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  <span><strong>Crew:</strong> Loading helper crew option</span>
-                </div>
-              </div>
-
-              <div class="fleet-ideal-section">
-                <div class="fleet-ideal-heading">Best Suited For</div>
-                <div class="fleet-ideal-tags">
-                  <span class="fleet-ideal-pill">2–3 Bedroom home move</span>
-                  <span class="fleet-ideal-pill">Wholesale freight</span>
-                  <span class="fleet-ideal-pill">Office relocation</span>
-                </div>
-              </div>
-
-              <button type="button" class="btn btn-accent fleet-book-btn" data-select-tier="medium-truck">
-                Select &amp; Calculate →
-              </button>
+            <div class="truck-card-info">
+              <h3 class="truck-card-title">Pickup Truck</h3>
+              <p class="truck-card-desc">
+                Great for 1-2 big box items, single pieces of furniture, lumber &amp; home improvement.
+              </p>
+              <a href="#hero" class="truck-card-btn">Book Now →</a>
             </div>
           </div>
-
-          <!-- Card 4: Heavy Freight / Sino Dump Truck -->
-          <div class="fleet-card" data-vehicle-tier="large-truck">
-            <div class="fleet-visual-container">
-              <div class="fleet-vehicle-svg-wrap">
-                <img src="/images/fleet-heavy-dumper.svg" alt="Sino Truck Heavy Dumper illustration" width="240" height="120" loading="lazy" />
-              </div>
-            </div>
-            <div class="fleet-card-body">
-              <div class="fleet-tier-header">
-                <span class="fleet-tonnage-tag">10 – 15 TON HEAVY HAUL</span>
-                <h3 class="fleet-vehicle-name">Heavy Freight &amp; Tipper</h3>
-                <p class="fleet-vehicle-models">Sino Truck • Isuzu FSR Tipper</p>
-              </div>
-
-              <div class="fleet-price-box">
-                <div>
-                  <div class="fleet-price-label">Starting Fare</div>
-                  <div class="fleet-price-value">From 2,200 ETB</div>
-                </div>
-                <div class="fleet-price-rate">120 ETB / km</div>
-              </div>
-
-              <div class="fleet-specs-grid">
-                <div class="fleet-spec-item">
-                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  <span><strong>Payload:</strong> Up to 12,000 kg</span>
-                </div>
-                <div class="fleet-spec-item">
-                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  <span><strong>Dump Box:</strong> 18.0 m³ hydraulic tipper</span>
-                </div>
-                <div class="fleet-spec-item">
-                  <svg class="fleet-spec-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  <span><strong>Access:</strong> Construction site ready</span>
-                </div>
-              </div>
-
-              <div class="fleet-ideal-section">
-                <div class="fleet-ideal-heading">Best Suited For</div>
-                <div class="fleet-ideal-tags">
-                  <span class="fleet-ideal-pill">Sand, gravel &amp; cement</span>
-                  <span class="fleet-ideal-pill">Structural rebar</span>
-                  <span class="fleet-ideal-pill">Industrial plant freight</span>
-                </div>
-              </div>
-
-              <button type="button" class="btn btn-outline fleet-book-btn" data-select-tier="large-truck">
-                Select &amp; Calculate →
-              </button>
-            </div>
-          </div>
-
         </div>
       </div>
     </section>
@@ -591,134 +439,125 @@
       </div>
     </section>
 
-    <!-- 09. FAQ & HOTLINE BANNER (PHASE 4 IMPLEMENTATION) -->
-    <section id="faq" class="landing-section" style="background: var(--color-surface-low);" aria-labelledby="faq-heading">
+    <!-- ============================================================
+         07. FAQ SECTION (PHASE 4)
+         ============================================================ -->
+    <section id="faq" class="faq-section" aria-labelledby="faq-heading">
       <div class="kulli-container">
-        <div class="section-header-block">
-          <span class="section-eyebrow">Clear Answers</span>
-          <h2 id="faq-heading" class="text-h2 section-main-title">Frequently Asked Questions</h2>
-          <p class="section-subtitle">Everything you need to know about pricing, vehicle vetting, cargo security, and telephone booking.</p>
-        </div>
+        <div class="faq-inner">
+          <!-- Left Column: Questions & Hotline -->
+          <div class="faq-questions-col">
+            <span class="faq-eyebrow">FAQ</span>
+            <h2 id="faq-heading" class="faq-title">
+              <span>Frequently Asked</span>
+              <br />
+              <span class="accent-orange">Questions</span>
+            </h2>
 
-        <div class="faq-accordion-wrap">
-          <div class="faq-accordion" role="region" aria-label="Frequently Asked Questions Accordion">
+            <div class="faq-accordion" role="region" aria-label="Frequently Asked Questions Accordion">
 
-            <!-- FAQ Item 1 -->
-            <div class="faq-item is-open">
-              <h3>
-                <button type="button" class="faq-question-btn" id="faq-q-1" aria-expanded="true" aria-controls="faq-a-1">
-                  <span>How is the freight or moving fare calculated?</span>
-                  <span class="faq-chevron" aria-hidden="true">▼</span>
-                </button>
-              </h3>
-              <div class="faq-answer-panel" id="faq-a-1" role="region" aria-labelledby="faq-q-1">
-                <p>
-                  Kulli uses a fully transparent, upfront pricing model with no roadside bargaining. The fare consists of a fixed base fare for your chosen vehicle class (e.g. 600 ETB for Small Pickup, 1,200 ETB for Isuzu NPR) plus a distance rate per kilometer calculated using actual Addis Ababa road network distances. You see the exact guaranteed price before confirming your booking.
-                </p>
+              <!-- Question 1 -->
+              <div class="faq-item is-open">
+                <h3>
+                  <button type="button" class="faq-question-btn" id="faq-q-1" aria-expanded="true" aria-controls="faq-a-1">
+                    <span>How do I book a truck?</span>
+                    <span class="faq-chevron" aria-hidden="true">+</span>
+                  </button>
+                </h3>
+                <div class="faq-answer-panel" id="faq-a-1" role="region" aria-labelledby="faq-q-1">
+                  <p>
+                    You can book a truck in seconds through our website or mobile app. Simply select your pickup and drop-off points, choose your vehicle size, and confirm your booking with instant upfront pricing.
+                  </p>
+                </div>
               </div>
+
+              <!-- Question 2 -->
+              <div class="faq-item">
+                <h3>
+                  <button type="button" class="faq-question-btn" id="faq-q-2" aria-expanded="false" aria-controls="faq-a-2">
+                    <span>Is Kulli available in my area?</span>
+                    <span class="faq-chevron" aria-hidden="true">+</span>
+                  </button>
+                </h3>
+                <div class="faq-answer-panel" id="faq-a-2" role="region" aria-labelledby="faq-q-2" hidden>
+                  <p>
+                    Kulli operates across all 11 sub-cities of Addis Ababa and surrounding Oromia special zones, with nationwide intercity moving available upon request.
+                  </p>
+                </div>
+              </div>
+
+              <!-- Question 3 -->
+              <div class="faq-item">
+                <h3>
+                  <button type="button" class="faq-question-btn" id="faq-q-3" aria-expanded="false" aria-controls="faq-a-3">
+                    <span>Can I track my shipment in real time?</span>
+                    <span class="faq-chevron" aria-hidden="true">+</span>
+                  </button>
+                </h3>
+                <div class="faq-answer-panel" id="faq-a-3" role="region" aria-labelledby="faq-q-3" hidden>
+                  <p>
+                    Yes! As soon as your driver is dispatched, you can follow their journey live with GPS tracking and contact them directly via phone or in-app messaging.
+                  </p>
+                </div>
+              </div>
+
+              <!-- Question 4 -->
+              <div class="faq-item">
+                <h3>
+                  <button type="button" class="faq-question-btn" id="faq-q-4" aria-expanded="false" aria-controls="faq-a-4">
+                    <span>Do you have an iOS or Android app?</span>
+                    <span class="faq-chevron" aria-hidden="true">+</span>
+                  </button>
+                </h3>
+                <div class="faq-answer-panel" id="faq-a-4" role="region" aria-labelledby="faq-q-4" hidden>
+                  <p>
+                    Yes, both the Kulli Customer App and Kulli Driver App are available for Android and iOS devices on Google Play and Apple App Store.
+                  </p>
+                </div>
+              </div>
+
+              <!-- Question 5 -->
+              <div class="faq-item">
+                <h3>
+                  <button type="button" class="faq-question-btn" id="faq-q-5" aria-expanded="false" aria-controls="faq-a-5">
+                    <span>How do I register as a truck owner?</span>
+                    <span class="faq-chevron" aria-hidden="true">+</span>
+                  </button>
+                </h3>
+                <div class="faq-answer-panel" id="faq-a-5" role="region" aria-labelledby="faq-q-5" hidden>
+                  <p>
+                    Download the Kulli Driver App or visit our walk-in partner onboarding center. Submit your driver's license, vehicle Libre, and Kebele ID to get verified within 24 hours.
+                  </p>
+                </div>
+              </div>
+
             </div>
 
-            <!-- FAQ Item 2 -->
-            <div class="faq-item">
-              <h3>
-                <button type="button" class="faq-question-btn" id="faq-q-2" aria-expanded="false" aria-controls="faq-a-2">
-                  <span>How does Kulli ensure the security of my cargo?</span>
-                  <span class="faq-chevron" aria-hidden="true">▼</span>
-                </button>
-              </h3>
-              <div class="faq-answer-panel" id="faq-a-2" role="region" aria-labelledby="faq-q-2" hidden>
-                <p>
-                  Every driver on Kulli undergoes strict physical document verification, including their government-issued commercial driver's license, vehicle title (<em>Libre</em>), and Kebele ID. All trips are tracked with live GPS from pickup to drop-off. You inspect your goods upon arrival before approving payment release, and our dedicated operations support handles any dispute resolution.
-                </p>
-              </div>
-            </div>
-
-            <!-- FAQ Item 3 -->
-            <div class="faq-item">
-              <h3>
-                <button type="button" class="faq-question-btn" id="faq-q-3" aria-expanded="false" aria-controls="faq-a-3">
-                  <span>Can I book a truck over the telephone if I don't have internet?</span>
-                  <span class="faq-chevron" aria-hidden="true">▼</span>
-                </button>
-              </h3>
-              <div class="faq-answer-panel" id="faq-a-3" role="region" aria-labelledby="faq-q-3" hidden>
-                <p>
-                  Yes! You do not need a smartphone or internet connection to use Kulli. Simply call our central dispatch hotline at <strong>8492</strong>. A Kulli logistics assistant will take your pickup and delivery details, confirm your guaranteed rate, and dispatch an available truck directly to your gate with SMS updates.
-                </p>
-              </div>
-            </div>
-
-            <!-- FAQ Item 4 -->
-            <div class="faq-item">
-              <h3>
-                <button type="button" class="faq-question-btn" id="faq-q-4" aria-expanded="false" aria-controls="faq-a-4">
-                  <span>Which areas and sub-cities of Addis Ababa do you cover?</span>
-                  <span class="faq-chevron" aria-hidden="true">▼</span>
-                </button>
-              </h3>
-              <div class="faq-answer-panel" id="faq-a-4" role="region" aria-labelledby="faq-q-4" hidden>
-                <p>
-                  We provide comprehensive coverage across all 11 sub-cities of Addis Ababa: Bole, Kirkos, Yeka, Arada, Addis Ketema (Merkato), Lideta, Kolfe Keranio, Gullele, Nifas Silk-Lafto, Akaki-Kality, and Lemi Kura. We also support regional inter-zone transport to surrounding Oromia special zones including Dukem, Bishoftu, Sebeta, and Burayu.
-                </p>
-              </div>
-            </div>
-
-            <!-- FAQ Item 5 -->
-            <div class="faq-item">
-              <h3>
-                <button type="button" class="faq-question-btn" id="faq-q-5" aria-expanded="false" aria-controls="faq-a-5">
-                  <span>What payment methods are supported?</span>
-                  <span class="faq-chevron" aria-hidden="true">▼</span>
-                </button>
-              </h3>
-              <div class="faq-answer-panel" id="faq-a-5" role="region" aria-labelledby="faq-q-5" hidden>
-                <p>
-                  We support flexible payment options: you can pay cash directly to the driver upon delivery inspection, or complete an instant mobile money transfer via Telebirr or CBE Birr. In both cases, you receive an instant digital receipt and trip waybill on your phone.
-                </p>
-              </div>
-            </div>
-
-            <!-- FAQ Item 6 -->
-            <div class="faq-item">
-              <h3>
-                <button type="button" class="faq-question-btn" id="faq-q-6" aria-expanded="false" aria-controls="faq-a-6">
-                  <span>How can I register my vehicle as a truck partner?</span>
-                  <span class="faq-chevron" aria-hidden="true">▼</span>
-                </button>
-              </h3>
-              <div class="faq-answer-panel" id="faq-a-6" role="region" aria-labelledby="faq-q-6" hidden>
-                <p>
-                  You can register directly via the Kulli Driver App or visit our driver onboarding centers at Mexico Square or Bole Medhanialem. Bring your valid commercial driver's license, vehicle title (<em>Libre</em>), and Kebele ID. Most driver partners are verified and receiving cargo requests within 24 hours.
-                </p>
-              </div>
-            </div>
-
-          </div>
-
-          <!-- Prominent Hotline Assistance Banner -->
-          <div class="hotline-banner-wrap">
+            <!-- Hotline Card -->
             <div class="hotline-banner">
               <div class="hotline-banner-content">
-                <span class="hotline-badge">📞 Telephone Dispatch Service</span>
-                <h3 class="hotline-title">Need Immediate Dispatch or Offline Booking?</h3>
-                <p class="hotline-desc">
-                  No internet connection or planning a complex commercial freight move? Speak directly with our Addis Ababa dispatch team. We match and assign a verified truck to your gate in minutes.
-                </p>
-                <div style="font-size: 0.8125rem; color: #94A3B8; margin-top: var(--space-2);">
-                  Available 7:00 AM – 9:00 PM • 7 Days a Week • Amharic &amp; English
+                <div>
+                  <h4 class="hotline-title">Need Immediate Phone Dispatch?</h4>
+                  <p class="hotline-desc">Speak directly with central dispatch for quick booking across Addis Ababa.</p>
                 </div>
               </div>
               <div class="hotline-actions">
                 <a href="tel:8492" class="hotline-primary-cta" title="Call Kulli Dispatch Hotline 8492">
-                  <span>📞 Call Shortcode: 8492</span>
-                </a>
-                <a href="tel:+251911000000" class="hotline-secondary-link" title="Call Mobile Line">
-                  Or call +251 911 000 000
+                  <span>📞 Call 8492</span>
                 </a>
               </div>
             </div>
           </div>
 
+          <!-- Right Column: Moving Boxes Illustration -->
+          <div class="faq-image-col">
+            <img
+              src="/images/box-truck-moving.jpg"
+              alt="Kulli Moving and Logistics Boxes"
+              class="faq-moving-img"
+              loading="lazy"
+            />
+          </div>
         </div>
       </div>
     </section>

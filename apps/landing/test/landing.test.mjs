@@ -50,14 +50,16 @@ describe('Kulli Landing Page Production Suite', () => {
     assert.match(html, /shipment-truck\.png/);
     assert.match(html, /Learn more/);
 
-    // Section 5: Fleet Catalog
+    // Section 5: Truck Types Catalog (Phase 4)
     assert.match(html, /id="fleet"/);
-    assert.match(html, /Small Pickup/);
-    assert.match(html, /Closed Cargo Van/);
-    assert.match(html, /Medium Flatbed/);
-    assert.match(html, /Heavy Freight &amp; Tipper/);
-    assert.match(html, /Bedford KB26/);
-    assert.match(html, /Isuzu NPR/);
+    assert.match(html, /Truck Types/);
+    assert.match(html, /Delivery &amp; Moving on Demand/);
+    assert.match(html, /Box Truck/);
+    assert.match(html, /Cargo Van/);
+    assert.match(html, /Pickup Truck/);
+    assert.match(html, /box-truck\.jpg/);
+    assert.match(html, /delivery-van\.png/);
+    assert.match(html, /bedford-kb26\.png/);
 
     // Section 6: Apps Download Center
     assert.match(html, /id="apps"/);
@@ -68,9 +70,16 @@ describe('Kulli Landing Page Production Suite', () => {
     assert.match(html, /Google Play/);
     assert.match(html, /App Store/);
 
-    // Section 7: FAQ Accordion & Hotline
+    // Section 7: FAQ Accordion & Side Image (Phase 4)
     assert.match(html, /id="faq"/);
     assert.match(html, /class="faq-accordion"/);
+    assert.match(html, /Frequently Asked/);
+    assert.match(html, /How do I book a truck\?/);
+    assert.match(html, /Is Kulli available in my area\?/);
+    assert.match(html, /Can I track my shipment in real time\?/);
+    assert.match(html, /Do you have an iOS or Android app\?/);
+    assert.match(html, /How do I register as a truck owner\?/);
+    assert.match(html, /box-truck-moving\.jpg/);
     assert.match(html, /class="hotline-banner"/);
     assert.match(html, /8492/);
 

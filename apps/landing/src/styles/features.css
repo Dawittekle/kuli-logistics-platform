@@ -242,218 +242,143 @@
 }
 
 /* ------------------------------------------------------------
-   3. VEHICLE FLEET & CAPACITY CATALOG (#fleet)
+   3. TRUCK TYPES SECTION (#fleet)
    ------------------------------------------------------------ */
-.fleet-catalog-grid {
+.truck-types-section {
+  padding: var(--space-16) 0;
+  background-color: var(--color-background);
+}
+
+.truck-types-header {
+  margin-bottom: var(--space-8);
+}
+
+.truck-types-eyebrow {
+  display: inline-block;
+  font-family: var(--font-heading);
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-primary);
+  margin-bottom: var(--space-2);
+}
+
+.truck-types-title {
+  font-family: var(--font-heading);
+  font-size: clamp(2rem, 3.8vw, 2.625rem);
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--color-text-primary);
+}
+
+.truck-types-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-6);
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-8);
   align-items: stretch;
 }
 
-@media (max-width: 1200px) {
-  .fleet-catalog-grid {
+.truck-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 480px;
+  border-radius: 36px;
+  overflow: hidden;
+  padding: var(--space-5);
+  background-color: #EEF3FA;
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-panel);
+  transition: transform var(--transition-fast, 150ms ease), box-shadow var(--transition-fast, 150ms ease);
+}
+
+.truck-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 36px rgba(20, 37, 83, 0.14);
+}
+
+.truck-card-media {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #EEF3FA;
+}
+
+.truck-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.truck-card-img.is-contain {
+  object-fit: contain;
+  padding: var(--space-6) var(--space-6) 160px;
+}
+
+.truck-card-info {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  background-color: #FFFFFF;
+  border-radius: 20px;
+  padding: var(--space-5) var(--space-6);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.truck-card-title {
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.truck-card-desc {
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin-bottom: var(--space-3);
+}
+
+.truck-card-btn {
+  font-family: var(--font-heading);
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  transition: color var(--transition-fast, 150ms ease);
+}
+
+.truck-card-btn:hover {
+  color: var(--color-orange);
+}
+
+@media (max-width: 960px) {
+  .truck-types-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: var(--space-6);
   }
 }
 
 @media (max-width: 640px) {
-  .fleet-catalog-grid {
+  .truck-types-grid {
     grid-template-columns: 1fr;
-    gap: var(--space-5);
+    gap: var(--space-6);
   }
-}
-
-.fleet-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-2xl);
-  overflow: hidden;
-  box-shadow: var(--shadow-low);
-  transition: transform var(--duration-fast) var(--ease-default),
-              box-shadow var(--duration-fast) var(--ease-default),
-              border-color var(--duration-fast) var(--ease-default);
-}
-
-.fleet-card:hover {
-  transform: translateY(-4px);
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-high);
-}
-
-.fleet-card.is-popular {
-  border-color: var(--color-accent);
-  box-shadow: 0 8px 24px rgba(249, 115, 22, 0.12);
-}
-
-.fleet-popular-ribbon {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  background-color: var(--color-accent);
-  color: var(--color-accent-on);
-  font-size: 0.6875rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 4px 10px;
-  border-radius: var(--radius-full);
-  z-index: 2;
-  box-shadow: var(--shadow-low);
-}
-
-.fleet-visual-container {
-  height: 140px;
-  background: linear-gradient(180deg, var(--color-surface-low) 0%, var(--color-surface) 100%);
-  border-bottom: 1px solid var(--color-border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-4);
-  position: relative;
-}
-
-.fleet-vehicle-svg-wrap {
-  width: 100%;
-  max-width: 190px;
-  height: auto;
-  transition: transform var(--duration-fast) var(--ease-default);
-}
-
-.fleet-card:hover .fleet-vehicle-svg-wrap {
-  transform: scale(1.05);
-}
-
-.fleet-card-body {
-  padding: var(--space-6);
-  display: flex;
-  flex-direction: column;
-  flex-grow: 1;
-}
-
-.fleet-tier-header {
-  margin-bottom: var(--space-4);
-}
-
-.fleet-tonnage-tag {
-  display: inline-block;
-  font-size: 0.6875rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-primary);
-  background-color: var(--color-primary-subtle);
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  margin-bottom: var(--space-2);
-}
-
-.fleet-vehicle-name {
-  font-family: var(--font-body);
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--color-text-primary);
-  line-height: 1.25;
-}
-
-.fleet-vehicle-models {
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-  margin-top: 2px;
-}
-
-/* Price Box */
-.fleet-price-box {
-  background-color: var(--color-surface-low);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-3) var(--space-4);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--space-4);
-}
-
-.fleet-price-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-}
-
-.fleet-price-value {
-  font-family: var(--font-display);
-  font-size: 1.125rem;
-  font-weight: 800;
-  color: var(--color-text-primary);
-}
-
-.fleet-price-rate {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-}
-
-/* Specs List */
-.fleet-specs-grid {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin-bottom: var(--space-5);
-  font-size: 0.8125rem;
-}
-
-.fleet-spec-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--color-text-secondary);
-}
-
-.fleet-spec-icon {
-  width: 16px;
-  height: 16px;
-  color: var(--color-primary);
-  flex-shrink: 0;
-}
-
-/* Ideal For Tags */
-.fleet-ideal-section {
-  margin-bottom: var(--space-6);
-  flex-grow: 1;
-}
-
-.fleet-ideal-heading {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-  letter-spacing: 0.05em;
-  margin-bottom: var(--space-2);
-}
-
-.fleet-ideal-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-}
-
-.fleet-ideal-pill {
-  font-size: 0.6875rem;
-  background-color: var(--color-surface-low);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-secondary);
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-}
-
-/* CTA */
-.fleet-book-btn {
-  width: 100%;
-  text-align: center;
-  margin-top: auto;
+  .truck-card {
+    min-height: 420px;
+  }
 }

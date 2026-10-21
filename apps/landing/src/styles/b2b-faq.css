@@ -1,297 +1,70 @@
 /* ============================================================
-   Kulli Landing Page — B2B Logistics, Drivers & FAQ Accordion
+   Kulli Landing Page — FAQ Accordion Section (#faq)
    Phase 4 Implementation
    ============================================================ */
 
-/* ------------------------------------------------------------
-   1. B2B & COMMERCIAL LOGISTICS SECTION (#business)
-   ------------------------------------------------------------ */
-.b2b-section-grid {
-  display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  gap: var(--space-12);
-  align-items: center;
+.faq-section {
+  padding: var(--space-16) 0;
+  background-color: var(--color-background);
+  border-top: 1px solid var(--color-border);
 }
 
-@media (max-width: 960px) {
-  .b2b-section-grid {
-    grid-template-columns: 1fr;
-    gap: var(--space-8);
-  }
-}
-
-.b2b-features-list {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-5);
-  margin-top: var(--space-8);
-}
-
-@media (max-width: 600px) {
-  .b2b-features-list {
-    grid-template-columns: 1fr;
-    gap: var(--space-4);
-  }
-}
-
-.b2b-feature-card {
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
-  padding: var(--space-5);
-  box-shadow: var(--shadow-low);
-  transition: transform var(--duration-fast) var(--ease-default),
-              border-color var(--duration-fast) var(--ease-default),
-              box-shadow var(--duration-fast) var(--ease-default);
-}
-
-.b2b-feature-card:hover {
-  transform: translateY(-2px);
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-medium);
-}
-
-.b2b-feature-icon-box {
-  width: 42px;
-  height: 42px;
-  border-radius: var(--radius-lg);
-  background-color: var(--color-primary-subtle);
-  color: var(--color-primary);
+.faq-inner {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: var(--space-3);
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-10);
 }
 
-.b2b-feature-title {
-  font-family: var(--font-body);
-  font-size: 1rem;
+.faq-questions-col {
+  flex: 1 1 54%;
+  display: flex;
+  flex-direction: column;
+}
+
+.faq-eyebrow {
+  display: inline-block;
+  font-family: var(--font-heading);
+  font-size: 0.875rem;
   font-weight: 700;
-  color: var(--color-text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-primary);
   margin-bottom: var(--space-2);
 }
 
-.b2b-feature-desc {
-  font-size: 0.8125rem;
-  color: var(--color-text-secondary);
-  line-height: 1.55;
-}
-
-/* B2B Visual Showcase Card */
-.b2b-preview-card {
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-2xl);
-  padding: var(--space-8);
-  box-shadow: var(--shadow-panel);
-  position: relative;
-  overflow: hidden;
-}
-
-.b2b-preview-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-accent) 100%);
-}
-
-.b2b-stats-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-3);
-  margin: var(--space-6) 0;
-  padding: var(--space-4);
-  background-color: var(--color-surface-low);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  text-align: center;
-}
-
-.b2b-stat-num {
-  font-family: var(--font-display);
-  font-size: 1.375rem;
-  font-weight: 800;
-  color: var(--color-primary);
-}
-
-.b2b-stat-label {
-  font-size: 0.6875rem;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  margin-top: 2px;
-}
-
-.b2b-multi-stop-diagram {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin-bottom: var(--space-6);
-}
-
-.multi-stop-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  font-size: 0.8125rem;
-}
-
-.multi-stop-badge {
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-full);
-  background-color: var(--color-primary-subtle);
-  color: var(--color-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: 0.6875rem;
-  flex-shrink: 0;
-}
-
-.multi-stop-badge.accent {
-  background-color: var(--color-accent-subtle);
-  color: var(--color-accent);
-}
-
-/* ------------------------------------------------------------
-   2. DRIVER & TRUCK OWNER PARTNER SECTION (#drivers)
-   ------------------------------------------------------------ */
-.driver-partner-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-10);
-  align-items: stretch;
-}
-
-@media (max-width: 960px) {
-  .driver-partner-grid {
-    grid-template-columns: 1fr;
-    gap: var(--space-8);
-  }
-}
-
-.driver-benefits-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.driver-benefit-item {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-4);
-  padding: var(--space-4);
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
-  transition: transform var(--duration-fast) var(--ease-default),
-              border-color var(--duration-fast) var(--ease-default);
-}
-
-.driver-benefit-item:hover {
-  transform: translateX(4px);
-  border-color: var(--color-primary);
-}
-
-.driver-benefit-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-lg);
-  background-color: var(--color-accent-subtle);
-  color: var(--color-accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.driver-benefit-title {
-  font-family: var(--font-body);
-  font-size: 1rem;
+.faq-title {
+  font-family: var(--font-heading);
+  font-size: clamp(2rem, 3.8vw, 2.625rem);
   font-weight: 700;
+  line-height: 1.25;
   color: var(--color-text-primary);
-  margin-bottom: 2px;
+  margin-bottom: var(--space-8);
 }
 
-.driver-benefit-desc {
-  font-size: 0.8125rem;
-  color: var(--color-text-secondary);
-  line-height: 1.5;
-}
-
-/* Driver Requirements Checklist Card */
-.driver-onboard-card {
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-2xl);
-  padding: var(--space-8);
-  box-shadow: var(--shadow-panel);
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.req-check-list {
-  list-style: none;
-  padding: 0;
-  margin: var(--space-5) 0 var(--space-6);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.req-check-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  font-size: 0.875rem;
-  color: var(--color-text-secondary);
-}
-
-.req-check-icon {
-  width: 20px;
-  height: 20px;
-  border-radius: var(--radius-full);
-  background-color: rgba(34, 197, 94, 0.15);
-  color: var(--color-success);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 800;
-  flex-shrink: 0;
-}
-
-/* ------------------------------------------------------------
-   3. ACCESSIBLE FAQ ACCORDION (#faq)
-   ------------------------------------------------------------ */
-.faq-accordion-wrap {
-  max-width: 820px;
-  margin: 0 auto;
+.faq-title .accent-orange {
+  color: var(--color-orange);
 }
 
 .faq-accordion {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  margin-bottom: var(--space-6);
+  width: 100%;
 }
 
 .faq-item {
-  background-color: var(--color-surface);
+  background-color: #FFFFFF;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-xl, 16px);
   overflow: hidden;
-  transition: border-color var(--duration-fast) var(--ease-default),
-              box-shadow var(--duration-fast) var(--ease-default);
+  transition: all var(--transition-fast, 150ms ease);
 }
 
 .faq-item.is-open {
   border-color: var(--color-primary);
-  box-shadow: var(--shadow-medium);
+  box-shadow: 0 4px 16px rgba(31, 59, 135, 0.08);
 }
 
 .faq-question-btn {
@@ -299,18 +72,18 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-5) var(--space-6);
+  padding: var(--space-4) var(--space-5);
   background: transparent;
   border: none;
   text-align: left;
   cursor: pointer;
   color: var(--color-text-primary);
-  font-family: var(--font-body);
+  font-family: var(--font-heading);
   font-size: 1.0625rem;
   font-weight: 700;
   line-height: 1.4;
   gap: var(--space-4);
-  transition: color var(--duration-fast) var(--ease-default);
+  transition: color var(--transition-fast, 150ms ease);
 }
 
 .faq-question-btn:hover {
@@ -323,149 +96,141 @@
 }
 
 .faq-chevron {
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-full);
-  background-color: var(--color-surface-low);
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full, 9999px);
+  background-color: var(--color-background);
   border: 1px solid var(--color-border);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: var(--color-text-muted);
-  transition: transform var(--duration-fast) var(--ease-default),
-              background-color var(--duration-fast) var(--ease-default),
-              color var(--duration-fast) var(--ease-default);
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  transition: transform var(--transition-fast, 150ms ease),
+              background-color var(--transition-fast, 150ms ease),
+              color var(--transition-fast, 150ms ease);
 }
 
 .faq-item.is-open .faq-chevron {
-  transform: rotate(180deg);
-  background-color: var(--color-primary);
+  transform: rotate(45deg);
+  background-color: var(--color-orange);
+  border-color: var(--color-orange);
   color: #FFFFFF;
 }
 
 .faq-answer-panel {
   display: none;
-  padding: 0 var(--space-6) var(--space-6);
+  padding: 0 var(--space-5) var(--space-5);
   color: var(--color-text-secondary);
+  font-family: var(--font-body);
   font-size: 0.9375rem;
-  line-height: 1.65;
-  border-top: 1px solid transparent;
+  line-height: 1.6;
 }
 
 .faq-item.is-open .faq-answer-panel {
   display: block;
 }
 
-/* ------------------------------------------------------------
-   4. HOTLINE ASSISTANCE BANNER
-   ------------------------------------------------------------ */
-.hotline-banner-wrap {
-  margin-top: var(--space-12);
-}
-
+/* Hotline Banner Card */
 .hotline-banner {
-  background: linear-gradient(135deg, var(--color-brand-primary) 0%, #172554 100%);
-  border-radius: var(--radius-2xl);
-  padding: var(--space-8);
-  color: #FFFFFF;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-6);
-  box-shadow: var(--shadow-panel);
-}
-
-@media (max-width: 900px) {
-  .hotline-banner {
-    flex-direction: column;
-    text-align: center;
-    padding: var(--space-6);
-  }
+  gap: var(--space-4);
+  background-color: #FFFFFF;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl, 16px);
+  padding: var(--space-4) var(--space-6);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .hotline-banner-content {
-  max-width: 580px;
-}
-
-.hotline-badge {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: 4px 12px;
-  background-color: rgba(249, 115, 22, 0.2);
-  border: 1px solid rgba(249, 115, 22, 0.4);
-  border-radius: var(--radius-full);
-  color: #FDBA74;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: var(--space-3);
+  gap: var(--space-3);
 }
 
 .hotline-title {
-  font-family: var(--font-display);
-  font-size: 1.625rem;
-  font-weight: 800;
-  color: #FFFFFF;
-  margin-bottom: var(--space-2);
-  line-height: 1.2;
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-bottom: 2px;
 }
 
 .hotline-desc {
-  font-size: 0.9375rem;
-  color: #CBD5E1;
-  line-height: 1.5;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
 }
 
 .hotline-actions {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  min-width: 240px;
-}
-
-@media (max-width: 900px) {
-  .hotline-actions {
-    width: 100%;
-  }
+  flex-shrink: 0;
 }
 
 .hotline-primary-cta {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: var(--space-2);
-  padding: 14px 24px;
-  background-color: var(--color-accent);
-  color: var(--color-accent-on);
-  font-family: var(--font-body);
-  font-size: 1.125rem;
-  font-weight: 800;
-  border-radius: var(--radius-xl);
+  padding: 8px 20px;
+  background-color: var(--color-primary);
+  color: #FFFFFF;
+  border-radius: var(--radius-pill, 9999px);
+  font-family: var(--font-heading);
+  font-size: 0.9375rem;
+  font-weight: 700;
   text-decoration: none;
-  box-shadow: var(--shadow-medium);
-  transition: all var(--duration-fast) var(--ease-default);
+  transition: background-color var(--transition-fast, 150ms ease);
 }
 
 .hotline-primary-cta:hover {
-  background-color: #FB923C;
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-high);
+  background-color: var(--color-orange);
 }
 
-.hotline-secondary-link {
-  display: inline-flex;
-  align-items: center;
+/* Right Column: Moving Illustration */
+.faq-image-col {
+  flex: 1 1 46%;
+  display: flex;
   justify-content: center;
-  font-size: 0.875rem;
-  color: #94A3B8;
-  text-decoration: none;
-  transition: color var(--duration-fast) var(--ease-default);
+  align-items: flex-start;
 }
 
-.hotline-secondary-link:hover {
-  color: #FFFFFF;
+.faq-moving-img {
+  width: 100%;
+  max-width: 520px;
+  height: auto;
+  border-radius: 48px;
+  object-fit: cover;
+  box-shadow: var(--shadow-panel);
 }
 
+@media (max-width: 960px) {
+  .faq-inner {
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+  .faq-questions-col,
+  .faq-image-col {
+    width: 100%;
+  }
+  .faq-moving-img {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .hotline-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+  }
+  .hotline-actions {
+    width: 100%;
+  }
+  .hotline-primary-cta {
+    width: 100%;
+    justify-content: center;
+  }
+}
