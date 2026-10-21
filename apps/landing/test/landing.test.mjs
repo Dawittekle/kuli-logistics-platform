@@ -32,19 +32,23 @@ describe('Kulli Landing Page Production Suite', () => {
     assert.match(html, /hero-home-moving\.jpg/);
     assert.match(html, /Book Now/);
 
-    // Section 3: Trust Strip
-    assert.match(html, /id="trust"/);
-    assert.match(html, /5,000\+/);
-    assert.match(html, /450\+/);
-    assert.match(html, /&lt; 28 min/);
-    assert.match(html, /100%/);
+    // Section 3: Drive & Earn Section (Phase 3)
+    assert.match(html, /id="drivers"/);
+    assert.match(html, /Drive when you want, Make/);
+    assert.match(html, /accent-orange/);
+    assert.match(html, /driver-cabin\.png/);
+    assert.match(html, /Get Started/);
+    assert.match(html, /Sign in/);
 
-    // Section 4: How It Works
-    assert.match(html, /id="how-it-works"/);
-    assert.match(html, /Select Route &amp; Load/);
-    assert.match(html, /Instant Guaranteed Quote/);
-    assert.match(html, /Live Cargo Tracking/);
-    assert.match(html, /Inspect &amp; Pay on Delivery/);
+    // Section 4: Our Services Section (Phase 3)
+    assert.match(html, /id="services"/);
+    assert.match(html, /Our Services/);
+    assert.match(html, /All moves can be scheduled in advance, or same day!/);
+    assert.match(html, /Home and Office Moves/);
+    assert.match(html, /B2B Logistics/);
+    assert.match(html, /Construction and Jobsites/);
+    assert.match(html, /shipment-truck\.png/);
+    assert.match(html, /Learn more/);
 
     // Section 5: Fleet Catalog
     assert.match(html, /id="fleet"/);
@@ -55,19 +59,7 @@ describe('Kulli Landing Page Production Suite', () => {
     assert.match(html, /Bedford KB26/);
     assert.match(html, /Isuzu NPR/);
 
-    // Section 6: Commercial B2B
-    assert.match(html, /id="business"/);
-    assert.match(html, /Multi-Stop Route Dispatch/);
-    assert.match(html, /Digital Proof of Delivery/);
-    assert.match(html, /Monthly Corporate Invoicing/);
-
-    // Section 7: Drivers & Partners
-    assert.match(html, /id="drivers"/);
-    assert.match(html, /Keep the Full Fare on Day 1/);
-    assert.match(html, /Smart Return Loads/);
-    assert.match(html, /data-action="open-driver-signup"/);
-
-    // Section 8: Apps Download Center
+    // Section 6: Apps Download Center
     assert.match(html, /id="apps"/);
     assert.match(html, /Kulli Customer App/);
     assert.match(html, /Kulli Driver Partner App/);
@@ -76,13 +68,13 @@ describe('Kulli Landing Page Production Suite', () => {
     assert.match(html, /Google Play/);
     assert.match(html, /App Store/);
 
-    // Section 9: FAQ Accordion & Hotline
+    // Section 7: FAQ Accordion & Hotline
     assert.match(html, /id="faq"/);
     assert.match(html, /class="faq-accordion"/);
     assert.match(html, /class="hotline-banner"/);
     assert.match(html, /8492/);
 
-    // Section 10: Footer
+    // Section 8: Footer
     assert.match(html, /class="kulli-footer"/);
     assert.match(html, /Bole/);
     assert.match(html, /Merkato/);
