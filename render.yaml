@@ -1,7 +1,6 @@
 services:
-  - type: web
+  - type: static
     name: kuli-logistics-landing
-    runtime: static
     buildCommand: npm install && npm run build:landing
     staticPublishPath: ./apps/landing/dist
     envVars:
@@ -21,4 +20,3 @@ services:
       - type: rewrite
         source: /about
         destination: /about.html
-
