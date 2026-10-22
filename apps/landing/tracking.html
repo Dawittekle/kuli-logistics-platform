@@ -40,160 +40,169 @@
 
   <main class="tracking-page-wrap" id="main-content">
     <div class="booking-main-container">
-      
-      <!-- Order Header Card -->
+
+      <!-- Screen 7: Booking Confirmation Hero Banner -->
+      <div class="confirmation-hero-banner" id="confirmation-banner" role="region" aria-label="Booking Confirmation Notice">
+        <div class="confirmation-top-row">
+          <div>
+            <div class="confirmation-badge-row">
+              <span class="confirmation-tag">✓ Confirmed &amp; Dispatched</span>
+              <div class="confirmation-ref-pill">
+                <span>Ref:</span>
+                <span id="hero-order-ref">KL-2026-8492</span>
+                <button type="button" class="btn-copy-ref" id="btn-copy-ref" title="Copy tracking reference number">
+                  📋 Copy
+                </button>
+              </div>
+            </div>
+            <h1 class="confirmation-title">Your truck is on the way!</h1>
+            <p class="confirmation-subtitle">
+              Driver partner Abebe Tadesse has accepted your dispatch. Tracking is live across Addis Ababa arterial corridors.
+            </p>
+          </div>
+
+          <div class="confirmation-actions-row">
+            <button type="button" class="btn btn-secondary" id="btn-print-receipt" onclick="window.print()" style="font-size: 0.8125rem;">
+              🖨️ Print Manifest &amp; Receipt
+            </button>
+            <a href="/booking.html" class="btn btn-secondary" style="font-size: 0.8125rem;">
+              + Book Another Move
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Simulation Controls Toolbar (Prototype Testing Feature) -->
+      <div class="tracking-sim-toolbar" aria-label="Interactive Prototype Simulation Controls">
+        <div class="sim-label-group">
+          <span style="font-size: 1.1rem;">🎮</span>
+          <span style="font-size: 0.8125rem; font-weight: 700; color: #142553;">Dispatch Lifecycle Simulation:</span>
+          <span class="sim-badge">Visual Prototype</span>
+        </div>
+        <div class="sim-buttons-group">
+          <button type="button" class="btn-sim-control" id="btn-sim-prev" title="Step backward">
+            ⏮️ Previous
+          </button>
+          <button type="button" class="btn-sim-control is-primary" id="btn-sim-next" title="Step forward">
+            ▶️ Advance Stage
+          </button>
+          <button type="button" class="btn-sim-control" id="btn-sim-autoplay" title="Toggle automatic status transition">
+            ⚡ Auto-Play Sim
+          </button>
+          <button type="button" class="btn-sim-control" id="btn-sim-reset" title="Reset to driver assigned state">
+            🔄 Reset
+          </button>
+        </div>
+      </div>
+
+      <!-- Order Header Brief Bar -->
       <div class="tracking-header-card">
         <div>
-          <span style="font-size: 0.8125rem; color: #71717A; display: block; margin-bottom: 0.25rem;">Shipment Tracking</span>
+          <span style="font-size: 0.8125rem; color: #71717A; display: block; margin-bottom: 0.25rem;">Active Corridor Shipment</span>
           <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
             <span class="tracking-ref-badge" id="tracking-order-ref">KL-2026-8492</span>
-            <span class="tracking-status-pill" id="tracking-status-badge">⚡ Matching Nearby Drivers</span>
+            <span class="tracking-status-pill" id="tracking-status-badge">⚡ Driver Assigned</span>
+            <span style="font-size: 0.875rem; font-weight: 600; color: #142553;">
+              <span id="tracking-origin-brief">Bole Medhanialem</span> → <span id="tracking-dest-brief">Merkato Wholesale</span>
+            </span>
           </div>
         </div>
 
-        <div style="display: flex; gap: 0.75rem; align-items: center;">
-          <a href="/booking.html" class="btn btn-secondary" style="font-size: 0.875rem;">Book Another Move</a>
-          <button type="button" class="btn btn-secondary" style="font-size: 0.875rem;" onclick="window.print()">Receipt</button>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <span style="font-size: 0.75rem; color: #15803D; font-weight: 700;">● Live GPS Synchronized</span>
         </div>
       </div>
 
       <!-- Tracking Grid -->
       <div class="tracking-grid">
-        
-        <!-- Left: Map & Driver Details -->
+
+        <!-- Left Column: Map & Driver Details -->
         <div>
-          <!-- Large Tracking Map -->
+          <!-- Large Live Tracking Map -->
           <div class="route-map-card" style="margin-bottom: 1.5rem;">
             <div class="map-header">
               <span class="map-title">
-                <span>📍</span> Live Transit Route
+                <span>📍</span> Real-Time Transit Map
               </span>
-              <span style="font-size: 0.75rem; color: #15803D; font-weight: 600;">● Active GPS Simulation</span>
+              <span style="font-size: 0.75rem; color: #15803D; font-weight: 700;">● Active GPS Tracking</span>
             </div>
             <div class="map-canvas-container" style="height: 320px;">
               <div class="map-bg-grid"></div>
               <svg class="map-svg-overlay" viewBox="0 0 500 320" preserveAspectRatio="none">
+                <!-- Arterial Road Polyline -->
                 <path d="M 100 240 Q 250 140 400 80" class="map-route-line" stroke-width="5" />
+
+                <!-- Origin Marker (Bole) -->
                 <circle cx="100" cy="240" r="10" fill="#15803D" />
                 <circle cx="100" cy="240" r="20" fill="#15803D" fill-opacity="0.2" />
+                <text x="100" y="270" text-anchor="middle" font-size="11" font-weight="700" fill="#15803D">Pickup: Bole</text>
+
+                <!-- Destination Marker (Merkato) -->
                 <rect x="390" y="70" width="20" height="20" rx="4" fill="#B91C1C" />
-                <circle cx="250" cy="140" r="12" fill="#FFAD61" />
-                <text x="250" y="145" text-anchor="middle" font-size="12">🚚</text>
+                <rect x="385" y="65" width="30" height="30" rx="6" fill="#B91C1C" fill-opacity="0.15" />
+                <text x="400" y="112" text-anchor="middle" font-size="11" font-weight="700" fill="#B91C1C">Drop-off: Merkato</text>
+
+                <!-- Moving Truck Marker -->
+                <g id="map-truck-marker-group" transform="translate(175, 190)" style="transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);">
+                  <circle cx="0" cy="0" r="14" fill="#FFAD61" />
+                  <circle cx="0" cy="0" r="22" fill="#FFAD61" fill-opacity="0.3" />
+                  <text x="0" y="5" text-anchor="middle" font-size="13">🚚</text>
+                </g>
               </svg>
             </div>
             <div class="map-metrics-bar">
               <div class="metric-box">
-                <span class="metric-val">Bole Medhanialem</span>
-                <span class="metric-lbl">Pickup</span>
+                <span class="metric-val" id="tracking-origin-metric">Bole Medhanialem</span>
+                <span class="metric-lbl">Pickup Location</span>
               </div>
               <div style="width: 1px; height: 28px; background: #E4E4E7;"></div>
               <div class="metric-box">
-                <span class="metric-val">Merkato Wholesale</span>
-                <span class="metric-lbl">Destination</span>
+                <span class="metric-val" id="tracking-dest-metric">Merkato Wholesale</span>
+                <span class="metric-lbl">Drop-off Location</span>
               </div>
               <div style="width: 1px; height: 28px; background: #E4E4E7;"></div>
               <div class="metric-box">
-                <span class="metric-val">~25 mins</span>
-                <span class="metric-lbl">Est. Arrival</span>
+                <span class="metric-val" id="tracking-eta-val">~25 min away</span>
+                <span class="metric-lbl">Driver Status</span>
               </div>
             </div>
           </div>
 
-          <!-- Driver Profile Card -->
-          <div class="step-card">
-            <h3 style="font-size: 1rem; font-weight: 700; color: #142553; margin: 0 0 0.75rem 0;">Assigned Driver &amp; Truck</h3>
+          <!-- Driver & Vehicle Profile Card -->
+          <div class="step-card" style="margin-bottom: 1.5rem;">
+            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.75rem;">
+              <h3 style="font-size: 1rem; font-weight: 700; color: #142553; margin: 0;">Assigned Driver &amp; Truck</h3>
+              <span style="font-size:0.75rem; font-weight:700; color:#15803D;">● Driver Online</span>
+            </div>
+
             <div class="driver-profile-card">
               <div class="driver-avatar">AT</div>
               <div style="flex: 1;">
                 <div style="display: flex; justify-content: space-between; align-items: baseline;">
-                  <h4 style="font-size: 1rem; font-weight: 700; margin: 0; color: #142553;">Abebe Tadesse</h4>
+                  <h4 style="font-size: 1.05rem; font-weight: 800; margin: 0; color: #142553;">Abebe Tadesse</h4>
                   <span style="font-size: 0.8125rem; font-weight: 700; color: #B45309;">★ 4.9 (342 moves)</span>
                 </div>
-                <p style="font-size: 0.875rem; color: #71717A; margin: 0.25rem 0 0 0;">
-                  Isuzu NPR Medium Box Truck • Plate: <strong>3-A48291 AA</strong>
+                <p style="font-size: 0.8125rem; color: #64748B; margin: 0.25rem 0 0 0;">
+                  <span id="manifest-vehicle-text">Medium Flatbed / Box Truck (Isuzu NPR)</span> • Plate: <strong>ET 3-A48291 AA</strong>
                 </p>
               </div>
             </div>
+
             <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
-              <a href="tel:+251911000000" class="btn btn-primary" style="flex: 1; justify-content: center; font-size: 0.875rem;">
+              <a href="tel:+251911482910" class="btn btn-primary" id="btn-call-driver" style="flex: 1; justify-content: center; font-size: 0.875rem;">
                 📞 Call Driver
               </a>
-              <button type="button" class="btn btn-secondary" style="flex: 1; justify-content: center; font-size: 0.875rem;" onclick="alert('In-app driver messaging will connect to MongoDB messages in backend phase.')">
-                💬 Message
+              <button type="button" class="btn btn-secondary" id="btn-open-chat" style="flex: 1; justify-content: center; font-size: 0.875rem;">
+                💬 Message Driver
               </button>
             </div>
           </div>
 
-        </div>
-
-        <!-- Right: Status Stepper & Manifest Brief -->
-        <div style="display: flex; flex-direction: column; gap: 1.5rem;">
-          
-          <!-- Canonical Status Timeline Card -->
-          <div class="step-card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-              <h3 style="font-size: 1rem; font-weight: 700; color: #142553; margin: 0;">Status Timeline</h3>
-              <button type="button" id="btn-advance-status" class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">
-                Demo: Advance Status ⏭️
-              </button>
-            </div>
-
-            <div style="display: flex; flex-direction: column; gap: 1rem; position: relative;">
-              <div class="timeline-step is-done" style="display: flex; gap: 0.75rem; align-items: start;">
-                <span style="color: #15803D; font-weight: 700;">✓</span>
-                <div>
-                  <strong style="font-size: 0.875rem; color: #142553;">1. Booking Request Received</strong>
-                  <p style="font-size: 0.75rem; color: #71717A; margin: 2px 0 0 0;">Request logged in central dispatch</p>
-                </div>
-              </div>
-
-              <div class="timeline-step is-active" id="status-step-2" style="display: flex; gap: 0.75rem; align-items: start;">
-                <span style="color: #B45309; font-weight: 700;">●</span>
-                <div>
-                  <strong style="font-size: 0.875rem; color: #B45309;">2. Driver Accepted Offer</strong>
-                  <p style="font-size: 0.75rem; color: #71717A; margin: 2px 0 0 0;">Abebe Tadesse confirmed the dispatch</p>
-                </div>
-              </div>
-
-              <div class="timeline-step" id="status-step-3" style="display: flex; gap: 0.75rem; align-items: start; opacity: 0.5;">
-                <span style="color: #A1A1AA; font-weight: 700;">○</span>
-                <div>
-                  <strong style="font-size: 0.875rem; color: #71717A;">3. En Route to Pickup</strong>
-                  <p style="font-size: 0.75rem; color: #71717A; margin: 2px 0 0 0;">Truck approaching Bole pickup point</p>
-                </div>
-              </div>
-
-              <div class="timeline-step" id="status-step-4" style="display: flex; gap: 0.75rem; align-items: start; opacity: 0.5;">
-                <span style="color: #A1A1AA; font-weight: 700;">○</span>
-                <div>
-                  <strong style="font-size: 0.875rem; color: #71717A;">4. Loading at Origin</strong>
-                  <p style="font-size: 0.75rem; color: #71717A; margin: 2px 0 0 0;">Loading items with 1 helper</p>
-                </div>
-              </div>
-
-              <div class="timeline-step" id="status-step-5" style="display: flex; gap: 0.75rem; align-items: start; opacity: 0.5;">
-                <span style="color: #A1A1AA; font-weight: 700;">○</span>
-                <div>
-                  <strong style="font-size: 0.875rem; color: #71717A;">5. In Transit to Destination</strong>
-                  <p style="font-size: 0.75rem; color: #71717A; margin: 2px 0 0 0;">Heading towards Merkato Wholesale</p>
-                </div>
-              </div>
-
-              <div class="timeline-step" id="status-step-6" style="display: flex; gap: 0.75rem; align-items: start; opacity: 0.5;">
-                <span style="color: #A1A1AA; font-weight: 700;">○</span>
-                <div>
-                  <strong style="font-size: 0.875rem; color: #71717A;">6. Delivery Completed</strong>
-                  <p style="font-size: 0.75rem; color: #71717A; margin: 2px 0 0 0;">Unloaded &amp; cash/telebirr settlement</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Dispatch Support Box -->
+          <!-- Central Dispatch Assistance -->
           <div style="background: #FFF8E6; border: 1px solid #FFE082; border-radius: 12px; padding: 1.25rem;">
             <h4 style="font-size: 0.9375rem; font-weight: 700; color: #795548; margin: 0 0 0.25rem 0;">Need dispatch support?</h4>
             <p style="font-size: 0.8125rem; color: #5D4037; margin: 0 0 0.75rem 0;">
-              Call Kulli central dispatch directly for changes, route adjustments, or questions.
+              Kulli central dispatch coordinators are on standby for gate access adjustments or route assistance.
             </p>
             <a href="tel:8492" class="btn btn-secondary" style="font-weight: 700; width: 100%; justify-content: center;">
               📞 Call Central Dispatch: 8492
@@ -202,9 +211,156 @@
 
         </div>
 
+        <!-- Right Column: Status Stepper & Manifest Brief -->
+        <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+
+          <!-- Canonical 6-Stage Timeline Card -->
+          <div class="step-card">
+            <h3 style="font-size: 1rem; font-weight: 700; color: #142553; margin: 0 0 1.25rem 0;">
+              Live Dispatch Timeline
+            </h3>
+
+            <div class="tracking-timeline-wrap" id="tracking-timeline">
+              <div class="tracking-timeline-line"></div>
+              <div class="tracking-timeline-progress-fill" id="timeline-progress-fill"></div>
+
+              <!-- Stage 1 -->
+              <div class="tracking-step-item is-done" id="tracking-step-1">
+                <div class="tracking-step-node">✓</div>
+                <div class="tracking-step-header">
+                  <span class="tracking-step-title">1. Booking Request Received</span>
+                  <span class="tracking-step-time">10:45 AM</span>
+                </div>
+                <p class="tracking-step-desc">Order registered in central dispatch system</p>
+              </div>
+
+              <!-- Stage 2 -->
+              <div class="tracking-step-item is-active" id="tracking-step-2">
+                <div class="tracking-step-node">●</div>
+                <div class="tracking-step-header">
+                  <span class="tracking-step-title">2. Driver Assigned &amp; Confirmed</span>
+                  <span class="tracking-step-time">10:47 AM</span>
+                </div>
+                <p class="tracking-step-desc">Abebe Tadesse confirmed dispatch offer</p>
+              </div>
+
+              <!-- Stage 3 -->
+              <div class="tracking-step-item" id="tracking-step-3" style="opacity: 0.45;">
+                <div class="tracking-step-node">3</div>
+                <div class="tracking-step-header">
+                  <span class="tracking-step-title">3. En Route to Pickup</span>
+                  <span class="tracking-step-time">ETA ~12 min</span>
+                </div>
+                <p class="tracking-step-desc">Truck navigating towards Bole pickup location</p>
+              </div>
+
+              <!-- Stage 4 -->
+              <div class="tracking-step-item" id="tracking-step-4" style="opacity: 0.45;">
+                <div class="tracking-step-node">4</div>
+                <div class="tracking-step-header">
+                  <span class="tracking-step-title">4. Loading &amp; Cargo Inspection</span>
+                  <span class="tracking-step-time">Estimated</span>
+                </div>
+                <p class="tracking-step-desc">Porters loading cargo &amp; securing tie-downs</p>
+              </div>
+
+              <!-- Stage 5 -->
+              <div class="tracking-step-item" id="tracking-step-5" style="opacity: 0.45;">
+                <div class="tracking-step-node">5</div>
+                <div class="tracking-step-header">
+                  <span class="tracking-step-title">5. In Transit to Destination</span>
+                  <span class="tracking-step-time">Estimated</span>
+                </div>
+                <p class="tracking-step-desc">En route via ring road to Merkato Wholesale</p>
+              </div>
+
+              <!-- Stage 6 -->
+              <div class="tracking-step-item" id="tracking-step-6" style="opacity: 0.45;">
+                <div class="tracking-step-node">6</div>
+                <div class="tracking-step-header">
+                  <span class="tracking-step-title">6. Delivered &amp; Settled</span>
+                  <span class="tracking-step-time">Pending</span>
+                </div>
+                <p class="tracking-step-desc">Goods safely unloaded &amp; cash/Telebirr settlement</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Order Manifest & Fare Receipt Card -->
+          <div class="order-manifest-card">
+            <h3 style="font-size: 1rem; font-weight: 700; color: #142553; margin: 0 0 0.75rem 0;">
+              Order Manifest &amp; Fare Summary
+            </h3>
+
+            <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.8125rem;">
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: #64748B;">Cargo Manifest:</span>
+                <strong id="manifest-cargo-tally" style="color: #142553;">13 items (5.8 m³) • ~305 kg</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: #64748B;">Loading Labor:</span>
+                <span id="manifest-labor-text" style="color: #142553; font-weight: 600;">Driver + 1 Helper</span>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: #64748B;">Contact Route:</span>
+                <span id="manifest-contacts-text" style="color: #142553;">Dawit Haile → Meron Tadesse</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding-top: 0.5rem; border-top: 1px dashed #CBD5E1; margin-top: 0.25rem; align-items: baseline;">
+                <span style="font-weight: 700; color: #142553;">Total Due on Delivery:</span>
+                <span id="manifest-total-fare" style="font-size: 1.15rem; font-weight: 800; color: #1F3B87;">2,660 ETB</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.25rem;">
+                <span style="font-size: 0.75rem; color: #15803D; font-weight: 700;">💳 Pay via Cash or Telebirr</span>
+                <span style="font-size: 0.6875rem; color: #71717A; background: #F1F5F9; padding: 2px 6px; border-radius: 4px;">Unpaid (COD)</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
       </div>
     </div>
   </main>
+
+  <!-- In-App Driver Chat Modal -->
+  <div class="chat-modal" id="driver-chat-modal" role="dialog" aria-modal="true" aria-labelledby="chat-driver-title">
+    <div class="chat-modal-backdrop" id="chat-backdrop"></div>
+    <div class="chat-modal-dialog">
+      <div class="chat-modal-header">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <div style="width: 10px; height: 10px; border-radius: 50%; background: #10B981;"></div>
+          <div>
+            <h4 id="chat-driver-title" style="margin: 0; font-size: 0.9375rem; font-weight: 700; color: #FFFFFF;">
+              Abebe Tadesse (Driver)
+            </h4>
+            <span style="font-size: 0.6875rem; color: rgba(255, 255, 255, 0.75);">Isuzu NPR • Plate 3-A48291 AA</span>
+          </div>
+        </div>
+        <button type="button" id="btn-close-chat" style="background: none; border: none; color: #FFFFFF; font-size: 1.25rem; cursor: pointer;">
+          ✕
+        </button>
+      </div>
+
+      <div class="chat-messages-body" id="chat-messages-body">
+        <div class="chat-bubble from-driver">
+          Hello! I have accepted your dispatch offer and I am en route to Bole Medhanialem.
+        </div>
+      </div>
+
+      <div class="chat-quick-replies">
+        <button type="button" class="btn-quick-reply">I am ready at the gate</button>
+        <button type="button" class="btn-quick-reply">Call me when you arrive</button>
+        <button type="button" class="btn-quick-reply">Elevator is reserved</button>
+      </div>
+
+      <div class="chat-input-bar">
+        <input type="text" class="chat-text-input" id="chat-input" placeholder="Type a message to your driver..." />
+        <button type="button" class="btn btn-primary" id="btn-send-chat" style="padding: 0.5rem 1rem; font-size: 0.8125rem;">
+          Send
+        </button>
+      </div>
+    </div>
+  </div>
 
   <footer class="kulli-footer" role="contentinfo">
     <div class="footer-container">
@@ -230,46 +386,6 @@
     </div>
   </footer>
 
-  <script>
-    // Read ref query param
-    const params = new URLSearchParams(window.location.search);
-    const ref = params.get('ref');
-    if (ref) {
-      const refEl = document.getElementById('tracking-order-ref');
-      if (refEl) refEl.textContent = ref;
-    }
-
-    // Status simulation
-    let currentStatusIndex = 2;
-    const statusTitles = [
-      'Booking Request Received',
-      '⚡ Driver Accepted Offer',
-      '🚚 En Route to Pickup',
-      '📦 Loading at Origin',
-      '🛣️ In Transit to Destination',
-      '✅ Delivery Completed'
-    ];
-
-    const advanceBtn = document.getElementById('btn-advance-status');
-    advanceBtn?.addEventListener('click', () => {
-      currentStatusIndex = (currentStatusIndex % 6) + 1;
-      const badge = document.getElementById('tracking-status-badge');
-      if (badge) {
-        badge.textContent = statusTitles[currentStatusIndex - 1];
-      }
-
-      for (let i = 2; i <= 6; i++) {
-        const stepEl = document.getElementById(`status-step-${i}`);
-        if (stepEl) {
-          stepEl.style.opacity = i <= currentStatusIndex ? '1' : '0.5';
-          const icon = stepEl.querySelector('span');
-          if (icon) {
-            icon.textContent = i < currentStatusIndex ? '✓' : (i === currentStatusIndex ? '●' : '○');
-            icon.style.color = i < currentStatusIndex ? '#15803D' : (i === currentStatusIndex ? '#B45309' : '#A1A1AA');
-          }
-        }
-      }
-    });
-  </script>
+  <script type="module" src="/src/scripts/tracking.ts"></script>
 </body>
 </html>

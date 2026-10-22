@@ -312,17 +312,31 @@ describe('Kulli Landing Page Production Suite', () => {
     assert.match(html, /id="auth-modal-step-success"/);
   });
 
-  it('dist/tracking.html is compiled and contains real-time status tracker and driver card', () => {
+  it('dist/tracking.html is compiled and contains real-time status tracker, simulator, and driver card', () => {
     const trackingPath = join(landingRoot, 'dist/tracking.html');
     assert.ok(existsSync(trackingPath), 'dist/tracking.html must exist after vite build');
 
     const html = readFileSync(trackingPath, 'utf-8');
     assert.match(html, /<title>Track Shipment \| Kulli Logistics Addis Ababa<\/title>/);
+    assert.match(html, /id="confirmation-banner"/);
+    assert.match(html, /id="hero-order-ref"/);
+    assert.match(html, /id="btn-copy-ref"/);
+    assert.match(html, /id="btn-sim-prev"/);
+    assert.match(html, /id="btn-sim-next"/);
+    assert.match(html, /id="btn-sim-autoplay"/);
+    assert.match(html, /id="btn-sim-reset"/);
     assert.match(html, /id="tracking-order-ref"/);
     assert.match(html, /id="tracking-status-badge"/);
+    assert.match(html, /id="map-truck-marker-group"/);
     assert.match(html, /class="driver-profile-card"/);
     assert.match(html, /Abebe Tadesse/);
-    assert.match(html, /class="timeline-step/);
-    assert.match(html, /id="btn-advance-status"/);
+    assert.match(html, /id="btn-open-chat"/);
+    assert.match(html, /class="tracking-timeline-wrap"/);
+    assert.match(html, /id="timeline-progress-fill"/);
+    assert.match(html, /id="tracking-step-1"/);
+    assert.match(html, /id="tracking-step-6"/);
+    assert.match(html, /class="tracking-step-node"/);
+    assert.match(html, /id="manifest-cargo-tally"/);
+    assert.match(html, /id="driver-chat-modal"/);
   });
 });
