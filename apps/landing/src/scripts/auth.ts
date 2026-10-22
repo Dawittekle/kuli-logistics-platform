@@ -8,6 +8,8 @@ export function initAuthInteractions(): void {
   initPasswordToggles();
   initOtpInputs();
   initOtpTimer();
+  initAuthForms();
+  initRedirectContext();
 }
 
 /**
@@ -198,6 +200,73 @@ function initOtpTimer(): void {
   }
 
   updateTimer();
+}
+
+/**
+ * 5. Handle Auth Form Submission & Redirect Parameter
+ */
+function initAuthForms(): void {
+  const forms = document.querySelectorAll<HTMLFormElement>('.auth-form');
+  forms.forEach((form) => {
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const params = new URLSearchParams(window.location.search);
+      const redirect = params.get('redirect') || '/';
+
+      // Save an active customer session
+      const phoneInput = form.querySelector<HTMLInputElement>('input[type="tel"]') ||
+                         form.querySelector<HTMLInputElement>('input[name="phone"]') ||
+                         form.querySelector<HTMLInputElement>('#login-email');
+      const nameInput = form.querySelector<HTMLInputElement>('input[name="firstName"]');
+      const phone = phoneInput ? phoneInput.value.trim() : '+251 91 123 4567';
+      const name = nameInput ? nameInput.value.trim() : 'Customer Shipper';
+
+      try {
+        localStorage.setItem('kuli_auth_user', JSON.stringify({
+          phone: phone || '+251 91 123 4567',
+          name: name || 'Customer Shipper',
+          role: 'client',
+          authenticatedAt: new Date().toISOString()
+        }));
+      } catch {
+        // storage disabled fallback
+      }
+
+      window.location.href = redirect;
+    });
+  });
+}
+
+/**
+ * 6. Preserve Redirect Queries Across Auth Switch Links
+ */
+function initRedirectContext(): void {
+  const params = new URLSearchParams(window.location.search);
+  const redirect = params.get('redirect');
+  if (!redirect) return;
+
+  // Append redirect parameter to switch links
+  document.querySelectorAll<HTMLAnchorElement>('.auth-switch-link').forEach((link) => {
+    try {
+      const url = new URL(link.href, window.location.origin);
+      url.searchParams.set('redirect', redirect);
+      link.href = url.pathname + url.search;
+    } catch {
+      // fallback
+    }
+  });
+
+  // Display notice if coming from booking
+  if (redirect.includes('tracking') || params.get('from') === 'booking') {
+    const heading = document.querySelector('.auth-heading');
+    if (heading && !document.getElementById('auth-booking-context-banner')) {
+      const banner = document.createElement('div');
+      banner.id = 'auth-booking-context-banner';
+      banner.style.cssText = 'background: #EFF6FF; border: 1px solid #BFDBFE; color: #1D4ED8; font-size: 0.8125rem; font-weight: 600; padding: 0.5rem 0.85rem; border-radius: 8px; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;';
+      banner.innerHTML = '<span>📦</span> <span>Complete registration to confirm your shipment booking and view live GPS tracking.</span>';
+      heading.parentNode?.insertBefore(banner, heading);
+    }
+  }
 }
 
 // Auto-run if running on an auth page

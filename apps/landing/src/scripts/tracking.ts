@@ -128,10 +128,10 @@ export class TrackingController {
           totalItemsCount: draft.totalItemsCount || 13,
           totalVolumeM3: draft.totalVolumeM3 || 5.8,
           totalWeightKg: draft.totalWeightKg || 305,
-          senderName: draft.senderName || 'Dawit Haile',
-          senderPhone: draft.senderPhone || '0911234567',
-          recipientName: draft.recipientName || 'Meron Tadesse',
-          recipientPhone: draft.recipientPhone || '0922345678',
+          senderName: draft.senderName || 'Customer Shipper',
+          senderPhone: draft.senderPhone || '—',
+          recipientName: draft.recipientName || 'Consignee',
+          recipientPhone: draft.recipientPhone || '—',
           specialInstructions: draft.specialInstructions
         };
       }
@@ -155,10 +155,10 @@ export class TrackingController {
       totalItemsCount: 13,
       totalVolumeM3: 5.8,
       totalWeightKg: 305,
-      senderName: 'Dawit Haile',
-      senderPhone: '0911234567',
-      recipientName: 'Meron Tadesse',
-      recipientPhone: '0922345678'
+      senderName: 'Customer Shipper',
+      senderPhone: '—',
+      recipientName: 'Consignee',
+      recipientPhone: '—'
     };
   }
 

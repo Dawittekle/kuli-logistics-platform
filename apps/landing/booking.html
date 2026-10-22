@@ -70,16 +70,6 @@
        ============================================================ -->
   <main class="booking-page-wrap" id="main-content">
     <div class="booking-main-container">
-      
-      <!-- Prototype Simulation Notice -->
-      <div class="prototype-banner" role="alert">
-        <div class="prototype-badge">
-          <span>⚡</span> Visual Prototype Mode
-        </div>
-        <div>
-          Interactive shipment booking demonstration using authentic Addis Ababa landmarks and simulated ETB pricing.
-        </div>
-      </div>
 
       <!-- Stepper / Progress Header -->
       <div class="booking-stepper-card">
@@ -511,19 +501,19 @@
               <div class="contacts-split-grid">
                 <div class="form-group" style="margin-bottom: 0;">
                   <label for="sender-name" class="form-label">Sender / Pickup Contact Name</label>
-                  <input type="text" id="sender-name" class="form-input" placeholder="e.g. Dawit Haile" value="Dawit Haile" />
+                  <input type="text" id="sender-name" class="form-input" placeholder="Enter sender full name" value="" />
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
                   <label for="sender-phone" class="form-label">Sender Phone Number</label>
-                  <input type="tel" id="sender-phone" class="form-input" placeholder="e.g. 0911234567" value="0911234567" />
+                  <input type="tel" id="sender-phone" class="form-input" placeholder="091 123 4567" value="" />
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
                   <label for="recipient-name" class="form-label">Recipient / Drop-off Contact Name</label>
-                  <input type="text" id="recipient-name" class="form-input" placeholder="e.g. Meron Tadesse" value="Meron Tadesse" />
+                  <input type="text" id="recipient-name" class="form-input" placeholder="Enter recipient full name" value="" />
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
                   <label for="recipient-phone" class="form-label">Recipient Phone Number</label>
-                  <input type="tel" id="recipient-phone" class="form-input" placeholder="e.g. 0922345678" value="0922345678" />
+                  <input type="tel" id="recipient-phone" class="form-input" placeholder="092 234 5678" value="" />
                 </div>
               </div>
 
@@ -678,13 +668,13 @@
                 <div class="review-contacts-grid">
                   <div class="review-contact-box">
                     <div class="review-contact-role">Sender / Pickup Contact</div>
-                    <div class="review-contact-name" id="review-sender-name">Dawit Haile</div>
-                    <div class="review-contact-phone" id="review-sender-phone">+251 91 123 4567</div>
+                    <div class="review-contact-name" id="review-sender-name">—</div>
+                    <div class="review-contact-phone" id="review-sender-phone">—</div>
                   </div>
                   <div class="review-contact-box">
                     <div class="review-contact-role">Recipient / Drop-off Contact</div>
-                    <div class="review-contact-name" id="review-recipient-name">Meron Tadesse</div>
-                    <div class="review-contact-phone" id="review-recipient-phone">+251 92 234 5678</div>
+                    <div class="review-contact-name" id="review-recipient-name">—</div>
+                    <div class="review-contact-phone" id="review-recipient-phone">—</div>
                   </div>
                 </div>
 
@@ -741,92 +731,79 @@
             </button>
           </div>
 
+          <!-- Wizard Form Navigation Actions Bar -->
+          <div class="wizard-actions-bar" id="wizard-actions-bar">
+            <button type="button" id="btn-booking-prev" class="btn btn-secondary" style="display: none; padding: 0.75rem 1.5rem; font-weight: 700;">
+              ← Back
+            </button>
+            <button type="button" id="btn-booking-next" class="btn btn-primary" style="padding: 0.75rem 2rem; font-weight: 700; font-size: 1rem;">
+              Continue to Cargo Inventory →
+            </button>
+          </div>
+
         </div>
 
-        <!-- Right Column: Sticky Summary & Map -->
-        <aside class="booking-summary-pane" aria-label="Route Summary &amp; Estimated Pricing">
+        <!-- Right Column: Big Google Map with Live Corridor Data -->
+        <aside class="booking-summary-pane" aria-label="Real-Time Google Map Corridor Preview">
           
-          <!-- Interactive Route Map Card -->
-          <div class="route-map-card">
+          <div class="big-map-card" id="route-map-preview">
             <div class="map-header">
               <span class="map-title">
-                <span>🗺️</span> Addis Ababa Route Map
+                <span class="map-icon" aria-hidden="true">📍</span>
+                <span id="map-corridor-title">Live Route &amp; Transit Map</span>
               </span>
-              <span style="font-size:0.75rem; color:#71717A;">Live Preview</span>
+              <span class="map-live-badge">● Google Maps Live</span>
             </div>
-            <div class="map-canvas-container" id="route-map-preview">
-              <div class="map-bg-grid"></div>
-              <svg class="map-svg-overlay" viewBox="0 0 400 240" preserveAspectRatio="none">
-                <!-- Route Polyline (Simulated Addis Arterial Route) -->
-                <path d="M 80 180 Q 200 90 320 60" class="map-route-line" />
-                <!-- Origin Pin (Bole Area) -->
-                <circle cx="80" cy="180" r="8" fill="#15803D" class="map-pin" id="map-pin-origin" />
-                <circle cx="80" cy="180" r="16" fill="#15803D" fill-opacity="0.2" />
-                <!-- Destination Pin (Merkato Area) -->
-                <rect x="312" y="52" width="16" height="16" rx="3" fill="#B91C1C" class="map-pin" id="map-pin-dest" />
-                <rect x="306" y="46" width="28" height="28" rx="6" fill="#B91C1C" fill-opacity="0.15" />
-              </svg>
+
+            <!-- Real-time Location Indicator Bar -->
+            <div class="map-route-bar">
+              <div class="map-route-point">
+                <span class="point-dot is-origin" aria-hidden="true">🟢</span>
+                <div class="point-text">
+                  <span class="point-label">Pickup Origin</span>
+                  <span class="point-val" id="map-display-origin">Bole Medhanialem, Addis Ababa</span>
+                </div>
+              </div>
+              <div class="map-route-arrow" aria-hidden="true">→</div>
+              <div class="map-route-point">
+                <span class="point-dot is-dest" aria-hidden="true">🔴</span>
+                <div class="point-text">
+                  <span class="point-label">Drop-off Destination</span>
+                  <span class="point-val" id="map-display-dest">Merkato Wholesale District, Addis Ababa</span>
+                </div>
+              </div>
             </div>
+
+            <!-- Big Google Map Canvas Iframe -->
+            <div class="big-map-canvas-container">
+              <iframe
+                id="google-map-iframe"
+                class="google-map-iframe"
+                title="Addis Ababa Live Route Map"
+                src="https://maps.google.com/maps?q=Bole+Medhanialem+to+Merkato+Wholesale+District+Addis+Ababa&amp;t=&amp;z=13&amp;ie=UTF8&amp;iwloc=&amp;output=embed"
+                loading="lazy"
+                allowfullscreen
+              ></iframe>
+            </div>
+
+            <!-- Route Metrics Bar -->
             <div class="map-metrics-bar">
               <div class="metric-box">
                 <span class="metric-val" id="route-distance-metric">14.8 km</span>
-                <span class="metric-lbl">Est. Distance</span>
+                <span class="metric-lbl">Est. Road Distance</span>
               </div>
               <div style="width: 1px; height: 28px; background: #E4E4E7;"></div>
               <div class="metric-box">
                 <span class="metric-val" id="route-duration-metric">32 min</span>
-                <span class="metric-lbl">Est. Duration</span>
+                <span class="metric-lbl">Est. Transit Time</span>
               </div>
-            </div>
-          </div>
-
-          <!-- Live Price Receipt Card -->
-          <div class="summary-receipt-card" id="booking-live-summary">
-            <div class="receipt-header">Estimated Quote Summary</div>
-            
-            <div class="receipt-route-brief" id="summary-route-brief">
-              Bole Medhanialem → Merkato Wholesale
-            </div>
-
-            <div class="receipt-breakdown" id="booking-fare-breakdown">
-              <div class="receipt-row" style="color: var(--color-navy-dark, #142553); font-weight: 600;">
-                <span>Selected Cargo</span>
-                <span id="summary-cargo-tally">13 items (5.6 m³)</span>
-              </div>
-              <div class="receipt-row">
-                <span id="summary-base-label">Base Fare (Medium Truck)</span>
-                <span id="summary-base-fare">1,200 ETB</span>
-              </div>
-              <div class="receipt-row">
-                <span>Road Distance <small id="summary-distance-subtext" style="color:#71717A;">(14.8 km × 75 ETB/km)</small></span>
-                <span id="summary-distance-fare">1,110 ETB</span>
-              </div>
-              <div class="receipt-row">
-                <span id="summary-helpers-label">Loading Assistance (1 Helper)</span>
-                <span id="summary-helpers-fare">350 ETB</span>
-              </div>
-              <div class="receipt-row" id="summary-stairs-row" style="display: none; color: #D97706;">
-                <span>Stairs Surcharge (No Elevator)</span>
-                <span id="summary-stairs-fare">0 ETB</span>
-              </div>
-              <div class="receipt-row is-total">
-                <span>Total Estimate</span>
-                <span id="summary-total-fare" style="color:#1F3B87;">2,660 ETB</span>
+              <div style="width: 1px; height: 28px; background: #E4E4E7;"></div>
+              <div class="metric-box">
+                <span class="metric-val" id="route-corridor-name">Bole ↔ Merkato</span>
+                <span class="metric-lbl">Active Corridor</span>
               </div>
             </div>
 
-            <div class="receipt-actions">
-              <button type="button" id="btn-booking-prev" class="btn btn-secondary" style="display: none;">
-                ← Back
-              </button>
-              <button type="button" id="btn-booking-next" class="btn btn-primary">
-                Continue →
-              </button>
-            </div>
-
-            <div class="receipt-guarantee">
-              <span>🛡️</span> Upfront quote. Pay upon delivery via Cash or Telebirr.
-            </div>
           </div>
 
         </aside>
@@ -846,15 +823,23 @@
     </button>
   </div>
 
-  <!-- Master Footer matching landing page -->
+  <!-- Master Global Footer (Matching Homepage) -->
   <footer class="kulli-footer" role="contentinfo">
-    <div class="footer-container">
-      <div class="footer-top">
-        <div class="footer-brand">
-          <a href="/" class="footer-brand-link">
-            <img src="/logos/kulli-logo-primary.svg" alt="Kulli Logo" class="brand-logo" width="120" height="36" />
+    <div class="kulli-container">
+      <div class="footer-main-content">
+        <!-- Logo -->
+        <div class="footer-logo-wrap">
+          <a href="/" class="footer-brand-logo" aria-label="Kulli Home">
+            <img
+              src="/logos/kulli-logo-primary.svg"
+              alt="Kulli"
+              style="height: 34px; width: fit-content;"
+              data-brand-logo
+            />
           </a>
         </div>
+
+        <!-- Navigation Links -->
         <nav class="footer-nav" aria-label="Footer Navigation">
           <a href="/booking.html" class="footer-link">Book</a>
           <a href="/#drivers" class="footer-link">Drivers</a>
@@ -862,121 +847,52 @@
           <a href="/#faq" class="footer-link">FAQ</a>
           <a href="/#apps" class="footer-link">Download App</a>
         </nav>
+
+        <!-- Social Links -->
+        <div class="footer-social-links" aria-label="Social Media Links">
+          <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" class="footer-social-icon" aria-label="Facebook">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+            </svg>
+          </a>
+          <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" class="footer-social-icon" aria-label="Instagram">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+              <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+              <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+            </svg>
+          </a>
+          <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" class="footer-social-icon" aria-label="Twitter">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"/>
+            </svg>
+          </a>
+          <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" class="footer-social-icon" aria-label="LinkedIn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6zM2 9h4v12H2z"/>
+              <circle cx="4" cy="4" r="2"/>
+            </svg>
+          </a>
+        </div>
       </div>
-      <div class="footer-bottom">
-        <p class="footer-copyright">
-          &copy; 2026 Kulli Logistics Platform. Addis Ababa, Ethiopia. All rights reserved.
-        </p>
+
+      <div class="footer-divider"></div>
+
+      <div class="footer-bottom-row">
+        <div class="footer-copy">
+          <span>© 2026 </span>
+          <span class="footer-brand-text">
+            <span class="brand-accent-orange">K</span>ulli
+          </span>
+          <span> • On-Demand Logistics &amp; Moving Across Addis Ababa (Bole, Merkato, Kality &amp; Nationwide)</span>
+        </div>
+        <div class="footer-legal-links">
+          <a href="/#faq" class="footer-legal-link">Privacy Policy</a>
+          <a href="/#faq" class="footer-legal-link">Terms of Service</a>
+        </div>
       </div>
     </div>
   </footer>
-
-  <!-- Screen 6: Authentication Gate Modal (Curri & Lalamove Inspired) -->
-  <div class="auth-gate-modal" id="auth-gate-modal" role="dialog" aria-modal="true" aria-labelledby="auth-gate-title">
-    <div class="auth-gate-backdrop" id="auth-gate-backdrop"></div>
-    <div class="auth-gate-card">
-      <button type="button" class="auth-gate-close-btn" id="btn-close-auth-modal" aria-label="Close authentication modal">✕</button>
-
-      <!-- Modal Step A: Phone Number Request -->
-      <div id="auth-modal-step-phone">
-        <div class="auth-gate-header">
-          <div class="auth-gate-icon-badge">📱</div>
-          <h3 class="auth-gate-title" id="auth-gate-title">Verify Phone to Request Truck</h3>
-          <p class="auth-gate-subtitle">
-            Confirm your Ethiopian mobile number so your assigned driver can call and coordinate pickup upon arrival.
-          </p>
-        </div>
-
-        <div style="margin-bottom: 1rem;">
-          <label for="auth-gate-name-input" class="form-label">Full Name</label>
-          <input type="text" id="auth-gate-name-input" class="form-input" placeholder="e.g. Dawit Haile" value="Dawit Haile" />
-        </div>
-
-        <div style="margin-bottom: 1rem;">
-          <label for="auth-gate-phone-input" class="form-label">Mobile Phone Number</label>
-          <div class="auth-gate-phone-wrap">
-            <div class="auth-gate-phone-prefix">
-              <span>🇪🇹</span>
-              <span>+251</span>
-            </div>
-            <input
-              type="tel"
-              id="auth-gate-phone-input"
-              class="auth-gate-phone-input"
-              placeholder="91 123 4567"
-              value="0911234567"
-              maxlength="12"
-            />
-          </div>
-          <div class="auth-gate-demo-hint">
-            <span>⚡ Demo Mode: Pre-filled with active test number</span>
-            <button type="button" class="btn-auth-demo-autofill" id="btn-auth-phone-autofill">Reset Test #</button>
-          </div>
-        </div>
-
-        <button type="button" class="btn btn-primary" id="btn-auth-gate-send-otp" style="width: 100%; height: 48px; font-weight: 700;">
-          Send SMS Verification Code →
-        </button>
-
-        <div class="auth-gate-guarantee-note">
-          <span>🔒</span> Your contact details are shared only with your assigned driver.
-        </div>
-      </div>
-
-      <!-- Modal Step B: 6-Digit OTP Verification -->
-      <div id="auth-modal-step-otp" style="display: none;">
-        <div class="auth-gate-header">
-          <div class="auth-gate-icon-badge" style="background: #DCFCE7; color: #15803D;">💬</div>
-          <h3 class="auth-gate-title">Enter Verification Code</h3>
-          <p class="auth-gate-subtitle">
-            We sent a 6-digit confirmation code to <strong id="auth-gate-phone-target">+251 91 123 4567</strong>.
-          </p>
-        </div>
-
-        <div class="auth-gate-otp-inputs" id="auth-gate-otp-inputs">
-          <input type="text" class="auth-gate-otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-otp-index="0" autofocus />
-          <input type="text" class="auth-gate-otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-otp-index="1" />
-          <input type="text" class="auth-gate-otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-otp-index="2" />
-          <input type="text" class="auth-gate-otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-otp-index="3" />
-          <input type="text" class="auth-gate-otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-otp-index="4" />
-          <input type="text" class="auth-gate-otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-otp-index="5" />
-        </div>
-
-        <div class="auth-gate-timer-row">
-          <span>Didn't get code?</span>
-          <button type="button" class="auth-gate-resend-btn" id="btn-auth-resend-otp">
-            Resend Code (<span id="auth-otp-timer">45</span>s)
-          </button>
-        </div>
-
-        <div class="auth-gate-demo-hint" style="margin-bottom: 1.25rem;">
-          <span>⚡ Simulated SMS Code: <strong>123456</strong></span>
-          <button type="button" class="btn-auth-demo-autofill" id="btn-auth-otp-autofill">Autofill Code</button>
-        </div>
-
-        <button type="button" class="btn btn-primary" id="btn-auth-gate-verify-otp" style="width: 100%; height: 48px; font-weight: 700;">
-          Verify &amp; Dispatch Truck ✓
-        </button>
-
-        <button type="button" id="btn-auth-otp-back" style="width: 100%; background: none; border: none; color: #64748B; font-size: 0.8125rem; font-weight: 600; cursor: pointer; margin-top: 0.75rem;">
-          ← Change phone number
-        </button>
-      </div>
-
-      <!-- Modal Step C: Booking Dispatch Success -->
-      <div id="auth-modal-step-success" style="display: none; text-align: center; padding: 1rem 0;">
-        <div class="auth-gate-icon-badge" style="background: #DCFCE7; color: #15803D; font-size: 2rem; width: 64px; height: 64px; margin: 0 auto 1rem;">
-          ✓
-        </div>
-        <h3 class="auth-gate-title">Phone Verified &amp; Truck Requested!</h3>
-        <p class="auth-gate-subtitle" style="margin-bottom: 1.25rem;">
-          Your booking reference is <strong id="auth-confirmed-ref">KL-2026-4892</strong>. Redirecting you to live dispatch tracking...
-        </p>
-        <div style="display: inline-block; width: 32px; height: 32px; border: 3px solid #E2E8F0; border-top-color: #1F3B87; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
-      </div>
-
-    </div>
-  </div>
 
   <script type="module" src="/src/scripts/booking.ts"></script>
 </body>

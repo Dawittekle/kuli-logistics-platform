@@ -352,7 +352,7 @@
 }
 
 /* ------------------------------------------------------------
-   4. Right Column: Sticky Summary & Route Map
+   4. Right Column: Big Google Map & Sticky Corridor View
    ------------------------------------------------------------ */
 .booking-summary-pane {
   display: flex;
@@ -364,10 +364,114 @@
   .booking-summary-pane {
     position: sticky;
     top: 96px;
+    height: calc(100vh - 120px);
+    min-height: 580px;
   }
 }
 
-/* Interactive Route Map Card */
+/* Big Google Map Card */
+.big-map-card {
+  background: var(--color-surface, #FFFFFF);
+  border: 1px solid var(--color-border, rgba(20, 37, 83, 0.1));
+  border-radius: var(--radius-lg, 12px);
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.map-live-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #15803D;
+  background: #DCFCE7;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.map-route-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: #F8FAFC;
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.map-route-point {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.map-route-point .point-dot {
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.map-route-point .point-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.map-route-point .point-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748B;
+}
+
+.map-route-point .point-val {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-navy-dark, #142553);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.map-route-arrow {
+  color: #94A3B8;
+  font-weight: 700;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.big-map-canvas-container {
+  flex: 1;
+  min-height: 400px;
+  position: relative;
+  background: #E5E7EB;
+}
+
+.google-map-iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  border: 0;
+  display: block;
+}
+
+/* Wizard Form Navigation Actions Bar */
+.wizard-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+}
+
+/* Interactive Route Map Card (Tracking/Small) */
 .route-map-card {
   background: var(--color-surface, #FFFFFF);
   border: 1px solid var(--color-border, rgba(20, 37, 83, 0.1));

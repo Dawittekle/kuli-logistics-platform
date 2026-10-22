@@ -82,11 +82,11 @@ export class BookingWizardController {
       isImmediate: true,
       scheduledDate: new Date().toISOString().split('T')[0],
       scheduledTime: 'Morning (08:00 - 10:00)',
-      senderName: 'Dawit Tadesse',
-      senderPhone: '+251 91 123 4567',
-      recipientName: 'Abebe Bekele',
-      recipientPhone: '+251 92 987 6543',
-      specialInstructions: 'Commercial loading dock Gate 3, call before arrival.',
+      senderName: '',
+      senderPhone: '',
+      recipientName: '',
+      recipientPhone: '',
+      specialInstructions: '',
       cargoInventory: {
         'sofa-3-seater': 1,
         'dining-table': 1,
@@ -142,6 +142,43 @@ export class BookingWizardController {
     this.recalculateStairsSurcharge();
     this.updateSummaryReceipt();
     this.goToStep(this.state.currentStep);
+    this.updateGoogleMap();
+  }
+
+  public handleRequestTruck(): void {
+    this.saveDraft();
+    const authUser = localStorage.getItem('kuli_auth_user');
+    if (authUser) {
+      window.location.href = '/tracking.html';
+    } else {
+      window.location.href = '/signup.html?redirect=/tracking.html&role=customer&from=booking';
+    }
+  }
+
+  public updateGoogleMap(): void {
+    const origin = this.state.origin || 'Bole Medhanialem, Addis Ababa';
+    const dest = this.state.destination || 'Merkato Wholesale District, Addis Ababa';
+
+    const displayOrigin = document.getElementById('map-display-origin');
+    const displayDest = document.getElementById('map-display-dest');
+    const corridorName = document.getElementById('route-corridor-name');
+    const distEl = document.getElementById('route-distance-metric');
+    const durEl = document.getElementById('route-duration-metric');
+    const iframe = document.getElementById('google-map-iframe') as HTMLIFrameElement | null;
+
+    if (displayOrigin) displayOrigin.textContent = origin;
+    if (displayDest) displayDest.textContent = dest;
+
+    const shortOrigin = origin.split(',')[0].trim();
+    const shortDest = dest.split(',')[0].trim();
+    if (corridorName) corridorName.textContent = `${shortOrigin} ↔ ${shortDest}`;
+    if (distEl) distEl.textContent = `${this.state.distanceKm.toFixed(1)} km`;
+    if (durEl) durEl.textContent = `${this.state.durationMins} min`;
+
+    if (iframe) {
+      const query = `${origin} to ${dest}, Addis Ababa`;
+      iframe.src = `https://maps.google.com/maps?q=${encodeURIComponent(query)}&t=&z=13&ie=UTF8&iwloc=&output=embed`;
+    }
   }
 
   private loadDraft(): BookingState | null {
@@ -224,15 +261,23 @@ export class BookingWizardController {
       prevBtn.style.display = stepNumber === 1 ? 'none' : 'inline-flex';
     }
 
-    const nextText = stepNumber === 5 ? 'Request Truck ✓' : 'Continue →';
+    const nextLabels: Record<number, string> = {
+      1: 'Continue to Cargo Inventory →',
+      2: 'Continue to Select Truck →',
+      3: 'Continue to Access & Schedule →',
+      4: 'Review Shipment Details →',
+      5: 'Request Truck ✓'
+    };
+    const nextText = nextLabels[stepNumber] || 'Continue →';
     if (nextBtn) {
       nextBtn.textContent = nextText;
     }
     if (mobileNextBtn) {
-      mobileNextBtn.textContent = nextText;
+      mobileNextBtn.textContent = stepNumber === 5 ? 'Request Truck ✓' : 'Continue →';
     }
 
     this.updateSummaryReceipt();
+    this.updateGoogleMap();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -277,6 +322,13 @@ export class BookingWizardController {
         this.state.originCoords = { lat: selected.lat, lng: selected.lng };
         this.recalculateRoute();
       });
+      originInput.addEventListener('blur', () => {
+        if (originInput.value.trim()) {
+          this.state.origin = originInput.value.trim();
+          this.updateGoogleMap();
+          this.saveDraft();
+        }
+      });
     }
 
     if (destInput && destDropdown) {
@@ -284,6 +336,13 @@ export class BookingWizardController {
         this.state.destination = `${selected.name}, Addis Ababa`;
         this.state.destinationCoords = { lat: selected.lat, lng: selected.lng };
         this.recalculateRoute();
+      });
+      destInput.addEventListener('blur', () => {
+        if (destInput.value.trim()) {
+          this.state.destination = destInput.value.trim();
+          this.updateGoogleMap();
+          this.saveDraft();
+        }
       });
     }
   }
@@ -401,7 +460,7 @@ export class BookingWizardController {
           this.goToStep(this.state.currentStep + 1);
         }
       } else {
-        this.openAuthGateModal();
+        this.handleRequestTruck();
       }
     };
 
@@ -437,6 +496,7 @@ export class BookingWizardController {
 
     this.setupVehicleSelection();
     this.updateSummaryReceipt();
+    this.updateGoogleMap();
     this.saveDraft();
   }
 
@@ -1129,7 +1189,7 @@ export class BookingWizardController {
   }
 
   private onConfirmBooking(): void {
-    this.openAuthGateModal();
+    this.handleRequestTruck();
   }
 
   /* ------------------------------------------------------------
@@ -1145,7 +1205,7 @@ export class BookingWizardController {
 
     const reviewConfirmCta = document.getElementById('btn-review-confirm-cta');
     reviewConfirmCta?.addEventListener('click', () => {
-      this.openAuthGateModal();
+      this.handleRequestTruck();
     });
   }
 
@@ -1317,11 +1377,11 @@ export class BookingWizardController {
       }
     }
 
-    if (senderNameEl) senderNameEl.textContent = this.state.senderName || 'Dawit Haile';
-    if (senderPhoneEl) senderPhoneEl.textContent = this.state.senderPhone || '0911234567';
-    if (recipientNameEl) recipientNameEl.textContent = this.state.recipientName || 'Meron Tadesse';
-    if (recipientPhoneEl) recipientPhoneEl.textContent = this.state.recipientPhone || '0922345678';
-    if (specialNotesEl) specialNotesEl.textContent = this.state.specialInstructions || 'Standard delivery. Call upon arrival.';
+    if (senderNameEl) senderNameEl.textContent = this.state.senderName.trim() || '—';
+    if (senderPhoneEl) senderPhoneEl.textContent = this.state.senderPhone.trim() || '—';
+    if (recipientNameEl) recipientNameEl.textContent = this.state.recipientName.trim() || '—';
+    if (recipientPhoneEl) recipientPhoneEl.textContent = this.state.recipientPhone.trim() || '—';
+    if (specialNotesEl) specialNotesEl.textContent = this.state.specialInstructions.trim() || 'None provided';
 
     // 5. Pricing Breakdown
     const baseFare = vehicle.baseFare;

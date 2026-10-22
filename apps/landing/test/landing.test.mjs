@@ -227,21 +227,19 @@ describe('Kulli Landing Page Production Suite', () => {
     assert.match(aboutHtml, /href="\/booking\.html"[^>]*>Book Now<\/a>/);
   });
 
-  it('dist/booking.html is compiled and contains two-column booking layout with route & pricing elements', () => {
+  it('dist/booking.html is compiled and contains two-column booking layout with live Google Map and clean footer', () => {
     const bookingPath = join(landingRoot, 'dist/booking.html');
     assert.ok(existsSync(bookingPath), 'dist/booking.html must exist after vite build');
 
     const html = readFileSync(bookingPath, 'utf-8');
     assert.match(html, /<title>Book a Truck \| Kulli Logistics Platform Addis Ababa<\/title>/);
-    assert.match(html, /class="prototype-banner"/);
     assert.match(html, /class="booking-stepper-card"/);
     assert.match(html, /id="input-origin"/);
     assert.match(html, /id="input-destination"/);
-    assert.match(html, /id="map-pin-origin"/);
-    assert.match(html, /id="map-pin-dest"/);
     assert.match(html, /id="route-map-preview"/);
-    assert.match(html, /id="booking-live-summary"/);
-    assert.match(html, /id="summary-cargo-tally"/);
+    assert.match(html, /id="google-map-iframe"/);
+    assert.match(html, /id="map-display-origin"/);
+    assert.match(html, /id="map-display-dest"/);
     assert.match(html, /id="btn-booking-next"/);
     assert.match(html, /id="btn-mobile-next"/);
 
@@ -280,12 +278,8 @@ describe('Kulli Landing Page Production Suite', () => {
     assert.match(html, /id="recipient-name"/);
     assert.match(html, /id="recipient-phone"/);
     assert.match(html, /id="special-delivery-instructions"/);
-    assert.match(html, /id="summary-base-label"/);
-    assert.match(html, /id="summary-helpers-label"/);
-    assert.match(html, /id="summary-stairs-row"/);
-    assert.match(html, /id="summary-stairs-fare"/);
 
-    // Phase 4 Uber Freight Review & Auth Gate landmarks
+    // Phase 4 Uber Freight Review & Transparent Pricing
     assert.match(html, /id="review-card-route"/);
     assert.match(html, /id="review-origin-name"/);
     assert.match(html, /id="review-dest-name"/);
@@ -304,15 +298,11 @@ describe('Kulli Landing Page Production Suite', () => {
     assert.match(html, /data-review-edit-step="3"/);
     assert.match(html, /data-review-edit-step="4"/);
     assert.match(html, /id="btn-review-confirm-cta"/);
-    assert.match(html, /id="auth-gate-modal"/);
-    assert.match(html, /id="auth-modal-step-phone"/);
-    assert.match(html, /id="auth-gate-phone-input"/);
-    assert.match(html, /id="btn-auth-gate-send-otp"/);
-    assert.match(html, /id="auth-modal-step-otp"/);
-    assert.match(html, /id="auth-gate-otp-inputs"/);
-    assert.match(html, /id="btn-auth-otp-autofill"/);
-    assert.match(html, /id="btn-auth-gate-verify-otp"/);
-    assert.match(html, /id="auth-modal-step-success"/);
+
+    // Canonical footer landmarks
+    assert.match(html, /class="kulli-footer"/);
+    assert.match(html, /class="kulli-container"/);
+    assert.match(html, /class="footer-main-content"/);
   });
 
   it('dist/tracking.html is compiled and contains real-time status tracker, simulator, and driver card', () => {
@@ -414,7 +404,7 @@ describe('Kulli Landing Page Production Suite', () => {
     assert.equal(totalFare, 1200 + 1088 + 300 + 300); // 2888 ETB
   });
 
-  it('dist/booking.html contains all 5 sequential wizard step panels and sticky summary elements', () => {
+  it('dist/booking.html contains all 5 sequential wizard step panels and navigation elements', () => {
     const bookingPath = join(landingRoot, 'dist/booking.html');
     const html = readFileSync(bookingPath, 'utf-8');
 
@@ -422,12 +412,12 @@ describe('Kulli Landing Page Production Suite', () => {
       assert.match(html, new RegExp(`id="step-panel-${step}"`), `Step panel ${step} must exist in booking.html`);
     }
 
-    assert.match(html, /id="summary-route-brief"/);
-    assert.match(html, /id="summary-cargo-tally"/);
-    assert.match(html, /id="summary-base-fare"/);
-    assert.match(html, /id="summary-distance-fare"/);
-    assert.match(html, /id="summary-helpers-fare"/);
-    assert.match(html, /id="summary-total-fare"/);
+    assert.match(html, /id="google-map-iframe"/);
+    assert.match(html, /id="map-display-origin"/);
+    assert.match(html, /id="map-display-dest"/);
+    assert.match(html, /id="route-distance-metric"/);
+    assert.match(html, /id="route-duration-metric"/);
+    assert.match(html, /id="wizard-actions-bar"/);
     assert.match(html, /id="btn-booking-prev"/);
     assert.match(html, /id="btn-booking-next"/);
     assert.match(html, /id="btn-mobile-next"/);
