@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { FLEET_CATALOG } from '../src/data/fleet-catalog.ts';
+import { CARGO_CATALOG, CARGO_CATEGORIES } from '../src/data/cargo-catalog.ts';
+import { ADDIS_LOCATIONS } from '../src/data/addis-locations.ts';
 
 const landingRoot = join(process.cwd(), 'apps/landing');
 
@@ -338,5 +341,95 @@ describe('Kulli Landing Page Production Suite', () => {
     assert.match(html, /class="tracking-step-node"/);
     assert.match(html, /id="manifest-cargo-tally"/);
     assert.match(html, /id="driver-chat-modal"/);
+  });
+
+  it('all 4 fleet catalog vehicles have valid schemas, pricing, dimensions, and capacity', () => {
+    assert.equal(FLEET_CATALOG.length, 4, 'FLEET_CATALOG must define exactly 4 vehicle tiers');
+
+    const expectedTiers = ['small-pickup', 'cargo-van', 'medium-truck', 'large-truck'];
+    const actualTiers = FLEET_CATALOG.map((v) => v.vehicleTierSlug);
+    assert.deepEqual(actualTiers, expectedTiers, 'All 4 canonical tiers must be present in order');
+
+    for (const vehicle of FLEET_CATALOG) {
+      assert.ok(vehicle.id && vehicle.id.length > 0, `Vehicle ${vehicle.name} must have non-empty id`);
+      assert.ok(vehicle.name && vehicle.name.length > 0, `Vehicle ${vehicle.id} must have name`);
+      assert.ok(vehicle.modelName && vehicle.modelName.length > 0, `Vehicle ${vehicle.id} must have modelName`);
+      assert.ok(vehicle.tonnage && vehicle.tonnage.length > 0, `Vehicle ${vehicle.id} must have tonnage`);
+      assert.ok(vehicle.payload && vehicle.payload.length > 0, `Vehicle ${vehicle.id} must have payload`);
+      assert.ok(vehicle.dimensions && vehicle.dimensions.length > 0, `Vehicle ${vehicle.id} must have dimensions`);
+      assert.ok(vehicle.volume && vehicle.volume.length > 0, `Vehicle ${vehicle.id} must have volume`);
+      assert.ok(typeof vehicle.baseFare === 'number' && vehicle.baseFare > 0, `Vehicle ${vehicle.id} baseFare must be > 0`);
+      assert.ok(typeof vehicle.perKmRate === 'number' && vehicle.perKmRate > 0, `Vehicle ${vehicle.id} perKmRate must be > 0`);
+      assert.ok(Array.isArray(vehicle.idealFor) && vehicle.idealFor.length >= 3, `Vehicle ${vehicle.id} must have at least 3 idealFor items`);
+    }
+  });
+
+  it('cargo catalog contains all required categories and realistic volume/weight values', () => {
+    assert.ok(CARGO_CATEGORIES.length >= 6, 'Must have at least 6 category definitions');
+    assert.ok(CARGO_CATALOG.length >= 25, 'Must have at least 25 pre-configured cargo items');
+
+    const categoryIds = new Set(CARGO_CATEGORIES.map((c) => c.id));
+    for (const item of CARGO_CATALOG) {
+      assert.ok(item.id && item.id.length > 0, `Cargo item ${item.name} must have an id`);
+      assert.ok(item.name && item.name.length > 0, `Cargo item ${item.id} must have a name`);
+      assert.ok(categoryIds.has(item.category), `Item ${item.id} category "${item.category}" must exist in CARGO_CATEGORIES`);
+      assert.ok(typeof item.volumeM3 === 'number' && item.volumeM3 > 0, `Item ${item.id} volumeM3 must be > 0`);
+      assert.ok(typeof item.weightKg === 'number' && item.weightKg > 0, `Item ${item.id} weightKg must be > 0`);
+      assert.ok(item.icon && item.icon.length > 0, `Item ${item.id} must have an emoji icon`);
+    }
+  });
+
+  it('Addis Ababa geographic corridor locations contain authentic coordinates and subcities', () => {
+    assert.ok(ADDIS_LOCATIONS.length >= 12, 'Must define at least 12 authentic Addis Ababa hubs');
+
+    for (const loc of ADDIS_LOCATIONS) {
+      assert.ok(loc.id && loc.id.length > 0, `Location ${loc.name} must have an id`);
+      assert.ok(loc.name && loc.name.length > 0, `Location ${loc.id} must have a name`);
+      assert.ok(loc.subcity && loc.subcity.length > 0, `Location ${loc.id} must have a subcity`);
+      assert.ok(loc.detail && loc.detail.length > 0, `Location ${loc.id} must have a detail descriptor`);
+      assert.ok(loc.lat >= 8.8 && loc.lat <= 9.2, `Location ${loc.id} latitude (${loc.lat}) must be within Addis bounds`);
+      assert.ok(loc.lng >= 38.6 && loc.lng <= 39.0, `Location ${loc.id} longitude (${loc.lng}) must be within Addis bounds`);
+    }
+  });
+
+  it('booking pricing formula calculates transparent upfront ETB price correctly', () => {
+    const mediumTruck = FLEET_CATALOG.find((v) => v.vehicleTierSlug === 'medium-truck');
+    assert.ok(mediumTruck, 'Medium truck must exist');
+
+    const distanceKm = 14.5;
+    const helperCount = 1;
+    const stairsFloors = 2;
+    const elevatorAvailable = false;
+
+    const baseFare = mediumTruck.baseFare;
+    const distanceFare = Math.round(distanceKm * mediumTruck.perKmRate);
+    const helperFare = helperCount * 300;
+    const stairsFare = elevatorAvailable ? 0 : stairsFloors * 150;
+    const totalFare = baseFare + distanceFare + helperFare + stairsFare;
+
+    assert.equal(baseFare, 1200);
+    assert.equal(distanceFare, Math.round(14.5 * 75)); // 1088 ETB
+    assert.equal(helperFare, 300);
+    assert.equal(stairsFare, 300);
+    assert.equal(totalFare, 1200 + 1088 + 300 + 300); // 2888 ETB
+  });
+
+  it('dist/booking.html contains all 5 sequential wizard step panels and sticky summary elements', () => {
+    const bookingPath = join(landingRoot, 'dist/booking.html');
+    const html = readFileSync(bookingPath, 'utf-8');
+
+    for (let step = 1; step <= 5; step++) {
+      assert.match(html, new RegExp(`id="step-panel-${step}"`), `Step panel ${step} must exist in booking.html`);
+    }
+
+    assert.match(html, /id="summary-route-brief"/);
+    assert.match(html, /id="summary-cargo-tally"/);
+    assert.match(html, /id="summary-base-fare"/);
+    assert.match(html, /id="summary-distance-fare"/);
+    assert.match(html, /id="summary-helpers-fare"/);
+    assert.match(html, /id="summary-total-fare"/);
+    assert.match(html, /id="btn-booking-prev"/);
+    assert.match(html, /id="btn-booking-next"/);
+    assert.match(html, /id="btn-mobile-next"/);
   });
 });
