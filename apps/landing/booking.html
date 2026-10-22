@@ -540,16 +540,205 @@
 
           </div>
 
-          <!-- STEP 5: Review & Confirm (Shell) -->
+          <!-- STEP 5: Review & Confirm (Uber Freight & Curri Inspired) -->
           <div class="step-card" id="step-panel-5" style="display: none;">
             <div class="step-header">
               <h2 class="step-title">Shipment Review &amp; Confirmation</h2>
-              <p class="step-subtitle">Verify your route, cargo manifest, truck assignment, and transparent price breakdown.</p>
+              <p class="step-subtitle">Verify your route, cargo manifest, truck assignment, and transparent price breakdown before requesting a driver.</p>
             </div>
-            <div style="padding: 2rem; text-align: center; color: #71717A; background: #F8FAFC; border-radius: 8px;">
-              <p style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; color: #142553;">Uber Freight Review Screen</p>
-              <p style="font-size: 0.875rem;">Two-column review summary and client auth gate will appear here in Phase 4.</p>
+
+            <div class="review-cards-list">
+              <!-- Review 1: Route & Schedule -->
+              <div class="review-section-card" id="review-card-route">
+                <div class="review-card-header">
+                  <div class="review-card-title-group">
+                    <span class="review-card-icon">🗺️</span>
+                    <h3 class="review-card-title">Route &amp; Timeline</h3>
+                  </div>
+                  <button type="button" class="btn-review-edit" data-review-edit-step="1">
+                    ✏️ Edit Route
+                  </button>
+                </div>
+
+                <div class="review-route-timeline">
+                  <div class="review-point-item">
+                    <div class="review-point-dot is-origin"></div>
+                    <div class="review-point-name" id="review-origin-name">Bole Medhanialem, Addis Ababa</div>
+                    <div class="review-point-details" id="review-origin-details">Pickup Spot • Ground Floor (Elevator available)</div>
+                  </div>
+
+                  <div id="review-stops-container"></div>
+
+                  <div class="review-point-item">
+                    <div class="review-point-dot is-dest"></div>
+                    <div class="review-point-name" id="review-dest-name">Merkato Wholesale District, Addis Ababa</div>
+                    <div class="review-point-details" id="review-dest-details">Drop-off Spot • 1st Floor</div>
+                  </div>
+                </div>
+
+                <div class="review-metrics-strip">
+                  <div class="review-metric-chip">
+                    <span>📏</span> <strong id="review-metric-dist">14.8 km</strong>
+                  </div>
+                  <div style="width: 1px; height: 16px; background: #CBD5E1;"></div>
+                  <div class="review-metric-chip">
+                    <span>⏱️</span> <strong id="review-metric-time">32 min</strong>
+                  </div>
+                  <div style="width: 1px; height: 16px; background: #CBD5E1;"></div>
+                  <div class="review-metric-chip">
+                    <span>📅</span> <span id="review-metric-schedule">Immediate Pickup (~30-45 min)</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Review 2: Cargo Inventory Manifest -->
+              <div class="review-section-card" id="review-card-cargo">
+                <div class="review-card-header">
+                  <div class="review-card-title-group">
+                    <span class="review-card-icon">📦</span>
+                    <h3 class="review-card-title">Cargo Manifest</h3>
+                  </div>
+                  <button type="button" class="btn-review-edit" data-review-edit-step="2">
+                    ✏️ Edit Cargo
+                  </button>
+                </div>
+
+                <div class="review-cargo-manifest">
+                  <div style="display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.8125rem; font-weight: 600; color: #142553;">
+                    <span id="review-cargo-total-count">0 items selected</span>
+                    <span>•</span>
+                    <span id="review-cargo-total-vol">0.0 m³ Total</span>
+                    <span>•</span>
+                    <span id="review-cargo-total-weight">~0 kg Gross</span>
+                  </div>
+
+                  <div class="review-cargo-chips-wrap" id="review-cargo-chips">
+                    <!-- Populated dynamically -->
+                  </div>
+
+                  <div class="review-handling-tags" id="review-handling-tags">
+                    <!-- Handling badges -->
+                  </div>
+
+                  <div class="photo-thumbnails-strip" id="review-photos-strip"></div>
+                </div>
+              </div>
+
+              <!-- Review 3: Assigned Vehicle -->
+              <div class="review-section-card" id="review-card-vehicle">
+                <div class="review-card-header">
+                  <div class="review-card-title-group">
+                    <span class="review-card-icon">🚛</span>
+                    <h3 class="review-card-title">Assigned Fleet Tier</h3>
+                  </div>
+                  <button type="button" class="btn-review-edit" data-review-edit-step="3">
+                    ✏️ Change Truck
+                  </button>
+                </div>
+
+                <div class="review-vehicle-box">
+                  <div class="review-vehicle-media">
+                    <img src="/images/box-truck.jpg" alt="Selected Truck" id="review-vehicle-img" class="review-vehicle-img" />
+                  </div>
+                  <div>
+                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                      <h4 id="review-vehicle-name" style="font-size:1.05rem; font-weight:800; color:#142553; margin:0;">Medium Flatbed / Box Truck</h4>
+                      <span id="review-vehicle-badge" class="vehicle-badge-pill">MOST POPULAR</span>
+                    </div>
+                    <div id="review-vehicle-model" style="font-size:0.8125rem; color:#71717A; margin-top:2px;">Isuzu NPR / Mitsubishi Canter</div>
+                    <div class="vehicle-specs-row" style="margin-top:0.35rem;">
+                      <span id="review-vehicle-payload" class="vehicle-spec-item">⚖️ Up to 4,500 kg</span>
+                      <span id="review-vehicle-dims" class="vehicle-spec-item">📐 4.5m × 2.1m bed</span>
+                      <span id="review-vehicle-vol" class="vehicle-spec-item">📦 18.5 m³ capacity</span>
+                    </div>
+                  </div>
+                  <div style="text-align: right; min-width: 120px;">
+                    <div style="font-size: 0.6875rem; color: #71717A;">Space Utilization</div>
+                    <div id="review-vehicle-util-pct" style="font-size: 1.1rem; font-weight: 800; color: #1F3B87;">31%</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Review 4: Loading Assistance & Contacts -->
+              <div class="review-section-card" id="review-card-labor">
+                <div class="review-card-header">
+                  <div class="review-card-title-group">
+                    <span class="review-card-icon">👥</span>
+                    <h3 class="review-card-title">Loading Assistance &amp; Contacts</h3>
+                  </div>
+                  <button type="button" class="btn-review-edit" data-review-edit-step="4">
+                    ✏️ Edit Details
+                  </button>
+                </div>
+
+                <div style="margin-bottom: 0.875rem; font-size: 0.875rem; color: #1E293B;">
+                  <strong>Labor Assistance:</strong> <span id="review-labor-tier-desc">Driver + 1 Helper (Dedicated porter assistance)</span>
+                </div>
+
+                <div class="review-contacts-grid">
+                  <div class="review-contact-box">
+                    <div class="review-contact-role">Sender / Pickup Contact</div>
+                    <div class="review-contact-name" id="review-sender-name">Dawit Haile</div>
+                    <div class="review-contact-phone" id="review-sender-phone">+251 91 123 4567</div>
+                  </div>
+                  <div class="review-contact-box">
+                    <div class="review-contact-role">Recipient / Drop-off Contact</div>
+                    <div class="review-contact-name" id="review-recipient-name">Meron Tadesse</div>
+                    <div class="review-contact-phone" id="review-recipient-phone">+251 92 234 5678</div>
+                  </div>
+                </div>
+
+                <div id="review-special-notes-wrap" style="margin-top: 0.75rem; padding: 0.75rem; background: #F8FAFC; border-radius: 6px; font-size: 0.8125rem; color: #475569;">
+                  <strong>Special Driver Instructions:</strong> <span id="review-special-notes">None provided</span>
+                </div>
+              </div>
+
+              <!-- Review 5: Detailed Upfront Price Breakdown -->
+              <div class="review-section-card" id="review-card-pricing" style="border-color: #CBD5E1; background: #FAFCFF;">
+                <div class="review-card-header">
+                  <div class="review-card-title-group">
+                    <span class="review-card-icon">🧾</span>
+                    <h3 class="review-card-title">Transparent Price Guarantee</h3>
+                  </div>
+                  <span style="font-size:0.75rem; font-weight:700; color:#15803D; background:#DCFCE7; padding:2px 8px; border-radius:9999px;">
+                    ✓ Zero Hidden Fees
+                  </span>
+                </div>
+
+                <div class="review-price-table">
+                  <div class="review-price-row">
+                    <span id="review-price-base-lbl">Base Vehicle Fare (Medium Truck)</span>
+                    <span id="review-price-base-val">1,200 ETB</span>
+                  </div>
+                  <div class="review-price-row">
+                    <span>Road Distance <small id="review-price-dist-sub" style="color:#71717A;">(14.8 km × 75 ETB/km)</small></span>
+                    <span id="review-price-dist-val">1,110 ETB</span>
+                  </div>
+                  <div class="review-price-row">
+                    <span id="review-price-helper-lbl">Loading Assistance (1 Helper)</span>
+                    <span id="review-price-helper-val">350 ETB</span>
+                  </div>
+                  <div class="review-price-row" id="review-price-stairs-row" style="display: none; color: #D97706;">
+                    <span>Stairs Surcharge (No Elevator)</span>
+                    <span id="review-price-stairs-val">0 ETB</span>
+                  </div>
+                  <div class="review-price-row is-total">
+                    <span>Total Guaranteed Fare</span>
+                    <span id="review-price-total-val">2,660 ETB</span>
+                  </div>
+                </div>
+
+                <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid #E2E8F0; display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; color: #64748B;">
+                  <span>💳 Payment Method: Cash on Delivery or Telebirr</span>
+                  <span>🛡️ Cargo Insurance Covered</span>
+                </div>
+              </div>
             </div>
+
+            <!-- Review CTA Button -->
+            <button type="button" id="btn-review-confirm-cta" class="btn btn-primary" style="width: 100%; height: 52px; font-size: 1.1rem; font-weight: 800; border-radius: 10px; margin-top: 0.5rem;">
+              Request Truck / Confirm Booking →
+            </button>
           </div>
 
         </div>
@@ -681,6 +870,113 @@
       </div>
     </div>
   </footer>
+
+  <!-- Screen 6: Authentication Gate Modal (Curri & Lalamove Inspired) -->
+  <div class="auth-gate-modal" id="auth-gate-modal" role="dialog" aria-modal="true" aria-labelledby="auth-gate-title">
+    <div class="auth-gate-backdrop" id="auth-gate-backdrop"></div>
+    <div class="auth-gate-card">
+      <button type="button" class="auth-gate-close-btn" id="btn-close-auth-modal" aria-label="Close authentication modal">✕</button>
+
+      <!-- Modal Step A: Phone Number Request -->
+      <div id="auth-modal-step-phone">
+        <div class="auth-gate-header">
+          <div class="auth-gate-icon-badge">📱</div>
+          <h3 class="auth-gate-title" id="auth-gate-title">Verify Phone to Request Truck</h3>
+          <p class="auth-gate-subtitle">
+            Confirm your Ethiopian mobile number so your assigned driver can call and coordinate pickup upon arrival.
+          </p>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+          <label for="auth-gate-name-input" class="form-label">Full Name</label>
+          <input type="text" id="auth-gate-name-input" class="form-input" placeholder="e.g. Dawit Haile" value="Dawit Haile" />
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+          <label for="auth-gate-phone-input" class="form-label">Mobile Phone Number</label>
+          <div class="auth-gate-phone-wrap">
+            <div class="auth-gate-phone-prefix">
+              <span>🇪🇹</span>
+              <span>+251</span>
+            </div>
+            <input
+              type="tel"
+              id="auth-gate-phone-input"
+              class="auth-gate-phone-input"
+              placeholder="91 123 4567"
+              value="0911234567"
+              maxlength="12"
+            />
+          </div>
+          <div class="auth-gate-demo-hint">
+            <span>⚡ Demo Mode: Pre-filled with active test number</span>
+            <button type="button" class="btn-auth-demo-autofill" id="btn-auth-phone-autofill">Reset Test #</button>
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-primary" id="btn-auth-gate-send-otp" style="width: 100%; height: 48px; font-weight: 700;">
+          Send SMS Verification Code →
+        </button>
+
+        <div class="auth-gate-guarantee-note">
+          <span>🔒</span> Your contact details are shared only with your assigned driver.
+        </div>
+      </div>
+
+      <!-- Modal Step B: 6-Digit OTP Verification -->
+      <div id="auth-modal-step-otp" style="display: none;">
+        <div class="auth-gate-header">
+          <div class="auth-gate-icon-badge" style="background: #DCFCE7; color: #15803D;">💬</div>
+          <h3 class="auth-gate-title">Enter Verification Code</h3>
+          <p class="auth-gate-subtitle">
+            We sent a 6-digit confirmation code to <strong id="auth-gate-phone-target">+251 91 123 4567</strong>.
+          </p>
+        </div>
+
+        <div class="auth-gate-otp-inputs" id="auth-gate-otp-inputs">
+          <input type="text" class="auth-gate-otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-otp-index="0" autofocus />
+          <input type="text" class="auth-gate-otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-otp-index="1" />
+          <input type="text" class="auth-gate-otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-otp-index="2" />
+          <input type="text" class="auth-gate-otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-otp-index="3" />
+          <input type="text" class="auth-gate-otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-otp-index="4" />
+          <input type="text" class="auth-gate-otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-otp-index="5" />
+        </div>
+
+        <div class="auth-gate-timer-row">
+          <span>Didn't get code?</span>
+          <button type="button" class="auth-gate-resend-btn" id="btn-auth-resend-otp">
+            Resend Code (<span id="auth-otp-timer">45</span>s)
+          </button>
+        </div>
+
+        <div class="auth-gate-demo-hint" style="margin-bottom: 1.25rem;">
+          <span>⚡ Simulated SMS Code: <strong>123456</strong></span>
+          <button type="button" class="btn-auth-demo-autofill" id="btn-auth-otp-autofill">Autofill Code</button>
+        </div>
+
+        <button type="button" class="btn btn-primary" id="btn-auth-gate-verify-otp" style="width: 100%; height: 48px; font-weight: 700;">
+          Verify &amp; Dispatch Truck ✓
+        </button>
+
+        <button type="button" id="btn-auth-otp-back" style="width: 100%; background: none; border: none; color: #64748B; font-size: 0.8125rem; font-weight: 600; cursor: pointer; margin-top: 0.75rem;">
+          ← Change phone number
+        </button>
+      </div>
+
+      <!-- Modal Step C: Booking Dispatch Success -->
+      <div id="auth-modal-step-success" style="display: none; text-align: center; padding: 1rem 0;">
+        <div class="auth-gate-icon-badge" style="background: #DCFCE7; color: #15803D; font-size: 2rem; width: 64px; height: 64px; margin: 0 auto 1rem;">
+          ✓
+        </div>
+        <h3 class="auth-gate-title">Phone Verified &amp; Truck Requested!</h3>
+        <p class="auth-gate-subtitle" style="margin-bottom: 1.25rem;">
+          Your booking reference is <strong id="auth-confirmed-ref">KL-2026-4892</strong>. Redirecting you to live dispatch tracking...
+        </p>
+        <div style="display: inline-block; width: 32px; height: 32px; border: 3px solid #E2E8F0; border-top-color: #1F3B87; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+      </div>
+
+    </div>
+  </div>
 
   <script type="module" src="/src/scripts/booking.ts"></script>
 </body>

@@ -136,6 +136,8 @@ export class BookingWizardController {
     this.setupMapPinInteractions();
     this.setupVehicleSelection();
     this.setupAccessDetailsHandlers();
+    this.setupReviewEditHandlers();
+    this.setupAuthGateModal();
     this.updateInventoryTotals();
     this.recalculateStairsSurcharge();
     this.updateSummaryReceipt();
@@ -173,6 +175,16 @@ export class BookingWizardController {
         this.state.currentStep = parsed;
       }
     }
+    const authParam = params.get('auth');
+    if (authParam === 'open') {
+      setTimeout(() => this.openAuthGateModal(), 100);
+    } else if (authParam === 'otp') {
+      setTimeout(() => {
+        this.openAuthGateModal();
+        const sendBtn = document.getElementById('btn-auth-gate-send-otp') as HTMLButtonElement | null;
+        sendBtn?.click();
+      }, 100);
+    }
   }
 
   public goToStep(stepNumber: number): void {
@@ -198,6 +210,11 @@ export class BookingWizardController {
       this.setupVehicleSelection();
     }
 
+    // Refresh review summary when entering Step 5
+    if (stepNumber === 5) {
+      this.renderReviewSummary();
+    }
+
     // Toggle Prev / Next buttons
     const prevBtn = document.getElementById('btn-booking-prev') as HTMLButtonElement | null;
     const nextBtn = document.getElementById('btn-booking-next') as HTMLButtonElement | null;
@@ -207,7 +224,7 @@ export class BookingWizardController {
       prevBtn.style.display = stepNumber === 1 ? 'none' : 'inline-flex';
     }
 
-    const nextText = stepNumber === 5 ? 'Confirm Booking ✓' : 'Continue →';
+    const nextText = stepNumber === 5 ? 'Request Truck ✓' : 'Continue →';
     if (nextBtn) {
       nextBtn.textContent = nextText;
     }
@@ -384,7 +401,7 @@ export class BookingWizardController {
           this.goToStep(this.state.currentStep + 1);
         }
       } else {
-        this.onConfirmBooking();
+        this.openAuthGateModal();
       }
     };
 
@@ -1112,8 +1129,425 @@ export class BookingWizardController {
   }
 
   private onConfirmBooking(): void {
-    const randomRef = `KL-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-    window.location.href = `/tracking.html?ref=${randomRef}`;
+    this.openAuthGateModal();
+  }
+
+  /* ------------------------------------------------------------
+     Phase 4: Step 5 Shipment Review Screen & Handlers
+     ------------------------------------------------------------ */
+  private setupReviewEditHandlers(): void {
+    document.querySelectorAll<HTMLButtonElement>('[data-review-edit-step]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const step = parseInt(btn.dataset.reviewEditStep || '1', 10);
+        this.goToStep(step);
+      });
+    });
+
+    const reviewConfirmCta = document.getElementById('btn-review-confirm-cta');
+    reviewConfirmCta?.addEventListener('click', () => {
+      this.openAuthGateModal();
+    });
+  }
+
+  public renderReviewSummary(): void {
+    // 1. Route & Timeline
+    const originNameEl = document.getElementById('review-origin-name');
+    const originDetailsEl = document.getElementById('review-origin-details');
+    const destNameEl = document.getElementById('review-dest-name');
+    const destDetailsEl = document.getElementById('review-dest-details');
+    const stopsContainer = document.getElementById('review-stops-container');
+    const metricDist = document.getElementById('review-metric-dist');
+    const metricTime = document.getElementById('review-metric-time');
+    const metricSchedule = document.getElementById('review-metric-schedule');
+
+    if (originNameEl) originNameEl.textContent = this.state.origin;
+    if (originDetailsEl) {
+      const elevatorText = this.state.pickupElevator ? 'Elevator available' : 'Stairs only';
+      const floorText = this.state.pickupFloor === 0 ? 'Ground Floor' : `${this.state.pickupFloor}th Floor`;
+      originDetailsEl.textContent = `Pickup Spot • ${floorText} (${elevatorText})`;
+    }
+
+    if (destNameEl) destNameEl.textContent = this.state.destination;
+    if (destDetailsEl) {
+      const elevatorText = this.state.dropoffElevator ? 'Elevator available' : 'Stairs only';
+      const floorText = this.state.dropoffFloor === 0 ? 'Ground Floor' : `${this.state.dropoffFloor}th Floor`;
+      destDetailsEl.textContent = `Drop-off Spot • ${floorText} (${elevatorText})`;
+    }
+
+    if (stopsContainer) {
+      if (this.state.stops.length > 0) {
+        stopsContainer.innerHTML = this.state.stops
+          .map(
+            (stop, idx) => `
+          <div class="review-point-item" style="margin: 0.5rem 0;">
+            <div class="review-point-dot is-stop"></div>
+            <div class="review-point-name">Stop ${idx + 1}: ${stop || 'Intermediate Stop'}</div>
+            <div class="review-point-details">Route waypoint loading/drop</div>
+          </div>
+        `
+          )
+          .join('');
+      } else {
+        stopsContainer.innerHTML = '';
+      }
+    }
+
+    if (metricDist) metricDist.textContent = `${this.state.distanceKm.toFixed(1)} km`;
+    if (metricTime) metricTime.textContent = `${this.state.durationMins} min`;
+    if (metricSchedule) {
+      if (this.state.isImmediate) {
+        metricSchedule.textContent = 'Immediate Pickup (~30-45 min)';
+      } else {
+        const dateStr = this.state.scheduledDate || 'Tomorrow';
+        const timeStr = this.state.scheduledTime ? `${this.state.scheduledTime} window` : 'Flexible';
+        metricSchedule.textContent = `Scheduled: ${dateStr} • ${timeStr}`;
+      }
+    }
+
+    // 2. Cargo Manifest
+    const totalCountEl = document.getElementById('review-cargo-total-count');
+    const totalVolEl = document.getElementById('review-cargo-total-vol');
+    const totalWeightEl = document.getElementById('review-cargo-total-weight');
+    const chipsContainer = document.getElementById('review-cargo-chips');
+    const handlingTagsEl = document.getElementById('review-handling-tags');
+    const photosStrip = document.getElementById('review-photos-strip');
+
+    if (totalCountEl) totalCountEl.textContent = `${this.state.totalItemsCount} items selected`;
+    if (totalVolEl) totalVolEl.textContent = `${this.state.totalVolumeM3.toFixed(1)} m³ Total`;
+    if (totalWeightEl) totalWeightEl.textContent = `~${this.state.totalWeightKg.toLocaleString()} kg Gross`;
+
+    if (chipsContainer) {
+      const standardChips = Object.entries(this.state.cargoInventory)
+        .filter(([, qty]) => qty > 0)
+        .map(([id, qty]) => {
+          const item = CARGO_CATALOG.find((c) => c.id === id);
+          return `<span class="review-cargo-chip"><span>${item?.icon || '📦'}</span> ${item?.name || id} <strong>×${qty}</strong></span>`;
+        });
+
+      const customChips = this.state.customItems.map(
+        (c) => `<span class="review-cargo-chip"><span>✨</span> ${c.name} <strong>×${c.quantity}</strong></span>`
+      );
+
+      const allChips = [...standardChips, ...customChips];
+      if (allChips.length > 0) {
+        chipsContainer.innerHTML = allChips.join('');
+      } else {
+        chipsContainer.innerHTML = `<span style="font-size:0.8125rem; color:#71717A;">General Cargo Package (Standard transport)</span>`;
+      }
+    }
+
+    if (handlingTagsEl) {
+      const tags: string[] = [];
+      if (this.state.isFragile) {
+        tags.push(`<span class="review-tag-badge is-fragile">⚠️ Fragile Cargo</span>`);
+      }
+      if (this.state.isHeavy) {
+        tags.push(`<span class="review-tag-badge is-heavy">🏋️ Heavy Load (&gt;50kg)</span>`);
+      }
+      if (this.state.isWeatherSensitive) {
+        tags.push(`<span class="review-tag-badge is-weather">🌧️ Weather Protected</span>`);
+      }
+      handlingTagsEl.innerHTML = tags.join('');
+    }
+
+    if (photosStrip) {
+      if (this.state.cargoPhotos.length > 0) {
+        photosStrip.innerHTML = this.state.cargoPhotos
+          .map((src, i) => `<div class="photo-thumb-card"><img src="${src}" alt="Cargo photo ${i + 1}" class="photo-thumb-img" /></div>`)
+          .join('');
+      } else {
+        photosStrip.innerHTML = '';
+      }
+    }
+
+    // 3. Assigned Vehicle
+    const vehicle = FLEET_CATALOG.find((v) => v.vehicleTierSlug === this.state.vehicleTier) || FLEET_CATALOG[2];
+    const vehicleImg = document.getElementById('review-vehicle-img') as HTMLImageElement | null;
+    const vehicleNameEl = document.getElementById('review-vehicle-name');
+    const vehicleBadgeEl = document.getElementById('review-vehicle-badge');
+    const vehicleModelEl = document.getElementById('review-vehicle-model');
+    const vehiclePayloadEl = document.getElementById('review-vehicle-payload');
+    const vehicleDimsEl = document.getElementById('review-vehicle-dims');
+    const vehicleVolEl = document.getElementById('review-vehicle-vol');
+    const vehicleUtilEl = document.getElementById('review-vehicle-util-pct');
+
+    if (vehicleImg) {
+      let imageSrc = '/images/bedford-kb26.png';
+      if (vehicle.vehicleTierSlug === 'cargo-van') imageSrc = '/images/delivery-van.jpg';
+      if (vehicle.vehicleTierSlug === 'medium-truck') imageSrc = '/images/box-truck.jpg';
+      if (vehicle.vehicleTierSlug === 'large-truck') imageSrc = '/images/fleet-heavy-dumper.svg';
+      vehicleImg.src = imageSrc;
+      vehicleImg.alt = vehicle.name;
+    }
+    if (vehicleNameEl) vehicleNameEl.textContent = vehicle.name;
+    if (vehicleBadgeEl) {
+      vehicleBadgeEl.textContent = vehicle.badge || 'VERIFIED FLEET';
+      vehicleBadgeEl.style.display = 'inline-block';
+    }
+    if (vehicleModelEl) vehicleModelEl.textContent = vehicle.modelName;
+    if (vehiclePayloadEl) vehiclePayloadEl.innerHTML = `⚖️ ${vehicle.payload}`;
+    if (vehicleDimsEl) vehicleDimsEl.innerHTML = `📐 ${vehicle.dimensions}`;
+    if (vehicleVolEl) vehicleVolEl.innerHTML = `📦 ${vehicle.volume}`;
+
+    const vehicleVolumes: Record<string, number> = {
+      'small-pickup': 5.2,
+      'cargo-van': 9.2,
+      'medium-truck': 18.5,
+      'large-truck': 18.0
+    };
+    const maxVol = vehicleVolumes[vehicle.vehicleTierSlug] || 15.0;
+    const fillPercent = Math.min(100, Math.round((this.state.totalVolumeM3 / maxVol) * 100));
+    if (vehicleUtilEl) vehicleUtilEl.textContent = `${fillPercent}%`;
+
+    // 4. Loading Labor & Contacts
+    const laborDescEl = document.getElementById('review-labor-tier-desc');
+    const senderNameEl = document.getElementById('review-sender-name');
+    const senderPhoneEl = document.getElementById('review-sender-phone');
+    const recipientNameEl = document.getElementById('review-recipient-name');
+    const recipientPhoneEl = document.getElementById('review-recipient-phone');
+    const specialNotesEl = document.getElementById('review-special-notes');
+
+    if (laborDescEl) {
+      if (this.state.helpersCount === 0) {
+        laborDescEl.textContent = 'Driver Only (Curbside tailgate loading)';
+      } else if (this.state.helpersCount === 1) {
+        laborDescEl.textContent = 'Driver + 1 Helper (Dedicated porter assistance into rooms & staircases)';
+      } else {
+        laborDescEl.textContent = 'Driver + 2 Helpers (Two porters for heavy furniture & multi-flight stairs)';
+      }
+    }
+
+    if (senderNameEl) senderNameEl.textContent = this.state.senderName || 'Dawit Haile';
+    if (senderPhoneEl) senderPhoneEl.textContent = this.state.senderPhone || '0911234567';
+    if (recipientNameEl) recipientNameEl.textContent = this.state.recipientName || 'Meron Tadesse';
+    if (recipientPhoneEl) recipientPhoneEl.textContent = this.state.recipientPhone || '0922345678';
+    if (specialNotesEl) specialNotesEl.textContent = this.state.specialInstructions || 'Standard delivery. Call upon arrival.';
+
+    // 5. Pricing Breakdown
+    const baseFare = vehicle.baseFare;
+    const distanceFee = Math.round(this.state.distanceKm * vehicle.perKmRate);
+    const helperFee = this.state.helpersCount * 350;
+    const stairsFee = this.state.stairsFee || 0;
+    const totalFare = baseFare + distanceFee + helperFee + stairsFee;
+
+    const baseLbl = document.getElementById('review-price-base-lbl');
+    const baseVal = document.getElementById('review-price-base-val');
+    const distSub = document.getElementById('review-price-dist-sub');
+    const distVal = document.getElementById('review-price-dist-val');
+    const helperLbl = document.getElementById('review-price-helper-lbl');
+    const helperVal = document.getElementById('review-price-helper-val');
+    const stairsRow = document.getElementById('review-price-stairs-row');
+    const stairsVal = document.getElementById('review-price-stairs-val');
+    const totalVal = document.getElementById('review-price-total-val');
+
+    if (baseLbl) baseLbl.textContent = `Base Fare (${vehicle.name})`;
+    if (baseVal) baseVal.textContent = `${baseFare.toLocaleString()} ETB`;
+    if (distSub) distSub.textContent = `(${this.state.distanceKm.toFixed(1)} km × ${vehicle.perKmRate} ETB/km)`;
+    if (distVal) distVal.textContent = `${distanceFee.toLocaleString()} ETB`;
+    if (helperLbl) {
+      helperLbl.textContent = this.state.helpersCount === 0 ? 'Driver Assistance (Tailgate)' : `Loading Assistance (${this.state.helpersCount} Helper${this.state.helpersCount > 1 ? 's' : ''})`;
+    }
+    if (helperVal) helperVal.textContent = `${helperFee.toLocaleString()} ETB`;
+
+    if (stairsRow && stairsVal) {
+      if (stairsFee > 0) {
+        stairsRow.style.display = 'flex';
+        stairsVal.textContent = `${stairsFee.toLocaleString()} ETB`;
+      } else {
+        stairsRow.style.display = 'none';
+      }
+    }
+    if (totalVal) totalVal.textContent = `${totalFare.toLocaleString()} ETB`;
+  }
+
+  /* ------------------------------------------------------------
+     Phase 4: Screen 6 Auth Gate Modal & Phone OTP Verification
+     ------------------------------------------------------------ */
+  public openAuthGateModal(): void {
+    const modal = document.getElementById('auth-gate-modal');
+    if (!modal) return;
+
+    // Pre-fill sender info
+    const nameInput = document.getElementById('auth-gate-name-input') as HTMLInputElement | null;
+    const phoneInput = document.getElementById('auth-gate-phone-input') as HTMLInputElement | null;
+    if (nameInput) nameInput.value = this.state.senderName || 'Dawit Haile';
+    if (phoneInput) phoneInput.value = this.state.senderPhone || '0911234567';
+
+    // Reset steps
+    const stepPhone = document.getElementById('auth-modal-step-phone');
+    const stepOtp = document.getElementById('auth-modal-step-otp');
+    const stepSuccess = document.getElementById('auth-modal-step-success');
+    if (stepPhone) stepPhone.style.display = 'block';
+    if (stepOtp) stepOtp.style.display = 'none';
+    if (stepSuccess) stepSuccess.style.display = 'none';
+
+    modal.classList.add('is-open');
+  }
+
+  public closeAuthGateModal(): void {
+    const modal = document.getElementById('auth-gate-modal');
+    if (modal) modal.classList.remove('is-open');
+  }
+
+  private otpTimerInterval: number | null = null;
+
+  private setupAuthGateModal(): void {
+    const backdrop = document.getElementById('auth-gate-backdrop');
+    const closeBtn = document.getElementById('btn-close-auth-modal');
+    const sendOtpBtn = document.getElementById('btn-auth-gate-send-otp');
+    const verifyOtpBtn = document.getElementById('btn-auth-gate-verify-otp');
+    const otpAutofillBtn = document.getElementById('btn-auth-otp-autofill');
+    const phoneAutofillBtn = document.getElementById('btn-auth-phone-autofill');
+    const otpBackBtn = document.getElementById('btn-auth-otp-back');
+    const resendBtn = document.getElementById('btn-auth-resend-otp');
+
+    closeBtn?.addEventListener('click', () => this.closeAuthGateModal());
+    backdrop?.addEventListener('click', () => this.closeAuthGateModal());
+
+    // Phone autofill demo button
+    phoneAutofillBtn?.addEventListener('click', () => {
+      const phoneInput = document.getElementById('auth-gate-phone-input') as HTMLInputElement | null;
+      if (phoneInput) phoneInput.value = '0911234567';
+    });
+
+    // Send OTP handler
+    sendOtpBtn?.addEventListener('click', () => {
+      const phoneInput = document.getElementById('auth-gate-phone-input') as HTMLInputElement | null;
+      const nameInput = document.getElementById('auth-gate-name-input') as HTMLInputElement | null;
+      const rawPhone = phoneInput ? phoneInput.value.trim() : '';
+
+      if (!rawPhone || rawPhone.length < 9) {
+        alert('Please enter a valid Ethiopian mobile number (e.g. 0911234567).');
+        return;
+      }
+
+      this.state.senderPhone = rawPhone;
+      if (nameInput) this.state.senderName = nameInput.value.trim();
+      this.saveDraft();
+
+      // Show OTP Step
+      const stepPhone = document.getElementById('auth-modal-step-phone');
+      const stepOtp = document.getElementById('auth-modal-step-otp');
+      const targetPhoneEl = document.getElementById('auth-gate-phone-target');
+
+      if (targetPhoneEl) {
+        let clean = rawPhone.replace(/\s+/g, '');
+        if (clean.startsWith('+251')) clean = clean.substring(4);
+        if (clean.startsWith('251')) clean = clean.substring(3);
+        if (clean.startsWith('0')) clean = clean.substring(1);
+        targetPhoneEl.textContent = `+251 ${clean.slice(0, 2)} ${clean.slice(2, 5)} ${clean.slice(5)}`;
+      }
+
+      if (stepPhone) stepPhone.style.display = 'none';
+      if (stepOtp) stepOtp.style.display = 'block';
+
+      this.startOtpTimer();
+      const firstDigit = document.querySelector<HTMLInputElement>('.auth-gate-otp-digit[data-otp-index="0"]');
+      firstDigit?.focus();
+    });
+
+    // OTP Digits navigation
+    const digits = document.querySelectorAll<HTMLInputElement>('.auth-gate-otp-digit');
+    digits.forEach((digit, idx) => {
+      digit.addEventListener('input', (e) => {
+        const val = (e.target as HTMLInputElement).value;
+        if (val && idx < digits.length - 1) {
+          digits[idx + 1].focus();
+        }
+      });
+
+      digit.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace' && !digit.value && idx > 0) {
+          digits[idx - 1].focus();
+        }
+      });
+    });
+
+    // OTP Demo Autofill
+    otpAutofillBtn?.addEventListener('click', () => {
+      const sample = ['1', '2', '3', '4', '5', '6'];
+      digits.forEach((d, i) => {
+        d.value = sample[i];
+      });
+      digits[digits.length - 1].focus();
+    });
+
+    // OTP Back button
+    otpBackBtn?.addEventListener('click', () => {
+      const stepPhone = document.getElementById('auth-modal-step-phone');
+      const stepOtp = document.getElementById('auth-modal-step-otp');
+      if (stepPhone) stepPhone.style.display = 'block';
+      if (stepOtp) stepOtp.style.display = 'none';
+    });
+
+    // Resend OTP
+    resendBtn?.addEventListener('click', () => {
+      this.startOtpTimer();
+      alert('A new SMS verification code has been dispatched.');
+    });
+
+    // Verify OTP and complete booking
+    verifyOtpBtn?.addEventListener('click', () => {
+      let code = '';
+      digits.forEach((d) => {
+        code += d.value.trim();
+      });
+
+      if (code.length < 6) {
+        alert('Please enter all 6 digits of the verification code.');
+        return;
+      }
+
+      // Persist authenticated customer profile
+      const userProfile = {
+        name: this.state.senderName || 'Dawit Haile',
+        phone: this.state.senderPhone || '0911234567',
+        verified: true,
+        verifiedAt: new Date().toISOString()
+      };
+      try {
+        localStorage.setItem('kuli_auth_user', JSON.stringify(userProfile));
+      } catch {
+        // storage disabled
+      }
+
+      // Transition to success state
+      const randomRef = `KL-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      const stepOtp = document.getElementById('auth-modal-step-otp');
+      const stepSuccess = document.getElementById('auth-modal-step-success');
+      const refEl = document.getElementById('auth-confirmed-ref');
+
+      if (refEl) refEl.textContent = randomRef;
+      if (stepOtp) stepOtp.style.display = 'none';
+      if (stepSuccess) stepSuccess.style.display = 'block';
+
+      // Save final draft
+      this.saveDraft();
+
+      setTimeout(() => {
+        window.location.href = `/tracking.html?ref=${randomRef}`;
+      }, 1400);
+    });
+  }
+
+  private startOtpTimer(): void {
+    let timeLeft = 45;
+    const timerEl = document.getElementById('auth-otp-timer');
+    const resendBtn = document.getElementById('btn-auth-resend-otp') as HTMLButtonElement | null;
+
+    if (this.otpTimerInterval) {
+      window.clearInterval(this.otpTimerInterval);
+    }
+    if (resendBtn) resendBtn.disabled = true;
+
+    this.otpTimerInterval = window.setInterval(() => {
+      timeLeft -= 1;
+      if (timerEl) timerEl.textContent = String(timeLeft);
+      if (timeLeft <= 0) {
+        if (this.otpTimerInterval) window.clearInterval(this.otpTimerInterval);
+        if (resendBtn) resendBtn.disabled = false;
+      }
+    }, 1000);
   }
 }
 

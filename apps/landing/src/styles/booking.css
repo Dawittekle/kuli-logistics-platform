@@ -1553,3 +1553,537 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ------------------------------------------------------------
+   10. Phase 4: Step 5 Shipment Review Screen Styles
+   ------------------------------------------------------------ */
+.review-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.review-section-card {
+  background: #FFFFFF;
+  border: 1px solid var(--color-border, #E4E4E7);
+  border-radius: var(--radius-lg, 12px);
+  padding: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+}
+
+.review-section-card:hover {
+  border-color: #CBD5E1;
+}
+
+.review-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding-bottom: 0.625rem;
+  border-bottom: 1px solid var(--color-border, #F4F4F5);
+}
+
+.review-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.review-card-icon {
+  font-size: 1.125rem;
+}
+
+.review-card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-navy-dark, #142553);
+  margin: 0;
+}
+
+.btn-review-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--color-border, #CBD5E1);
+  background: #FFFFFF;
+  color: var(--color-primary, #1F3B87);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-review-edit:hover {
+  background: #F8FAFC;
+  border-color: var(--color-primary, #1F3B87);
+}
+
+/* Route Timeline in Review */
+.review-route-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  position: relative;
+  padding-left: 1.75rem;
+}
+
+.review-route-timeline::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  background: #CBD5E1;
+}
+
+.review-point-item {
+  position: relative;
+}
+
+.review-point-dot {
+  position: absolute;
+  left: -1.75rem;
+  top: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 3px solid #FFFFFF;
+  box-shadow: 0 0 0 1px #CBD5E1;
+}
+
+.review-point-dot.is-origin {
+  background: #15803D;
+  box-shadow: 0 0 0 1px #15803D;
+}
+
+.review-point-dot.is-stop {
+  background: #FFAD61;
+  box-shadow: 0 0 0 1px #FFAD61;
+}
+
+.review-point-dot.is-dest {
+  background: #B91C1C;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px #B91C1C;
+}
+
+.review-point-name {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--color-navy-dark, #142553);
+  margin-bottom: 0.125rem;
+}
+
+.review-point-details {
+  font-size: 0.75rem;
+  color: #71717A;
+}
+
+.review-metrics-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: #F8FAFC;
+  border-radius: var(--radius-md, 8px);
+}
+
+.review-metric-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: #334155;
+  font-weight: 600;
+}
+
+/* Review Cargo Section */
+.review-cargo-manifest {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.review-cargo-chips-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.review-cargo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #F1F5F9;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--radius-sm, 6px);
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+  color: #1E293B;
+  font-weight: 500;
+}
+
+.review-cargo-chip strong {
+  color: var(--color-primary, #1F3B87);
+}
+
+.review-handling-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.review-tag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+}
+
+.review-tag-badge.is-fragile {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.review-tag-badge.is-heavy {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+
+.review-tag-badge.is-weather {
+  background: #E0E7FF;
+  color: #3730A3;
+}
+
+/* Review Vehicle Card */
+.review-vehicle-box {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  align-items: center;
+}
+
+@media (min-width: 640px) {
+  .review-vehicle-box {
+    grid-template-columns: 120px 1fr auto;
+  }
+}
+
+.review-vehicle-media {
+  background: #F8FAFC;
+  border-radius: var(--radius-md, 8px);
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 80px;
+}
+
+.review-vehicle-img {
+  max-width: 100%;
+  max-height: 64px;
+  object-fit: contain;
+}
+
+/* Review Labor & Contacts */
+.review-contacts-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .review-contacts-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.review-contact-box {
+  background: #F8FAFC;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md, 8px);
+}
+
+.review-contact-role {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #64748B;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25rem;
+}
+
+.review-contact-name {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--color-navy-dark, #142553);
+}
+
+.review-contact-phone {
+  font-size: 0.8125rem;
+  color: #475569;
+  font-family: monospace;
+}
+
+/* Detailed Price Breakdown in Review */
+.review-price-table {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.review-price-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #475569;
+}
+
+.review-price-row.is-total {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--color-navy-dark, #142553);
+  padding-top: 0.75rem;
+  border-top: 2px dashed #E2E8F0;
+  margin-top: 0.25rem;
+}
+
+.review-price-row.is-total span:last-child {
+  color: var(--color-primary, #1F3B87);
+}
+
+/* ------------------------------------------------------------
+   11. Phase 4: Screen 6 Auth Gate Modal & Phone OTP Verification
+   ------------------------------------------------------------ */
+.auth-gate-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.auth-gate-modal.is-open {
+  display: flex;
+  opacity: 1;
+  visibility: visible;
+}
+
+.auth-gate-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 37, 83, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.auth-gate-card {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 480px;
+  background: #FFFFFF;
+  border-radius: 20px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25), 0 4px 16px rgba(0, 0, 0, 0.08);
+  padding: clamp(1.5rem, 4vw, 2.25rem);
+  transform: translateY(20px) scale(0.98);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.auth-gate-modal.is-open .auth-gate-card {
+  transform: translateY(0) scale(1);
+}
+
+.auth-gate-close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid #E2E8F0;
+  background: #F8FAFC;
+  color: #64748B;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.auth-gate-close-btn:hover {
+  background: #EDF2F7;
+  color: #142553;
+}
+
+.auth-gate-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.auth-gate-icon-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--color-amber-dimmed, #FDF3E8);
+  font-size: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.auth-gate-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--color-navy-dark, #142553);
+  margin-bottom: 0.35rem;
+}
+
+.auth-gate-subtitle {
+  font-size: 0.8125rem;
+  color: #64748B;
+  line-height: 1.45;
+}
+
+.auth-gate-phone-wrap {
+  display: flex;
+  align-items: center;
+  border: 1px solid #CBD5E1;
+  border-radius: var(--radius-md, 8px);
+  background: #FFFFFF;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.auth-gate-phone-wrap:focus-within {
+  border-color: var(--color-primary, #1F3B87);
+  box-shadow: 0 0 0 3px rgba(31, 59, 135, 0.12);
+}
+
+.auth-gate-phone-prefix {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.75rem 0.875rem;
+  background: #F8FAFC;
+  border-right: 1px solid #E2E8F0;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.auth-gate-phone-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  color: #0F172A;
+  background: transparent;
+}
+
+.auth-gate-otp-inputs {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 1.25rem 0;
+}
+
+.auth-gate-otp-digit {
+  width: 48px;
+  height: 54px;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 800;
+  font-family: monospace;
+  border: 2px solid #CBD5E1;
+  border-radius: var(--radius-md, 8px);
+  background: #FFFFFF;
+  color: var(--color-navy-dark, #142553);
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.auth-gate-otp-digit:focus {
+  border-color: var(--color-primary, #1F3B87);
+  box-shadow: 0 0 0 3px rgba(31, 59, 135, 0.15);
+}
+
+.auth-gate-timer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #64748B;
+  margin-bottom: 1.25rem;
+}
+
+.auth-gate-resend-btn {
+  background: none;
+  border: none;
+  color: var(--color-primary, #1F3B87);
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.75rem;
+}
+
+.auth-gate-resend-btn:disabled {
+  color: #94A3B8;
+  cursor: not-allowed;
+}
+
+.auth-gate-demo-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #FDF3E8;
+  border: 1px dashed #FFAD61;
+  border-radius: var(--radius-sm, 6px);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  color: #78350F;
+  margin-top: 0.75rem;
+}
+
+.btn-auth-demo-autofill {
+  background: #FFFFFF;
+  border: 1px solid #F59E0B;
+  color: #B45309;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.auth-gate-guarantee-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  font-size: 0.6875rem;
+  color: #15803D;
+  margin-top: 1rem;
+}

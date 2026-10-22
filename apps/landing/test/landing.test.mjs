@@ -281,6 +281,35 @@ describe('Kulli Landing Page Production Suite', () => {
     assert.match(html, /id="summary-helpers-label"/);
     assert.match(html, /id="summary-stairs-row"/);
     assert.match(html, /id="summary-stairs-fare"/);
+
+    // Phase 4 Uber Freight Review & Auth Gate landmarks
+    assert.match(html, /id="review-card-route"/);
+    assert.match(html, /id="review-origin-name"/);
+    assert.match(html, /id="review-dest-name"/);
+    assert.match(html, /id="review-card-cargo"/);
+    assert.match(html, /id="review-cargo-total-count"/);
+    assert.match(html, /id="review-cargo-chips"/);
+    assert.match(html, /id="review-card-vehicle"/);
+    assert.match(html, /id="review-vehicle-name"/);
+    assert.match(html, /id="review-card-labor"/);
+    assert.match(html, /id="review-sender-name"/);
+    assert.match(html, /id="review-recipient-name"/);
+    assert.match(html, /id="review-card-pricing"/);
+    assert.match(html, /id="review-price-total-val"/);
+    assert.match(html, /data-review-edit-step="1"/);
+    assert.match(html, /data-review-edit-step="2"/);
+    assert.match(html, /data-review-edit-step="3"/);
+    assert.match(html, /data-review-edit-step="4"/);
+    assert.match(html, /id="btn-review-confirm-cta"/);
+    assert.match(html, /id="auth-gate-modal"/);
+    assert.match(html, /id="auth-modal-step-phone"/);
+    assert.match(html, /id="auth-gate-phone-input"/);
+    assert.match(html, /id="btn-auth-gate-send-otp"/);
+    assert.match(html, /id="auth-modal-step-otp"/);
+    assert.match(html, /id="auth-gate-otp-inputs"/);
+    assert.match(html, /id="btn-auth-otp-autofill"/);
+    assert.match(html, /id="btn-auth-gate-verify-otp"/);
+    assert.match(html, /id="auth-modal-step-success"/);
   });
 
   it('dist/tracking.html is compiled and contains real-time status tracker and driver card', () => {
