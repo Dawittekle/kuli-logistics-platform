@@ -1,127 +1,106 @@
-# KULI Logistics Platform
+# Kulli Logistics Platform
 
-KULI is a peer-to-peer logistics marketplace for Addis Ababa. It connects clients who need truck transport with verified truck owners, and includes an admin/call-assistant dashboard for verification, support, pricing, and operations.
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Render-brightgreen?style=for-the-badge&logo=render)](https://kuli-logistics-landing.onrender.com/)
+[![Node.js](https://img.shields.io/badge/Node.js-20+-339933?style=for-the-badge&logo=node.js)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-6.0+-646CFF?style=for-the-badge&logo=vite)](https://vitejs.dev/)
 
-The repository is a JavaScript/TypeScript monorepo with four application surfaces:
+> **Live Deployment:** 🌐 [https://kuli-logistics-landing.onrender.com/](https://kuli-logistics-landing.onrender.com/)
 
-- `apps/landing` - Lightweight, accessible, high-converting marketing landing page, vehicle catalog, FAQ, and app download portal (Vite + TypeScript + modern CSS).
-- `apps/api` - Node.js REST API, modular domain services, MongoDB persistence, Supabase Auth token verification.
-- `apps/mobile` - Expo React Native app for clients and truck owners.
-- `apps/admin` - Vite React dashboard for administrators and call-center assistants.
-- `packages/shared` - Shared contracts and API client helpers.
+**Kulli** is an on-demand freight and moving logistics platform engineered for urban transport corridors in Addis Ababa (Bole, Merkato, Kality, etc.). It connects shippers and commercial businesses with verified truck owners through upfront transparent pricing, automated vehicle payload matching, and real-time corridor dispatch tracking.
 
-## Architecture
+---
 
-KULI uses a layered modular monolith: the API owns business rules, MongoDB owns product data, and Supabase is used only as the identity provider. Mobile and admin clients authenticate with Supabase, then call the API with bearer tokens.
+## 🚀 Key Highlights & Capabilities
+
+- **Interactive 5-Step Booking Engine:** Streamlined workflow covering pickup/drop-off routing, real-time Google Maps preview, searchable cargo inventory with live weight/volume calculation, vehicle recommendation (Pickups, Isuzu NPR, FSR, Heavy Trucks), and access requirements.
+- **Dynamic Live Route Preview:** Embedded Google Maps displaying authentic corridor endpoints, distance, transit duration, and price breakdown in Ethiopian Birr (ETB).
+- **Real-Time Dispatch & Tracking Simulator:** Live transit simulator with milestone progression (Order Placed &rarr; Driver Assigned &rarr; Loading &rarr; In Transit &rarr; Delivered) and in-app driver messaging.
+- **Role-Based Authentication Gate:** Split-screen customer/driver onboarding with mobile OTP verification, session storage, and draft restoration upon sign-in.
+- **Production Monorepo Architecture:** Clean separation of concerns across web, API, admin, and mobile services with shared domain contracts.
+
+---
+
+## 🏗️ Repository Architecture
 
 ```text
-Mobile/Admin -> Node API -> MongoDB
-                  |
-                  -> Supabase Auth JWKS
+kuli-logistics-platform/
+├── apps/
+│   ├── landing/    # Marketing portal & booking flow (Vite + TypeScript + Modern CSS)
+│   ├── api/        # REST API services, MongoDB persistence, Supabase Auth JWKS
+│   ├── mobile/     # Cross-platform Expo React Native app for clients & drivers
+│   └── admin/      # Dispatch & operations dashboard (Vite + React)
+├── packages/
+│   └── shared/     # Shared type contracts, schemas, and API client helpers
+├── docs/           # Architecture diagrams, brand tokens, and developer guidelines
+└── tools/          # Linting, typechecking, and startup verification scripts
 ```
 
-Core workflows include role-based onboarding, vehicle/document verification, quote generation, nearby vehicle matching, first-accept-wins offers, manual trip status tracking, cash payment confirmation, request messaging, ratings, reports, notifications, and hotline-assisted booking.
+---
 
-## Requirements
+## 🛠️ Tech Stack
 
-- Node.js 20+
-- npm workspaces
-- Docker and Docker Compose
-- A Supabase project for real authentication
+| Layer | Technologies |
+| :--- | :--- |
+| **Frontend & Web** | TypeScript, Vite, Semantic HTML5, Vanilla CSS3 (Custom Design Tokens, Flexbox/Grid) |
+| **Backend API** | Node.js, Express, Modular Domain Services, Supabase Auth (JWKS token verification) |
+| **Data & Storage** | MongoDB, Redis |
+| **Mobile & Admin** | React Native (Expo), React, Vite |
+| **Testing & CI** | Node.js Native Test Runner (`node:test`), AST static linting, strict TypeScript |
+| **Deployment** | Render ([Live App](https://kuli-logistics-landing.onrender.com/)) |
 
-## Environment
+---
 
-Copy the examples and fill in local values:
+## 💻 Getting Started Locally
+
+### Prerequisites
+
+- **Node.js:** `v20+`
+- **npm:** `v10+` (npm workspaces enabled)
+- **Docker & Docker Compose** (for MongoDB and Redis)
+
+### Quick Start
 
 ```bash
-cp apps/api/.env.example apps/api/.env
-cp apps/mobile/.env.example apps/mobile/.env
-cp apps/admin/.env.example apps/admin/.env
-```
-
-Supabase uses the current API key model:
-
-- Use `sb_publishable_...` keys in `SUPABASE_PUBLISHABLE_KEY`, `MOBILE_APP_SUPABASE_PUBLISHABLE_KEY`, and `ADMIN_APP_SUPABASE_PUBLISHABLE_KEY`.
-- Do not put `sb_secret_...` or any elevated key in mobile or browser env files.
-- Keep `SUPABASE_JWKS_URL` pointed at `https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json`.
-
-For local demo auth without Supabase sessions, set:
-
-```env
-DEMO_AUTH_ENABLED=true
-MOBILE_APP_DEMO_AUTH_ENABLED=true
-ADMIN_APP_DEMO_AUTH_ENABLED=true
-```
-
-## Install
-
-```bash
+# 1. Clone repository & install dependencies
+git clone https://github.com/your-username/kuli-logistics-platform.git
+cd kuli-logistics-platform
 npm install
+
+# 2. Start local databases (MongoDB on 27018, Redis on 6380)
 docker compose up -d
+
+# 3. Launch application services
+npm run dev:landing   # Marketing & Booking: http://localhost:5175
+npm run dev:api       # REST API:            http://127.0.0.1:4000/api/v1
+npm run dev:admin     # Admin Dashboard:     http://localhost:5174
+npm run dev:mobile    # Mobile Client:       Expo Dev Tools
 ```
 
-Docker exposes:
-
-- MongoDB: `localhost:27018`
-- Redis: `localhost:6380`
-
-## Run Locally
-
-Start each service in a separate terminal:
+### Production Build & Preview
 
 ```bash
-npm run dev:landing   # Landing page (http://localhost:5175)
-npm run dev:api       # REST API (http://127.0.0.1:4000/api/v1)
-npm run dev:admin     # Admin dashboard (http://localhost:5174)
-npm run dev:mobile    # Expo mobile app
-```
-
-### Landing Page Build & Preview
-
-```bash
-# Build production bundle to apps/landing/dist
+# Compile landing and booking application
 npm run build:landing
 
-# Preview production build locally (http://localhost:4175)
+# Preview compiled build locally (http://localhost:4175)
 npm run preview --workspace @kuli/landing
 ```
 
-Default URLs:
+---
 
-- Landing page (Dev): `http://localhost:5175`
-- Landing page (Preview): `http://localhost:4175`
-- API: `http://127.0.0.1:4000/api/v1`
-- Admin dashboard: `http://localhost:5174`
-- Mobile: Expo Dev Tools/Metro from `npm run dev:mobile`
+## 🧪 Verification & Quality Checks
 
-For Android emulator access to the local API, set `MOBILE_APP_API_BASE_URL=http://10.0.2.2:4000/api/v1`.
-
-## Verification
+Run the verification pipeline to ensure code standards and test compliance:
 
 ```bash
-npm run lint
-npm run typecheck
-npm test
-npm run smoke:critical
-npm run verify:startup
+npm run lint          # Validates project structure and code standards
+npm run typecheck     # Validates TypeScript contracts across workspaces
+npm test              # Executes the full node:test suite
 ```
 
-Useful data commands:
+---
 
-```bash
-npm run seed:demo
-npm run seed:fake-users
-npm run reset:auth-data
-```
+## 📄 License
 
-## Production Notes
-
-- Set `NODE_ENV=production`.
-- Set `SUPABASE_JWT_MODE=supabase`.
-- Keep demo auth disabled.
-- Restrict `CORS_ORIGINS` to deployed mobile/web origins.
-- Use managed MongoDB with backups and TLS.
-- Provision staff users through Supabase Auth, then map their KULI roles in MongoDB.
-- Rotate Supabase publishable/secret keys from the Supabase dashboard; never commit secrets.
-
-For domain rules and implementation guardrails, see `docs/KULI_DEVELOPER_GUIDE.md`.
+This project is licensed under the MIT License.
